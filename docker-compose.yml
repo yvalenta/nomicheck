@@ -1,0 +1,75 @@
+# Base de desarrollo: por defecto el Postgres del compose. Si en .env se
+# define DEV_DATABASE_URL (p. ej. el pooler de Supabase de producción),
+# los contenedores apuntan allá. ⚠️ Con Supabase activo NO correr
+# prisma migrate reset contra esa URL — las migraciones locales siempre
+# van contra la base del compose.
+x-env: &app-env
+  DATABASE_URL: ${DEV_DATABASE_URL:-postgres://postgres:postgres@db:5432/nomicheck_development}
+  DIRECT_URL: ${DEV_DATABASE_URL:-postgres://postgres:postgres@db:5432/nomicheck_development}
+  SUPABASE_URL: ${SUPABASE_URL:-}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  JWT_SECRET: ${JWT_SECRET:-dev-secret}
+  IA_PROVEEDOR: ${IA_PROVEEDOR:-gemini}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  CORS_ORIGIN: http://localhost:5173
+  PORT: 3001
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+  volumes:
+    - .:/app
+    - node_modules:/app/node_modules
+    - api_node_modules:/app/apps/api/node_modules
+    - web_node_modules:/app/apps/web/node_modules
+    - reglas_node_modules:/app/packages/reglas/node_modules
+  environment: *app-env
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  api:
+    <<: *app
+    command: pnpm --filter @pv/api dev
+    ports:
+      - "3001:3001"
+
+  web:
+    <<: *app
+    command: pnpm --filter @pv/web dev -- --host
+    environment:
+      <<: *app-env
+      API_PROXY_TARGET: http://api:3001
+    ports:
+      - "5173:5173"
+    stdin_open: true
+    tty: true
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nomicheck_development
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  node_modules:
+  api_node_modules:
+  web_node_modules:
+  reglas_node_modules:
+  postgres:

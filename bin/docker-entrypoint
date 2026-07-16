@@ -1,0 +1,8 @@
+#!/bin/bash -e
+
+# Aplica migraciones pendientes contra DATABASE_URL antes de arrancar el server.
+if [ "${1}" == "node" ] && [ -z "${SKIP_DB_MIGRATE}" ]; then
+  ./node_modules/.bin/prisma migrate deploy
+fi
+
+exec "${@}"

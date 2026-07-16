@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Imagen de desarrollo — usada solo por docker-compose.yml (hot-reload,
+# node_modules como volúmenes nombrados, código montado en vivo).
+# No usar para producción: ver Dockerfile en la raíz.
+
+ARG NODE_VERSION=22.18.0
+FROM docker.io/library/node:${NODE_VERSION}-slim
+
+WORKDIR /app
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y openssl && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/reglas/package.json packages/reglas/package.json
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+RUN pnpm --filter @pv/api exec prisma generate
+
+CMD ["pnpm", "dev"]

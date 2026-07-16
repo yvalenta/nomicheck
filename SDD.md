@@ -262,6 +262,23 @@ payment_validation/
                            └──────────────────────────────────────┘
 ```
 
+### Despliegue (Docker)
+
+Imagen única multi-stage (`Dockerfile`, raíz del repo) — no hay contenedores separados para `api`/`web`: el server Express de `apps/api` sirve el build estático de `apps/web` (`web-dist/`) además de `/api/*`, un solo puerto (80).
+
+- **Etapa `build`**: instala todo el workspace pnpm, corre `prisma generate`, compila `packages/reglas` → `apps/api` → `apps/web`, y usa `pnpm deploy --prod --legacy` para extraer solo las dependencias de producción de `@pv/api` (incluye `@pv/reglas` ya compilado).
+- **Etapa final**: usuario no-root (`nomicheck`, uid/gid 1001 — 1000 ya existe en `node:slim`), copia artefactos compilados (`dist/`, `web-dist/`, `prisma/`) + `node_modules` de producción. `prisma` (CLI) vive en `dependencies`, no `devDependencies`, porque el entrypoint lo necesita en runtime.
+- **`bin/docker-entrypoint`**: corre `prisma migrate deploy` contra `DATABASE_URL` antes de arrancar (salvo `SKIP_DB_MIGRATE=1`), luego `exec` al `CMD`.
+- **Variables `VITE_*`** (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) se incrustan en el bundle en *build time* — deben pasarse como `--build-arg`, no como variables de runtime del contenedor. Son claves publishable, seguras para el navegador.
+- Variables de runtime (`.env` de `apps/api`: `DATABASE_URL`, `SUPABASE_*`, `GOOGLE_CLIENT_*`, `JWT_SECRET`, `IA_PROVEEDOR`, etc.) se inyectan con `--env-file` o `-e` al hacer `docker run`.
+
+```
+docker build -t nomicheck \
+  --build-arg VITE_SUPABASE_URL=https://<ref>.supabase.co \
+  --build-arg VITE_SUPABASE_ANON_KEY=<publishable-key> .
+docker run -d -p 80:80 --env-file apps/api/.env --name nomicheck nomicheck
+```
+
 ---
 
 ## 06 — Sistema de diseño
@@ -476,6 +493,7 @@ Cada fase entrega algo usable de punta a punta.
 - [x] Fase 6 — liquidación y recibos: `PeriodoNomina` (borrador/liquidado), captura de `Turno` en grilla, `POST .../liquidar` genera `ReciboPago` por empleado reusando `CalculadoraPorTurnos`/`CalculadoraSalarioFijo` de `packages/reglas` (mismo motor del verificador anónimo). Verificado end-to-end en navegador: recibo liquidado coincide exactamente con la aritmética esperada
 - [ ] Fase 7 — portal colaborador + discrepancias
 - [ ] Fase 8 — panel admin de reglas
+- [x] Docker — imagen única de producción (`Dockerfile`) + `docker-compose.yml`/`Dockerfile.dev` para desarrollo con hot-reload. Verificado: build produce imagen que sirve API + SPA en un solo puerto (80), `prisma migrate deploy` corre en el entrypoint, y el compose de desarrollo levanta api+web+postgres con el proxy `web→api` resolviendo por nombre de servicio
 
 ---
 
