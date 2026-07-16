@@ -35,6 +35,7 @@ export default function App() {
     hasta: "",
     auxilio: true,
     netoRecibido: "",
+    aporteAfc: "",
   });
   const [horarioBase, setHorarioBase] = useState<(HorarioDia | null)[]>(HORARIO_BASE_DEFAULT);
   const [festivos, setFestivos] = useState<Festivo[]>([]);
@@ -58,6 +59,7 @@ export default function App() {
         periodoHasta: datos1.hasta,
         horarioBase,
         novedades,
+        aporteAfcMensual: datos1.aporteAfc ? Number(datos1.aporteAfc) : undefined,
       });
       setResultado(r);
       setPaso("resultado");

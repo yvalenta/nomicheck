@@ -1,6 +1,6 @@
 import type { CalculadoraNomina, DatosNominaFija, LineaResultado } from "./types.js";
 import { round2 } from "./numero.js";
-import { deduccionesDeLey } from "./deducciones.js";
+import { aplicarDeducciones } from "./deducciones.js";
 
 export const CalculadoraSalarioFijo: CalculadoraNomina = {
   calcular(datos, reglas, _festivos) {
@@ -24,7 +24,17 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       ley: "Contrato de trabajo",
     });
 
-    lineas.push(...deduccionesDeLey(ibc, reglas, d.periodoDesde));
+    // Solo se aplica el tope del 50% (CST art. 149) a salud/pensión/fondo:
+    // los conceptos declarados abajo (incl. AFC si viene del comprobante)
+    // llegan como valores ya extraídos, no como un monto ajustable aquí.
+    const { lineas: lineasDeduccionLey, advertencias: advertenciasLey } = aplicarDeducciones(
+      d.salarioBasicoMensual,
+      ibc,
+      reglas,
+      d.periodoDesde
+    );
+    lineas.push(...lineasDeduccionLey);
+    advertencias.push(...advertenciasLey);
 
     // Conceptos declarados por el usuario o extraídos del comprobante:
     // devengos extralegales y deducciones por convenio se suman tal cual,

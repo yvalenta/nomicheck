@@ -16,6 +16,7 @@ export const REGLAS_JUL_2026: ReglaLegal[] = [
   { clave: "fondo_solidaridad_umbral_smlmv", valor: 4, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993, art. 27" },
   { clave: "divisor_hora_ordinaria", valor: 220, vigenteDesde: "2021-01-01", vigenteHasta: "2026-07-14", fuente: "Ley 2101 de 2021" },
   { clave: "divisor_hora_ordinaria", valor: 210, vigenteDesde: "2026-07-15", fuente: "Ley 2101 de 2021" },
+  { clave: "limite_deducciones_salario", valor: 0.5, vigenteDesde: "1950-01-01", fuente: "CST art. 149" },
 ];
 
 export const FESTIVOS_2026: Festivo[] = [

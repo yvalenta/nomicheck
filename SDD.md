@@ -79,6 +79,25 @@ Cada requerimiento queda trazado a su entidad (§07) y su flujo (§10). Los requ
 | `fondo_solidaridad` | escalonado 1–2 % si IBC ≥ 4 SMLMV (4–16→1%, 16–17→1.2%, 17–18→1.4%, 18–19→1.6%, 19–20→1.8%, ≥20→2%) | — | Ley 100 de 1993, Ley 797 de 2003 art. 8 — **la reforma pensional (Ley 2381 de 2024) que la modificaría sigue suspendida por la Corte Constitucional (auto 841/25) por vicio de trámite; revisar si se reactiva** |
 | Retención en la fuente | según tabla vigente del Estatuto Tributario | — | E.T. art. 383 — no se calcula automáticamente en v1 (ver Módulo B) |
 
+**Ampliación de la semilla — AFC y preparación tributaria (verificado 16-jul-2026):**
+
+| Clave | Valor | Vigencia | Fuente | Uso hoy |
+|---|---|---|---|---|
+| `limite_deducciones_salario` | 50 % del devengado | histórico | CST art. 149 num. 2 (excepción de libranza, Ley 1527 de 2012, art. 3 §5) | **Sí** — recorta el AFC si el total de deducciones lo supera |
+| `uvt` | $52.374 | 2026 | DIAN, Resolución 000238 de 15-dic-2025 | No (Fase 2) |
+| `limite_porcentaje_afc` | 30 % del ingreso laboral/mes | desde 2012 | E.T. art. 126-1 y 126-4 (Ley 1607 de 2012) | No (Fase 2) |
+| `limite_anual_uvt_afc` | 3.800 UVT/año | desde 2012 | E.T. art. 126-1 y 126-4 | No (Fase 2) |
+| `limite_rentas_exentas_porcentaje` | 40 % del ingreso | desde 2023 | E.T. art. 336 (Ley 2277 de 2022) | No (Fase 2) |
+
+> ⚠️ El valor de UVT del prompt original de diseño ($49.799) es el de **2025**; el vigente para el año gravable 2026, confirmado en la resolución oficial de la DIAN, es **$52.374**. Se corrigió en la semilla (`apps/api/prisma/seed.ts`).
+
+**AFC (Ahorro para el Fomento a la Construcción) — dos fases de tratamiento:**
+
+- **Fase 1 (implementada):** para trabajadores que no declaran renta, el AFC es una **deducción por convenio de monto fijo** — el usuario/empresa declara `aporteAfcMensual`, se prorratea por días del periodo igual que el auxilio de transporte, y se descuenta del neto **sin afectar el IBC** de salud/pensión (E.T. art. 126-4 solo habla de renta exenta para quien declara renta; para quien no declara, el AFC no tiene ningún efecto tributario en la nómina, es un simple descuento autorizado). Protegido por `limite_deducciones_salario`: si salud + pensión + fondo + AFC superan el 50 % del devengado, se recorta el AFC — nunca los aportes obligatorios — y se deja una advertencia trazable (`packages/reglas/src/deducciones.ts`, función `aplicarDeducciones()`).
+- **Fase 2 (preparación, NO implementada):** para perfiles que sí declaran renta, el AFC pasa a ser **renta exenta** que reduce la base de retención en la fuente (E.T. art. 126-4, fórmula `Base_ret = (Devengado − IngresosNoConstitutivos) − DeduccionesPermitidas − RentasExentas`, sujeta a los topes `limite_porcentaje_afc` / `limite_anual_uvt_afc` / `limite_rentas_exentas_porcentaje` ya sembrados). Requiere además: tabla del art. 383 del E.T. (rangos UVT → tarifa marginal), lógica de "¿este colaborador declara renta?" (umbral de ingresos/patrimonio, variable cada año), y UI para declarar dependientes/aportes voluntarios — se deja fuera del alcance actual a propósito (SDD.md §14 Visión a futuro).
+- Ambas fases comparten la misma tabla `ReglaLegal` (`clave`, `valor`, `vigenteDesde`, `vigenteHasta`, `fuente`) — el panel administrativo (Fase 8, rol `admin_plataforma`) las edita sin tocar el repositorio. `packages/reglas/src/catalogoReglas.ts` expone metadatos (etiqueta, unidad, si ya se usa en el cálculo) para que ese panel no tenga que adivinar qué significa cada clave.
+- **UI FinTech:** la línea "Aporte AFC (convenio)" aparece en el `SegmentedControl` bajo "Deducciones", con `tipo: "deduccion"` — el mismo mecanismo de color coral que ya usan salud/pensión/fondo, sin cambios en `ValidationRow.tsx`.
+
 ### Módulo B — Verificador anónimo (wizard de turnos)
 
 > **Principio (v2.2):** la carga cognitiva vive en el código. El usuario declara
@@ -104,9 +123,34 @@ Cada requerimiento queda trazado a su entidad (§07) y su flujo (§10). Los requ
 4. Valor hora = `salario ÷ divisor` según fecha (220 → 210 con corte 15-jul-2026); si el periodo cruza un corte normativo, cada tramo se presenta por separado.
 5. Recargos (solo el % adicional — la hora base ya está en el salario): nocturno 35 % (19:00–06:00), dominical/festivo vigente (80 %/90 %/100 %) sobre horas ordinarias en domingo/festivo; se acumulan.
 6. Horas extra (por encima de 7 h hábiles / 6 h dominicales por día): se pagan completas — hora × (1 + recargo): diurna 25 %, nocturna 75 %, dominical/festiva = recargo dominical + 25 %.
-7. Deducciones de ley automáticas sobre IBC = devengado salarial (base + recargos + extras, SIN auxilio de transporte).
+7. Deducciones de ley automáticas sobre IBC = devengado salarial (base + recargos + extras, SIN auxilio de transporte); más el aporte AFC opcional (`aporteAfcMensual`, prorrateado igual que el auxilio) como deducción por convenio — no afecta el IBC (Fase 1, ver arriba). El total de deducciones no puede superar `limite_deducciones_salario` (50 %, CST art. 149): si lo excede, se recorta el AFC y se agrega una advertencia.
 8. Advertencia de descanso compensatorio cuando se trabajan ≥ 3 domingos en el periodo (CST art. 181).
-9. Fixture de regresión (Resplandor, 16–30 jun 2026, horario default): base $875.453 + recargo dominical 12 h × 80 % = $76.403 + auxilio $124.548 − salud/pensión $76.148 → neto $1.000.255.
+9. Fixture de regresión (Resplandor, 16–30 jun 2026, horario default): base $875.453 + recargo dominical 12 h × 80 % = $76.403 + auxilio $124.548 − salud/pensión $76.148 → neto $1.000.255. Con AFC de $200.000/mes (caso de prueba adicional): AFC prorrateado $100.000, IBC sin cambios, neto $900.255.
+
+**Esquema JSON del resultado** (`ResultadoNomina`, `packages/reglas/src/types.ts`) — el frontend pinta los tooltips explicativos sin recalcular nada, cada línea ya trae su fórmula:
+
+```jsonc
+{
+  "modo": "turnos",
+  "periodoDesde": "2026-06-16", "periodoHasta": "2026-06-30",
+  "salarioBasicoMensual": 1750905,
+  "lineas": [
+    { "concepto": "Salario básico (15 días)", "base": 1750905, "valorCalculado": 875452.5, "tipo": "devengo", "ley": "Contrato de trabajo; CST art. 127" },
+    { "concepto": "Recargo dominical/festivo", "horas": 12, "recargoPct": 0.8, "valorCalculado": 76403.13, "tipo": "devengo", "ley": "Ley 2466 de 2025, art. 2" },
+    { "concepto": "Salud (aporte empleado)", "base": 951855.63, "recargoPct": 0.04, "valorCalculado": 38074.23, "tipo": "deduccion", "ley": "Ley 100 de 1993" },
+    { "concepto": "Pensión (aporte empleado)", "base": 951855.63, "recargoPct": 0.04, "valorCalculado": 38074.23, "tipo": "deduccion", "ley": "Ley 100 de 1993" },
+    { "concepto": "Aporte AFC (convenio)", "valorCalculado": 100000, "tipo": "deduccion", "ley": "E.T. art. 126-4 — deducción por convenio, no afecta IBC (Fase 1: sin declaración de renta)" }
+  ],
+  "totalDevengos": 951855.63, "totalDeducciones": 176148.46, "netoEsperado": 775707.17,
+  "advertencias": []
+}
+```
+
+- `base` + `recargoPct` presentes ⇒ el tooltip arma `${base} × ${recargoPct*100}%` (así se ve hoy en `ValidationRow.tsx`, caso salud/pensión).
+- `horas` + `recargoPct` presentes ⇒ el tooltip arma `${horas}h × valorHora × ${recargoPct*100}%` (caso recargos/extras).
+- Solo `valorCalculado` (sin `base` ni `horas`, ej. AFC) ⇒ se muestra como monto fijo, sin fórmula desplegable.
+- `tipo: "deduccion"` ⇒ color coral en el `SegmentedControl`; `tipo: "devengo"` ⇒ color mint. Ningún campo nuevo requerido en el frontend — es el mismo contrato que ya consume `PaycheckCard`/`ValidationRow`.
+- `advertencias: string[]` ⇒ se listan aparte (banner), incluye el recorte del AFC si aplicó el tope del 50 %.
 
 **Reglas de cálculo salario fijo** (spec v1 `calculo-salario-fijo`, íntegro):
 1. Entrada: salario básico mensual + lista abierta de conceptos (código/nombre, tipo: devengo legal · devengo extralegal · deducción legal · deducción por convenio, base y valor).
@@ -494,6 +538,7 @@ Cada fase entrega algo usable de punta a punta.
 - [x] Fase 6 — liquidación y recibos: `PeriodoNomina` (borrador/liquidado), captura de `Turno` en grilla, `POST .../liquidar` genera `ReciboPago` por empleado reusando `CalculadoraPorTurnos`/`CalculadoraSalarioFijo` de `packages/reglas` (mismo motor del verificador anónimo). Verificado end-to-end en navegador: recibo liquidado coincide exactamente con la aritmética esperada
 - [ ] Fase 7 — portal colaborador + discrepancias
 - [ ] Fase 8 — panel admin de reglas
+- [x] AFC Fase 1 (deducción por convenio) + preparación Fase 2 (renta exenta): `aplicarDeducciones()` en `packages/reglas`, tope 50% (CST art. 149), semilla `ReglaLegal` ampliada con `uvt` (corregido a $52.374, valor 2026 real — el borrador de diseño traía el de 2025), `limite_porcentaje_afc`, `limite_anual_uvt_afc`, `limite_rentas_exentas_porcentaje`, `limite_deducciones_salario`; catálogo de metadatos (`catalogoReglas.ts`) para el futuro panel admin. Verificado con tests (33/33) y en navegador real (wizard con AFC $200.000/mes → línea coral $100.000 prorrateada, IBC sin cambios, neto correcto)
 - [x] Docker — imagen única de producción (`Dockerfile`) + `docker-compose.yml`/`Dockerfile.dev` para desarrollo con hot-reload. Verificado: build produce imagen que sirve API + SPA en un solo puerto (80), `prisma migrate deploy` corre en el entrypoint, y el compose de desarrollo levanta api+web+postgres con el proxy `web→api` resolviendo por nombre de servicio
 
 ---

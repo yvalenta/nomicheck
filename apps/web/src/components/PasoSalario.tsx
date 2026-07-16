@@ -1,4 +1,4 @@
-import { ArrowRight, Bus, CalendarRange, Wallet } from "lucide-react";
+import { ArrowRight, Bus, CalendarRange, PiggyBank, Wallet } from "lucide-react";
 import PaycheckCard from "./PaycheckCard.tsx";
 
 export interface DatosPaso1 {
@@ -7,6 +7,7 @@ export interface DatosPaso1 {
   hasta: string;
   auxilio: boolean;
   netoRecibido: string;
+  aporteAfc: string;
 }
 
 interface Props {
@@ -59,6 +60,25 @@ export default function PasoSalario({ datos, onCambio, onSiguiente }: Props) {
               className="w-4 h-4 accent-emerald-500"
             />
             <Bus size={16} className="text-muted" /> Recibo auxilio de transporte
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            <span className="flex items-center gap-2">
+              <PiggyBank size={16} className="text-coral" /> Aporte a cuenta AFC (opcional)
+            </span>
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={datos.aporteAfc}
+              onChange={(e) => set("aporteAfc", e.target.value)}
+              className={inputCls}
+              placeholder="Monto mensual autorizado, si aplica"
+            />
+            <span className="text-xs text-muted font-normal">
+              Descuento por convenio que autorizaste a tu empleador — no afecta tu salud ni tu
+              pensión.
+            </span>
           </label>
         </div>
       </PaycheckCard>

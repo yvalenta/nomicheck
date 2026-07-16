@@ -23,6 +23,20 @@ const reglas = [
   { clave: "divisor_hora_ordinaria", valor: 220, vigenteDesde: "2021-01-01", vigenteHasta: "2026-07-14", fuente: "Ley 2101 de 2021" },
   // Divisor hora ordinaria: jornada 42h desde 15-jul-2026
   { clave: "divisor_hora_ordinaria", valor: 210, vigenteDesde: "2026-07-15", fuente: "Ley 2101 de 2021" },
+
+  // Tope de deducciones sobre el salario devengado — protege el mínimo
+  // vital. Usado hoy para recortar el aporte AFC (deducción por convenio)
+  // si sumado a salud/pensión/fondo supera el 50%.
+  { clave: "limite_deducciones_salario", valor: 0.50, vigenteDesde: "1950-01-01", fuente: "CST art. 149 (num. 2, excepción libranza Ley 1527 de 2012)" },
+
+  // --- Constantes tributarias (preparación Fase 2: alivios para quienes
+  // declaran renta — AFC como renta exenta, no solo deducción de convenio).
+  // No se usan todavía en el cálculo, solo quedan disponibles en el panel
+  // administrativo para cuando se implemente la Fase 2. Verificado 16-jul-2026.
+  { clave: "uvt", valor: 52374, vigenteDesde: "2026-01-01", fuente: "DIAN, Resolución 000238 de 15-12-2025" },
+  { clave: "limite_porcentaje_afc", valor: 0.30, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4 (Ley 1607 de 2012)" },
+  { clave: "limite_anual_uvt_afc", valor: 3800, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4 (Ley 1607 de 2012)" },
+  { clave: "limite_rentas_exentas_porcentaje", valor: 0.40, vigenteDesde: "2023-01-01", fuente: "E.T. art. 336 (Ley 2277 de 2022)" },
 ];
 
 // Festivos Colombia 2026 (Ley Emiliani)

@@ -28,6 +28,7 @@ const datosNominaTurnos = z.object({
   // Índice 0=domingo … 6=sábado; null = día de descanso.
   horarioBase: z.array(horarioDia.nullable()).length(7),
   novedades: z.array(novedadDia),
+  aporteAfcMensual: z.number().nonnegative().optional(),
 });
 
 const conceptoNomina = z.object({

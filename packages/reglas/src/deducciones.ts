@@ -58,3 +58,54 @@ export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[], fecha: strin
 
   return lineas;
 }
+
+export interface ResultadoDeducciones {
+  lineas: LineaResultado[];
+  totalDeducciones: number;
+  advertencias: string[];
+}
+
+// Deducciones completas de un periodo: ley (deduccionesDeLey) + AFC por
+// convenio (Fase 1 — E.T. art. 126-4: el trabajador NO declara renta, así
+// que el AFC es solo un descuento fijo autorizado, no reduce el IBC de
+// salud/pensión). Protege el mínimo vital: si el total de deducciones
+// supera `limite_deducciones_salario` (CST art. 149, tope histórico 50%)
+// se recorta primero el AFC — nunca los aportes obligatorios de ley — y se
+// deja constancia en `advertencias`.
+export function aplicarDeducciones(
+  totalDevengado: number,
+  ibc: number,
+  reglas: ReglaLegal[],
+  fecha: string,
+  aporteAfcMensual = 0
+): ResultadoDeducciones {
+  const lineas = deduccionesDeLey(ibc, reglas, fecha);
+  const advertencias: string[] = [];
+
+  const afcSolicitado = round2(aporteAfcMensual);
+  if (afcSolicitado > 0) {
+    lineas.push({
+      concepto: "Aporte AFC (convenio)",
+      valorCalculado: afcSolicitado,
+      tipo: "deduccion",
+      ley: "E.T. art. 126-4 — deducción por convenio, no afecta IBC (Fase 1: sin declaración de renta)",
+    });
+  }
+
+  const topePct = reglaEn(reglas, "limite_deducciones_salario", fecha);
+  const topeMonto = round2(totalDevengado * topePct);
+  let totalDeducciones = round2(lineas.reduce((s, l) => s + l.valorCalculado, 0));
+
+  if (totalDeducciones > topeMonto && afcSolicitado > 0) {
+    const exceso = round2(totalDeducciones - topeMonto);
+    const afcAjustado = Math.max(0, round2(afcSolicitado - exceso));
+    const lineaAfc = lineas.find((l) => l.concepto === "Aporte AFC (convenio)")!;
+    lineaAfc.valorCalculado = afcAjustado;
+    totalDeducciones = round2(totalDeducciones - afcSolicitado + afcAjustado);
+    advertencias.push(
+      `El aporte AFC solicitado ($${afcSolicitado.toLocaleString("es-CO")}) se ajustó a $${afcAjustado.toLocaleString("es-CO")} porque el total de deducciones no puede superar el ${round2(topePct * 100)}% del salario devengado (CST art. 149 — mínimo vital).`
+    );
+  }
+
+  return { lineas, totalDeducciones, advertencias };
+}

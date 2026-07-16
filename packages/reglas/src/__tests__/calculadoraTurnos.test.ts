@@ -168,6 +168,42 @@ describe("CalculadoraPorTurnos — cortes normativos", () => {
   });
 });
 
+describe("CalculadoraPorTurnos — aporte AFC (Fase 1, deducción por convenio)", () => {
+  it("descuenta el AFC prorrateado del neto sin afectar el IBC de salud/pensión", () => {
+    // AFC 200.000/mes × 15/30 días = 100.000. IBC (base salud/pensión) debe
+    // seguir siendo el mismo que sin AFC: 951.855,63.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ aporteAfcMensual: 200000 }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const afc = resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)");
+    const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
+    expect(afc?.valorCalculado).toBeCloseTo(100000, 1);
+    expect(afc?.tipo).toBe("deduccion");
+    expect(salud?.base).toBeCloseTo(951855.63, 1);
+    expect(resultado.advertencias).toHaveLength(0);
+  });
+
+  it("recorta el AFC (no salud/pensión) si el total de deducciones supera el 50% del devengado (CST art. 149)", () => {
+    // Devengado ≈ 1.076.403,13; tope 50 % ≈ 538.201,57; salud+pensión ≈
+    // 76.148,46 → AFC solicitado de 1.000.000 debe recortarse.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ aporteAfcMensual: 2000000 }), // 2.000.000/mes × 15/30 = 1.000.000 en el periodo
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const afc = resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)");
+    const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
+    const pension = resultado.lineas.find((l) => l.concepto.startsWith("Pensión"));
+    expect(salud?.valorCalculado).toBeCloseTo(38074.23, 1);
+    expect(pension?.valorCalculado).toBeCloseTo(38074.23, 1);
+    expect(resultado.totalDeducciones).toBeLessThanOrEqual(resultado.totalDevengos * 0.5 + 0.01);
+    expect(afc!.valorCalculado).toBeLessThan(1000000);
+    expect(resultado.advertencias.some((a) => a.includes("AFC"))).toBe(true);
+  });
+});
+
 describe("CalculadoraPorTurnos — validaciones de entrada", () => {
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>

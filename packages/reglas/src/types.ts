@@ -39,6 +39,10 @@ export interface DatosNominaTurnos {
   horarioBase: (HorarioDia | null)[];
   // Días que difieren del horario base (no trabajó, o trabajó otras horas).
   novedades: NovedadDia[];
+  // Aporte AFC mensual autorizado por el trabajador (deducción por convenio,
+  // Fase 1 — ver deducciones.ts). Se prorratea por días del periodo igual
+  // que el auxilio de transporte. undefined/0 = sin aporte AFC.
+  aporteAfcMensual?: number;
 }
 
 // Entrada para el modo salario fijo

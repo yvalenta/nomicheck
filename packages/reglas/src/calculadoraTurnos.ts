@@ -8,7 +8,7 @@ import type {
 } from "./types.js";
 import { diaSemana, esDomingo, rangoFechas, reglaEn } from "./utils.js";
 import { round2 } from "./numero.js";
-import { deduccionesDeLey } from "./deducciones.js";
+import { aplicarDeducciones } from "./deducciones.js";
 import {
   DIAS_MES_COMERCIAL,
   HORA_FIN_JORNADA_NOCTURNA,
@@ -280,15 +280,18 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       });
     }
 
-    // Deducciones de ley automáticas — el usuario nunca las declara.
-    lineas.push(...deduccionesDeLey(ibc, reglas, d.periodoHasta));
-
     const totalDevengos = round2(
       lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
     );
-    const totalDeducciones = round2(
-      lineas.filter((l) => l.tipo === "deduccion").reduce((s, l) => s + l.valorCalculado, 0)
-    );
+
+    // Deducciones de ley + AFC (por convenio) — el usuario nunca declara
+    // salud/pensión/fondo, solo el monto AFC autorizado si aplica.
+    const afcMensual = d.aporteAfcMensual ?? 0;
+    const afcPeriodo = (afcMensual / DIAS_MES_COMERCIAL) * diasPeriodo;
+    const { lineas: lineasDeduccion, totalDeducciones, advertencias: advertenciasDeducciones } =
+      aplicarDeducciones(totalDevengos, ibc, reglas, d.periodoHasta, afcPeriodo);
+    lineas.push(...lineasDeduccion);
+    advertencias.push(...advertenciasDeducciones);
 
     return {
       modo: "turnos",
