@@ -6,6 +6,14 @@ import { listarFestivos } from "../controllers/festivosController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { registro, invitar } from "../controllers/authController.js";
 import { listar, crear, actualizar } from "../controllers/empleadosController.js";
+import {
+  listar as listarPeriodos,
+  crear as crearPeriodo,
+  obtenerTurnos,
+  guardarTurnos,
+  liquidar,
+  recibos,
+} from "../controllers/periodosController.js";
 import { requiereAuth, requiereRol } from "../middleware/auth.js";
 
 const router = Router();
@@ -44,5 +52,12 @@ router.get("/empresa/empleados", ...soloEmpresa, listar);
 router.post("/empresa/empleados", ...soloEmpresa, crear);
 router.put("/empresa/empleados/:id", ...soloEmpresa, actualizar);
 router.post("/empresa/empleados/:id/invitar", ...soloEmpresa, invitar);
+
+router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
+router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);
+router.get("/empresa/periodos/:id/turnos", ...soloEmpresa, obtenerTurnos);
+router.put("/empresa/periodos/:id/turnos", ...soloEmpresa, guardarTurnos);
+router.post("/empresa/periodos/:id/liquidar", ...soloEmpresa, liquidar);
+router.get("/empresa/recibos", ...soloEmpresa, recibos);
 
 export default router;

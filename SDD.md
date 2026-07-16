@@ -473,7 +473,7 @@ Cada fase entrega algo usable de punta a punta.
 - [x] Fase 3 — extracción por imagen: código completo (`POST /api/comprobantes/extraer`, capa multi-proveedor Gemini/Claude, editable antes de calcular). **⏸ Pausado**: bloqueado por falta de facturación habilitada en el proyecto de GCP de las keys de Gemini provistas (429 `limit: 0`); Claude sigue con key placeholder. Retomar cuando haya una key funcional — cambiar `IA_PROVEEDOR` en `.env` no requiere tocar código.
 - [ ] Fase 4 — chat contador. **⏸ Pausado**: depende de un proveedor de IA con key funcional, igual que Fase 3 (ver nota ahí)
 - [x] Fase 5 — cuentas + empresa + empleados: schema completo migrado (`Empresa`, `Empleado`, `PeriodoNomina`, `Turno`, `ReciboPago`, `ReporteDiscrepancia`) con políticas RLS aplicadas; Supabase Auth (Google + email) para registro/login; middleware `requiereAuth`/`requiereRol`; CRUD de empleados + invitación de colaborador. Verificado end-to-end en navegador (registro → login → crear empleado) y limpiado de la base
-- [ ] Fase 6 — liquidación y recibos
+- [x] Fase 6 — liquidación y recibos: `PeriodoNomina` (borrador/liquidado), captura de `Turno` en grilla, `POST .../liquidar` genera `ReciboPago` por empleado reusando `CalculadoraPorTurnos`/`CalculadoraSalarioFijo` de `packages/reglas` (mismo motor del verificador anónimo). Verificado end-to-end en navegador: recibo liquidado coincide exactamente con la aritmética esperada
 - [ ] Fase 7 — portal colaborador + discrepancias
 - [ ] Fase 8 — panel admin de reglas
 

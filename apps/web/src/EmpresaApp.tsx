@@ -2,11 +2,16 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import HeaderProfile from "./components/HeaderProfile.tsx";
+import SegmentedControl from "./components/SegmentedControl.tsx";
 import AuthEmpresa from "./components/empresa/AuthEmpresa.tsx";
 import DashboardEmpresa from "./components/empresa/DashboardEmpresa.tsx";
+import PeriodosEmpresa from "./components/empresa/PeriodosEmpresa.tsx";
+
+type Seccion = "colaboradores" | "periodos";
 
 export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [seccion, setSeccion] = useState<Seccion>("colaboradores");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -20,7 +25,21 @@ export default function EmpresaApp() {
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
         {session === undefined && <p className="text-sm text-muted text-center">Cargando…</p>}
         {session === null && <AuthEmpresa />}
-        {session && <DashboardEmpresa />}
+        {session && (
+          <div className="flex flex-col gap-5">
+            <div className="flex justify-center">
+              <SegmentedControl<Seccion>
+                opciones={[
+                  { valor: "colaboradores", etiqueta: "Colaboradores" },
+                  { valor: "periodos", etiqueta: "Periodos" },
+                ]}
+                activo={seccion}
+                onCambio={setSeccion}
+              />
+            </div>
+            {seccion === "colaboradores" ? <DashboardEmpresa /> : <PeriodosEmpresa />}
+          </div>
+        )}
       </main>
       <footer className="text-center text-xs text-muted py-4 px-6">
         NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
