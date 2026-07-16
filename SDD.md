@@ -174,8 +174,28 @@ Cada requerimiento queda trazado a su entidad (§07) y su flujo (§10). Los requ
 | **RLS (Row Level Security)** | Autorización a nivel de fila | Políticas Postgres que aplican el scoping por empresa/colaborador directo en la base, como defensa adicional a la del service |
 | Prisma | ORM | Sobre la connection string de Supabase Postgres; `schema.prisma` sigue siendo la fuente del modelo de datos y migraciones |
 | `packages/reglas` | Motor de cálculo | TS puro: sin HTTP, sin ORM, sin dependencias de UI; testeable con fixtures reales |
-| Claude API (Anthropic) | IA | Extracción (visión + JSON schema) y chat contador; API key solo en servidor |
+| **Capa de IA multi-proveedor** | Extracción de comprobantes | `ProveedorExtraccionIA` (Strategy) + adaptadores intercambiables — **Gemini** activo (`IA_PROVEEDOR=gemini`), Claude disponible; API keys solo en servidor |
 | Vitest | Tests | Motor de reglas con los 2 comprobantes reales como regresión |
+
+### Capa de IA multi-proveedor (`apps/api/src/services/ia/`)
+
+Igual que Advance Fitness (proyecto hermano): una interfaz de dominio
+(`ProveedorExtraccionIA.extraerComprobante(archivo, mimeType)`) con
+adaptadores intercambiables — `ProveedorGemini` y `ProveedorClaude` — elegidos
+por `IA_PROVEEDOR` (env var). El contrato de qué extraer (schema, prompt) es
+del dominio y vive en `ia/tipos.ts`; cada adaptador solo traduce esa forma al
+formato de su proveedor (Gemini: `responseSchema` OpenAPI en mayúsculas vía
+`fetch`; Claude: `tool_choice` forzado vía `@anthropic-ai/sdk`). Añadir un
+proveedor nuevo es un archivo más, sin tocar el resto del sistema.
+
+- **Por qué Gemini activo**: sin dependencia adicional (llamada REST directa
+  con `fetch`, sin SDK), `responseSchema` nativo para salida estructurada,
+  tier gratuito generoso una vez el proyecto de GCP tiene facturación
+  habilitada (nota: si la key devuelve 429 con `limit: 0` en
+  `generate_content_free_tier_requests`, es porque el proyecto de GCP no
+  tiene facturación vinculada — no es un bug del adaptador).
+- **Por qué Claude sigue disponible**: cero costo de mantenimiento (ya
+  integrado), fallback si Gemini falla o cambia de precio/cuota.
 
 ### ¿Qué de Supabase se usa y qué no
 
