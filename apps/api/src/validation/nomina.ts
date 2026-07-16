@@ -29,6 +29,12 @@ const datosNominaTurnos = z.object({
   horarioBase: z.array(horarioDia.nullable()).length(7),
   novedades: z.array(novedadDia),
   aporteAfcMensual: z.number().nonnegative().optional(),
+  descuentoJudicial: z
+    .object({
+      tipo: z.enum(["ordinario", "alimentos_o_cooperativa"]),
+      valorMensual: z.number().nonnegative(),
+    })
+    .optional(),
 });
 
 const conceptoNomina = z.object({

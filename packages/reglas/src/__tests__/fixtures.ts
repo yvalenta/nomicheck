@@ -17,6 +17,9 @@ export const REGLAS_JUL_2026: ReglaLegal[] = [
   { clave: "divisor_hora_ordinaria", valor: 220, vigenteDesde: "2021-01-01", vigenteHasta: "2026-07-14", fuente: "Ley 2101 de 2021" },
   { clave: "divisor_hora_ordinaria", valor: 210, vigenteDesde: "2026-07-15", fuente: "Ley 2101 de 2021" },
   { clave: "limite_deducciones_salario", valor: 0.5, vigenteDesde: "1950-01-01", fuente: "CST art. 149" },
+  { clave: "auxilio_transporte_tope_smlmv", valor: 2, vigenteDesde: "1950-01-01", fuente: "Decreto de salario mínimo vigente" },
+  { clave: "embargo_ordinario_fraccion_excedente", valor: 0.2, vigenteDesde: "1950-01-01", fuente: "CST art. 154 y 155" },
+  { clave: "embargo_alimentos_pct_max", valor: 0.5, vigenteDesde: "1950-01-01", fuente: "CST art. 156" },
 ];
 
 export const FESTIVOS_2026: Festivo[] = [

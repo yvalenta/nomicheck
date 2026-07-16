@@ -29,6 +29,13 @@ const reglas = [
   // si sumado a salud/pensión/fondo supera el 50%.
   { clave: "limite_deducciones_salario", valor: 0.50, vigenteDesde: "1950-01-01", fuente: "CST art. 149 (num. 2, excepción libranza Ley 1527 de 2012)" },
 
+  // Auxilio de transporte: solo para quien devenga hasta 2 SMLMV.
+  { clave: "auxilio_transporte_tope_smlmv", valor: 2, vigenteDesde: "1950-01-01", fuente: "Decreto de salario mínimo vigente (requisito histórico del auxilio de transporte)" },
+
+  // Embargo de salario: dos regímenes independientes (ver deducciones.ts).
+  { clave: "embargo_ordinario_fraccion_excedente", valor: 0.20, vigenteDesde: "1950-01-01", fuente: "CST art. 154 y 155" },
+  { clave: "embargo_alimentos_pct_max", valor: 0.50, vigenteDesde: "1950-01-01", fuente: "CST art. 156" },
+
   // --- Constantes tributarias (preparación Fase 2: alivios para quienes
   // declaran renta — AFC como renta exenta, no solo deducción de convenio).
   // No se usan todavía en el cálculo, solo quedan disponibles en el panel

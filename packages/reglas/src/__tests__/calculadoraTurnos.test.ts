@@ -204,6 +204,59 @@ describe("CalculadoraPorTurnos — aporte AFC (Fase 1, deducción por convenio)"
   });
 });
 
+describe("CalculadoraPorTurnos — tope de auxilio de transporte (2 SMLMV)", () => {
+  it("no paga auxilio si el salario supera 2 SMLMV, aunque el usuario lo marque", () => {
+    // 2 SMLMV = 3.501.810; salario de prueba por encima del tope.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ salarioBasicoMensual: 4000000, recibeAuxilioTransporte: true }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado.lineas.some((l) => l.concepto === "Auxilio de transporte")).toBe(false);
+    expect(resultado.advertencias.some((a) => a.includes("auxilio de transporte"))).toBe(true);
+  });
+
+  it("sí paga auxilio si el salario es igual al tope de 2 SMLMV", () => {
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ salarioBasicoMensual: 3501810, recibeAuxilioTransporte: true }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado.lineas.some((l) => l.concepto === "Auxilio de transporte")).toBe(true);
+  });
+});
+
+describe("CalculadoraPorTurnos — embargo judicial", () => {
+  it("embargo ordinario: solo 1/5 del excedente sobre el SMLMV prorrateado del periodo", () => {
+    // Periodo de 15 días ⇒ SMLMV prorrateado = 1.750.905/2 = 875.452,5.
+    // Devengado del periodo ≈ 1.076.403,13 ⇒ excedente ≈ 200.950,63 ⇒
+    // embargable = 20% × 200.950,63 ≈ 40.190,13 (menor a los 100.000
+    // solicitados, prorrateados de 200.000/mes).
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ descuentoJudicial: { tipo: "ordinario", valorMensual: 200000 } }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const embargo = resultado.lineas.find((l) => l.concepto.startsWith("Embargo judicial"));
+    expect(embargo?.valorCalculado).toBeCloseTo(40190.13, 0);
+    expect(resultado.advertencias.some((a) => a.includes("embargo"))).toBe(true);
+  });
+
+  it("embargo por alimentos: se recorta al 50% del devengado si se solicita más", () => {
+    // Devengado del periodo ≈ 1.076.403,13 → tope 50% ≈ 538.201,57.
+    // Solicitado (prorrateado 15/30 de 4.000.000/mes) = 2.000.000, muy por
+    // encima del tope: debe recortarse exactamente al 50% del devengado.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ descuentoJudicial: { tipo: "alimentos_o_cooperativa", valorMensual: 4000000 } }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const embargo = resultado.lineas.find((l) => l.concepto.startsWith("Embargo judicial"));
+    expect(embargo!.valorCalculado).toBeCloseTo(resultado.totalDevengos * 0.5, 0);
+    expect(resultado.advertencias.some((a) => a.includes("embargo"))).toBe(true);
+  });
+});
+
 describe("CalculadoraPorTurnos — validaciones de entrada", () => {
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>

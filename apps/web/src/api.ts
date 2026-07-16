@@ -26,6 +26,21 @@ export async function listarFestivos(): Promise<Festivo[]> {
   return res.json();
 }
 
+export interface ParametrosPublicos {
+  smlmv: number;
+  auxilioTransporteTopeSmlmv: number;
+}
+
+// Espejo de lectura de reglas legales que la UI necesita para dar feedback
+// inmediato (ej. ocultar el auxilio de transporte si el salario supera el
+// tope) sin duplicar la cifra como constante — el motor server-side sigue
+// siendo quien decide en el cálculo real.
+export async function obtenerParametros(): Promise<ParametrosPublicos | null> {
+  const res = await fetch("/api/reglas/parametros");
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function calcularNomina(
   datos: DatosNominaTurnos | DatosNominaFija
 ): Promise<ResultadoNomina> {

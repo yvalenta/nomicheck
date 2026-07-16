@@ -4,7 +4,7 @@
 // No valida datos en runtime (packages/reglas no depende de zod) — es
 // documentación tipada que la UI del panel puede iterar.
 
-export type UnidadReglaLegal = "pesos" | "porcentaje" | "horas" | "uvt";
+export type UnidadReglaLegal = "pesos" | "porcentaje" | "horas" | "uvt" | "multiplo-smlmv";
 
 export interface MetaReglaLegal {
   clave: string;
@@ -24,9 +24,12 @@ export const CATALOGO_REGLAS_LEGALES: MetaReglaLegal[] = [
   { clave: "hora_extra_nocturna", etiqueta: "Recargo hora extra nocturna", unidad: "porcentaje", fuenteTipica: "CST art. 168", usadaEnCalculo: true, descripcion: "75% adicional sobre el valor de la hora ordinaria." },
   { clave: "aporte_salud_empleado", etiqueta: "Aporte a salud (empleado)", unidad: "porcentaje", fuenteTipica: "Ley 100 de 1993", usadaEnCalculo: true, descripcion: "4% sobre el IBC." },
   { clave: "aporte_pension_empleado", etiqueta: "Aporte a pensión (empleado)", unidad: "porcentaje", fuenteTipica: "Ley 100 de 1993", usadaEnCalculo: true, descripcion: "4% sobre el IBC." },
-  { clave: "fondo_solidaridad_umbral_smlmv", etiqueta: "Umbral fondo de solidaridad (en SMLMV)", unidad: "horas", fuenteTipica: "Ley 100 de 1993, art. 27", usadaEnCalculo: true, descripcion: "IBC ≥ este múltiplo de SMLMV activa el fondo de solidaridad pensional." },
+  { clave: "fondo_solidaridad_umbral_smlmv", etiqueta: "Umbral fondo de solidaridad (en SMLMV)", unidad: "multiplo-smlmv", fuenteTipica: "Ley 100 de 1993, art. 27", usadaEnCalculo: true, descripcion: "IBC ≥ este múltiplo de SMLMV activa el fondo de solidaridad pensional." },
   { clave: "divisor_hora_ordinaria", etiqueta: "Divisor de hora ordinaria", unidad: "horas", fuenteTipica: "Ley 2101 de 2021", usadaEnCalculo: true, descripcion: "220 (jornada 44h) hasta 14-jul-2026; 210 (jornada 42h) desde 15-jul-2026." },
   { clave: "limite_deducciones_salario", etiqueta: "Tope de deducciones sobre el salario", unidad: "porcentaje", fuenteTipica: "CST art. 149", usadaEnCalculo: true, descripcion: "Protege el mínimo vital: recorta el AFC (nunca ley) si el total de deducciones lo supera." },
+  { clave: "auxilio_transporte_tope_smlmv", etiqueta: "Tope de SMLMV para auxilio de transporte", unidad: "multiplo-smlmv", fuenteTipica: "Decreto de salario mínimo vigente", usadaEnCalculo: true, descripcion: "Salario > este múltiplo de SMLMV ⇒ no hay derecho a auxilio de transporte." },
+  { clave: "embargo_ordinario_fraccion_excedente", etiqueta: "Fracción embargable del excedente (ordinario)", unidad: "porcentaje", fuenteTipica: "CST art. 154 y 155", usadaEnCalculo: true, descripcion: "1 SMLMV es inembargable; del excedente solo se puede embargar esta fracción (1/5)." },
+  { clave: "embargo_alimentos_pct_max", etiqueta: "Tope embargo por alimentos/cooperativa", unidad: "porcentaje", fuenteTipica: "CST art. 156", usadaEnCalculo: true, descripcion: "Hasta este % de CUALQUIER salario, incluido el mínimo." },
   { clave: "uvt", etiqueta: "Unidad de Valor Tributario (UVT)", unidad: "pesos", fuenteTipica: "DIAN, resolución anual", usadaEnCalculo: false, descripcion: "Preparación Fase 2 (retención en la fuente / rentas exentas) — aún no se usa en el cálculo." },
   { clave: "limite_porcentaje_afc", etiqueta: "Límite AFC — % del ingreso laboral", unidad: "porcentaje", fuenteTipica: "E.T. art. 126-1 y 126-4", usadaEnCalculo: false, descripcion: "Preparación Fase 2: AFC + aportes voluntarios a pensión no pueden superar este % del ingreso mensual." },
   { clave: "limite_anual_uvt_afc", etiqueta: "Límite AFC — tope anual en UVT", unidad: "uvt", fuenteTipica: "E.T. art. 126-1 y 126-4", usadaEnCalculo: false, descripcion: "Preparación Fase 2: tope anual combinado de AFC + aportes voluntarios a pensión." },

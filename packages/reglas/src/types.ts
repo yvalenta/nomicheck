@@ -43,6 +43,10 @@ export interface DatosNominaTurnos {
   // Fase 1 — ver deducciones.ts). Se prorratea por días del periodo igual
   // que el auxilio de transporte. undefined/0 = sin aporte AFC.
   aporteAfcMensual?: number;
+  // Embargo judicial mensual (ordinario CST art. 154-155, o alimentos/
+  // cooperativa art. 156). Se prorratea por días del periodo y se limita al
+  // tope legal de cada régimen — ver deducciones.ts, limiteEmbargo().
+  descuentoJudicial?: { tipo: "ordinario" | "alimentos_o_cooperativa"; valorMensual: number };
 }
 
 // Entrada para el modo salario fijo

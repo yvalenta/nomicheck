@@ -271,25 +271,47 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     const ibc = lineas.reduce((s, l) => s + l.valorCalculado, 0);
 
     if (d.recibeAuxilioTransporte) {
-      const auxilioMensual = reglaEn(reglas, "auxilio_transporte", d.periodoHasta);
-      lineas.push({
-        concepto: "Auxilio de transporte",
-        valorCalculado: round2((auxilioMensual / DIAS_MES_COMERCIAL) * diasPeriodo),
-        tipo: "devengo",
-        ley: "Decreto de salario mínimo vigente",
-      });
+      const smlmv = reglaEn(reglas, "smlmv", d.periodoHasta);
+      const topeSmlmv = reglaEn(reglas, "auxilio_transporte_tope_smlmv", d.periodoHasta);
+      if (d.salarioBasicoMensual <= smlmv * topeSmlmv) {
+        const auxilioMensual = reglaEn(reglas, "auxilio_transporte", d.periodoHasta);
+        lineas.push({
+          concepto: "Auxilio de transporte",
+          valorCalculado: round2((auxilioMensual / DIAS_MES_COMERCIAL) * diasPeriodo),
+          tipo: "devengo",
+          ley: "Decreto de salario mínimo vigente",
+        });
+      } else {
+        advertencias.push(
+          `No se reconoce auxilio de transporte: el salario ($${d.salarioBasicoMensual.toLocaleString("es-CO")}) supera ${topeSmlmv} SMLMV ($${round2(smlmv * topeSmlmv).toLocaleString("es-CO")}) — Decreto de salario mínimo vigente.`
+        );
+      }
     }
 
     const totalDevengos = round2(
       lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
     );
 
-    // Deducciones de ley + AFC (por convenio) — el usuario nunca declara
-    // salud/pensión/fondo, solo el monto AFC autorizado si aplica.
-    const afcMensual = d.aporteAfcMensual ?? 0;
-    const afcPeriodo = (afcMensual / DIAS_MES_COMERCIAL) * diasPeriodo;
+    // Deducciones de ley + AFC (por convenio) + embargo judicial — el
+    // usuario nunca declara salud/pensión/fondo, solo los montos
+    // autorizados/ordenados si aplican. Ambos se prorratean por días del
+    // periodo igual que el auxilio de transporte.
+    const afcPeriodo = ((d.aporteAfcMensual ?? 0) / DIAS_MES_COMERCIAL) * diasPeriodo;
+    const embargoPeriodo = d.descuentoJudicial
+      ? {
+          tipo: d.descuentoJudicial.tipo,
+          valorMensual: (d.descuentoJudicial.valorMensual / DIAS_MES_COMERCIAL) * diasPeriodo,
+        }
+      : undefined;
     const { lineas: lineasDeduccion, totalDeducciones, advertencias: advertenciasDeducciones } =
-      aplicarDeducciones(totalDevengos, ibc, reglas, d.periodoHasta, afcPeriodo);
+      aplicarDeducciones(
+        totalDevengos,
+        ibc,
+        reglas,
+        d.periodoHasta,
+        { aporteAfcMensual: afcPeriodo, descuentoJudicial: embargoPeriodo },
+        diasPeriodo / DIAS_MES_COMERCIAL
+      );
     lineas.push(...lineasDeduccion);
     advertencias.push(...advertenciasDeducciones);
 

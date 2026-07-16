@@ -7,7 +7,13 @@ import {
   type NovedadDia,
   type ResultadoNomina,
 } from "@pv/reglas";
-import { calcularNomina, listarFestivos, type ComprobanteExtraido } from "./api";
+import {
+  calcularNomina,
+  listarFestivos,
+  obtenerParametros,
+  type ComprobanteExtraido,
+  type ParametrosPublicos,
+} from "./api";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 import PasoSalario, { type DatosPaso1 } from "./components/PasoSalario.tsx";
 import PasoSemana from "./components/PasoSemana.tsx";
@@ -31,20 +37,25 @@ export default function App() {
   const [paso, setPaso] = useState<Paso>("salario");
   const [datos1, setDatos1] = useState<DatosPaso1>({
     salario: "",
+    periodicidad: "quincenal",
     desde: "",
     hasta: "",
     auxilio: true,
     netoRecibido: "",
     aporteAfc: "",
+    embargoTipo: "",
+    embargoValor: "",
   });
   const [horarioBase, setHorarioBase] = useState<(HorarioDia | null)[]>(HORARIO_BASE_DEFAULT);
   const [festivos, setFestivos] = useState<Festivo[]>([]);
+  const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
   const [extraido, setExtraido] = useState<ComprobanteExtraido | null>(null);
   const [resultado, setResultado] = useState<ResultadoNomina | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     listarFestivos().then(setFestivos);
+    obtenerParametros().then(setParametros);
   }, []);
 
   async function calcularPorTurnos(novedades: NovedadDia[]) {
@@ -60,6 +71,10 @@ export default function App() {
         horarioBase,
         novedades,
         aporteAfcMensual: datos1.aporteAfc ? Number(datos1.aporteAfc) : undefined,
+        descuentoJudicial:
+          datos1.embargoTipo && datos1.embargoValor
+            ? { tipo: datos1.embargoTipo, valorMensual: Number(datos1.embargoValor) }
+            : undefined,
       });
       setResultado(r);
       setPaso("resultado");
@@ -122,7 +137,12 @@ export default function App() {
                 colombiana vigente.
               </p>
             </div>
-            <PasoSalario datos={datos1} onCambio={setDatos1} onSiguiente={() => setPaso("semana")} />
+            <PasoSalario
+              datos={datos1}
+              onCambio={setDatos1}
+              onSiguiente={() => setPaso("semana")}
+              parametros={parametros}
+            />
             <button
               onClick={() => setPaso("subir")}
               className="text-sm text-mint-dark hover:underline self-center"
