@@ -25,4 +25,6 @@ COPY . .
 
 RUN pnpm --filter @pv/api exec prisma generate
 
+RUN chmod +x bin/docker-entrypoint.dev
+ENTRYPOINT ["/app/bin/docker-entrypoint.dev"]
 CMD ["pnpm", "dev"]

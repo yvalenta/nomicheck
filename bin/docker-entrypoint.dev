@@ -1,0 +1,14 @@
+#!/bin/bash -e
+
+# Los node_modules son volúmenes nombrados vacíos en el primer `docker
+# compose up` (montan por encima de lo instalado en build time), así que
+# hay que reinstalar aquí, no solo en el Dockerfile. El store de pnpm
+# también es un volumen nombrado, así que las reinstalaciones tras la
+# primera son casi instantáneas (todo viene del cache de contenido).
+pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR:-/pnpm-store}"
+
+# El cliente de Prisma se genera dentro de node_modules; como ese
+# directorio acaba de reinstalarse, hay que regenerarlo en cada arranque.
+pnpm --filter @pv/api exec prisma generate
+
+exec "${@}"

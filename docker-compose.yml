@@ -17,6 +17,7 @@ x-env: &app-env
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   CORS_ORIGIN: http://localhost:5173
   PORT: 3001
+  PNPM_STORE_DIR: /pnpm-store
 
 x-app: &app
   build:
@@ -28,6 +29,7 @@ x-app: &app
     - api_node_modules:/app/apps/api/node_modules
     - web_node_modules:/app/apps/web/node_modules
     - reglas_node_modules:/app/packages/reglas/node_modules
+    - pnpm_store:/pnpm-store
   environment: *app-env
   depends_on:
     db:
@@ -72,4 +74,5 @@ volumes:
   api_node_modules:
   web_node_modules:
   reglas_node_modules:
+  pnpm_store:
   postgres:
