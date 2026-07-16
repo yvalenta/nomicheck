@@ -1,89 +1,125 @@
-import { useState } from "react";
-import { Scale } from "lucide-react";
-import type { DatosNominaFija, DatosNominaTurnos, ResultadoNomina } from "@pv/reglas";
-import { calcularNomina } from "./api";
-import FormularioTurnos from "./components/FormularioTurnos";
-import FormularioSalarioFijo from "./components/FormularioSalarioFijo";
-import Resultado from "./components/Resultado";
+import { useEffect, useState } from "react";
+import {
+  HORARIO_BASE_DEFAULT,
+  type Festivo,
+  type HorarioDia,
+  type NovedadDia,
+  type ResultadoNomina,
+} from "@pv/reglas";
+import { calcularNomina, listarFestivos } from "./api";
+import HeaderProfile from "./components/HeaderProfile.tsx";
+import PasoSalario, { type DatosPaso1 } from "./components/PasoSalario.tsx";
+import PasoSemana from "./components/PasoSemana.tsx";
+import Resultado from "./components/Resultado.tsx";
+import SkeletonResultado from "./components/SkeletonResultado.tsx";
 
-type Vista = "inicio" | "turnos" | "salario-fijo" | "resultado";
+type Paso = "salario" | "semana" | "calculando" | "resultado";
+
+const PASO_LABEL: Record<Paso, string> = {
+  salario: "Paso 1 de 3 · Salario y fechas",
+  semana: "Paso 2 de 3 · Tu semana",
+  calculando: "Calculando…",
+  resultado: "Paso 3 de 3 · Resultado",
+};
 
 export default function App() {
-  const [vista, setVista] = useState<Vista>("inicio");
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [paso, setPaso] = useState<Paso>("salario");
+  const [datos1, setDatos1] = useState<DatosPaso1>({
+    salario: "",
+    desde: "",
+    hasta: "",
+    auxilio: true,
+    netoRecibido: "",
+  });
+  const [horarioBase, setHorarioBase] = useState<(HorarioDia | null)[]>(HORARIO_BASE_DEFAULT);
+  const [festivos, setFestivos] = useState<Festivo[]>([]);
   const [resultado, setResultado] = useState<ResultadoNomina | null>(null);
-  const [netoRecibido, setNetoRecibido] = useState<number | undefined>();
+  const [error, setError] = useState<string | null>(null);
 
-  async function calcular(datos: DatosNominaTurnos | DatosNominaFija, neto?: number) {
-    setCargando(true);
+  useEffect(() => {
+    listarFestivos().then(setFestivos);
+  }, []);
+
+  async function calcular(novedades: NovedadDia[]) {
+    setPaso("calculando");
     setError(null);
     try {
-      const r = await calcularNomina(datos);
+      const r = await calcularNomina({
+        modo: "turnos",
+        salarioBasicoMensual: Number(datos1.salario),
+        recibeAuxilioTransporte: datos1.auxilio,
+        periodoDesde: datos1.desde,
+        periodoHasta: datos1.hasta,
+        horarioBase,
+        novedades,
+      });
       setResultado(r);
-      setNetoRecibido(neto);
-      setVista("resultado");
+      setPaso("resultado");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
-    } finally {
-      setCargando(false);
+      setPaso("semana");
     }
   }
 
-  function volver() {
+  function reiniciar() {
     setResultado(null);
     setError(null);
-    setVista("inicio");
+    setPaso("salario");
   }
 
+  const periodo =
+    paso !== "salario" && datos1.desde && datos1.hasta
+      ? { desde: datos1.desde, hasta: datos1.hasta }
+      : undefined;
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center gap-8 p-8">
-      <button onClick={volver} className="flex items-center gap-3">
-        <Scale size={36} strokeWidth={1.5} className="text-brand" />
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
-          Validador de Nómina
-        </h1>
-      </button>
+    <div className="min-h-screen flex flex-col">
+      <HeaderProfile periodo={periodo} paso={PASO_LABEL[paso]} />
 
-      {vista === "inicio" && (
-        <>
-          <p className="text-gray-500 text-sm max-w-sm text-center">
-            Verifica si tu pago fue calculado correctamente según la ley laboral
-            colombiana vigente.
-          </p>
-          <div className="flex gap-4">
-            <button
-              onClick={() => setVista("turnos")}
-              className="px-6 py-3 rounded-xl bg-brand text-white font-medium hover:bg-brand-dark transition-colors shadow-sm"
-            >
-              Nómina por turnos
-            </button>
-            <button
-              onClick={() => setVista("salario-fijo")}
-              className="px-6 py-3 rounded-xl border border-gray-200 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              Nómina de salario fijo
-            </button>
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
+        {paso === "salario" && (
+          <div className="flex flex-col gap-5">
+            <div className="text-center px-4">
+              <h2 className="text-xl font-bold text-ink">¿Te pagaron bien?</h2>
+              <p className="text-sm text-muted mt-1">
+                Dinos tu salario y tus horarios — nosotros hacemos las cuentas con la ley
+                colombiana vigente.
+              </p>
+            </div>
+            <PasoSalario datos={datos1} onCambio={setDatos1} onSiguiente={() => setPaso("semana")} />
           </div>
-        </>
-      )}
+        )}
 
-      {vista === "turnos" && (
-        <FormularioTurnos onCalcular={calcular} cargando={cargando} error={error} />
-      )}
+        {paso === "semana" && (
+          <div className="flex flex-col gap-4">
+            {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
+            <PasoSemana
+              desde={datos1.desde}
+              hasta={datos1.hasta}
+              horarioBase={horarioBase}
+              onCambioHorarioBase={setHorarioBase}
+              festivos={festivos}
+              onAtras={() => setPaso("salario")}
+              onCalcular={calcular}
+            />
+          </div>
+        )}
 
-      {vista === "salario-fijo" && (
-        <FormularioSalarioFijo onCalcular={calcular} cargando={cargando} error={error} />
-      )}
+        {paso === "calculando" && <SkeletonResultado />}
 
-      {vista === "resultado" && resultado && (
-        <Resultado resultado={resultado} netoRecibido={netoRecibido} onVolver={volver} />
-      )}
+        {paso === "resultado" && resultado && (
+          <Resultado
+            resultado={resultado}
+            netoRecibido={datos1.netoRecibido ? Number(datos1.netoRecibido) : undefined}
+            onVolver={reiniciar}
+          />
+        )}
+      </main>
 
-      <p className="text-xs text-gray-400 mt-auto">
-        Estimado informativo — no reemplaza la liquidación oficial ni asesoría
-        legal certificada.
-      </p>
+      <footer className="text-center text-xs text-muted py-4 px-6">
+        NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
+        certificada.
+      </footer>
     </div>
   );
 }

@@ -1,0 +1,83 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  Banknote,
+  Bus,
+  CalendarDays,
+  HandCoins,
+  HeartPulse,
+  Moon,
+  PiggyBank,
+  Sun,
+  Sunrise,
+} from "lucide-react";
+import { formatCOP, type LineaResultado } from "@pv/reglas";
+
+function iconoDe(concepto: string): LucideIcon {
+  if (concepto.startsWith("Salario")) return Banknote;
+  if (concepto.startsWith("Recargo nocturno")) return Moon;
+  if (concepto.startsWith("Recargo dominical")) return CalendarDays;
+  if (concepto.startsWith("Hora extra nocturna")) return Moon;
+  if (concepto.startsWith("Hora extra dominical")) return CalendarDays;
+  if (concepto.startsWith("Hora extra")) return Sunrise;
+  if (concepto.startsWith("Auxilio")) return Bus;
+  if (concepto.startsWith("Salud")) return HeartPulse;
+  if (concepto.startsWith("Pensión")) return PiggyBank;
+  if (concepto.startsWith("Fondo")) return HandCoins;
+  return Sun;
+}
+
+// Fórmula legible para el tooltip, armada con los datos que expone el motor.
+function formulaDe(l: LineaResultado): string | null {
+  const pct = l.recargoPct !== undefined ? `${(l.recargoPct * 100).toFixed(0)}%` : null;
+  if (l.horas !== undefined && pct) {
+    const esExtra = l.concepto.startsWith("Hora extra");
+    return `${l.horas} h × valor hora × ${esExtra ? `(100% + ${pct})` : pct}`;
+  }
+  if (l.base !== undefined && pct) return `${formatCOP(l.base)} × ${pct}`;
+  if (l.base !== undefined) return `Base: ${formatCOP(l.base)}`;
+  return null;
+}
+
+export default function ValidationRow({ linea }: { linea: LineaResultado }) {
+  const Icono = iconoDe(linea.concepto);
+  const esDeduccion = linea.tipo === "deduccion";
+  const formula = formulaDe(linea);
+
+  return (
+    <div className="group relative flex items-center gap-3 px-3 py-3 rounded-xl transition-colors duration-200 ease-in-out hover:bg-slate-50">
+      <div
+        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+          esDeduccion ? "bg-red-50 text-coral" : "bg-emerald-50 text-mint-dark"
+        }`}
+      >
+        <Icono size={18} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-ink truncate">{linea.concepto}</p>
+        {linea.ley && <p className="text-xs text-muted truncate">{linea.ley}</p>}
+      </div>
+
+      {linea.horas !== undefined && (
+        <span className="text-xs font-semibold bg-slate-100 text-muted rounded-full px-2 py-0.5 shrink-0">
+          {linea.horas} h
+        </span>
+      )}
+
+      <p
+        className={`text-sm font-semibold tabular-nums shrink-0 ${
+          esDeduccion ? "text-coral" : "text-ink"
+        }`}
+      >
+        {esDeduccion ? "−" : ""}
+        {formatCOP(linea.valorCalculado)}
+      </p>
+
+      {formula && (
+        <div className="pointer-events-none absolute -top-8 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out bg-midnight text-white text-xs rounded-lg px-3 py-1.5 shadow-lg whitespace-nowrap z-10">
+          {formula}
+        </div>
+      )}
+    </div>
+  );
+}

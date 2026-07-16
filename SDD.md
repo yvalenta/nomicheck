@@ -1,16 +1,18 @@
-# NóminaClara — Software Design Document · v2.1
+# NomiCheck — Software Design Document · v2.2
 
-> **SDD v2.1** · Plataforma de nómina Colombia con dos modos: **verificador anónimo** de comprobantes de pago y **versión empresa** para liquidar nómina de colaboradores, con verificación y reporte de discrepancias por parte del empleado.
+> **SDD v2.2** · Plataforma de nómina Colombia con dos modos: **verificador anónimo** de comprobantes de pago y **versión empresa** para liquidar nómina de colaboradores, con verificación y reporte de discrepancias por parte del empleado.
 > Stack: pnpm monorepo TypeScript · React 19 + Vite + Tailwind CSS (SPA) · Express + Prisma + **Supabase (Postgres + Auth + RLS)** · `packages/reglas` (motor puro compartido) · Claude API (extracción + chat).
 
 | Metadato | Valor |
 |---|---|
-| Versión | 2.1 — Supabase como motor de base de datos (Postgres + Auth + RLS), reemplaza SQLite y la auth propia |
+| Versión | 2.2 — rebrand a NomiCheck, wizard de turnos basado en tiempo (salario proporcional + deducciones automáticas) y UI FinTech |
 | Estado | Definición del pivot, en implementación |
 | Stack | TypeScript end-to-end · React 19 · Express · Prisma sobre Supabase Postgres · Supabase Auth · Claude API |
 | Actualizado | Julio 2026 |
 | Documentos de referencia | `PLAN.md` (v1, superseded) · `sdd/` (metodología v1, archivada) · Advance Fitness SDD v2.0 (formato) |
 
+> **Nota de transición (v2.2):** el producto se renombra **NomiCheck**. El verificador anónimo abandona los formularios de conceptos contables: el usuario declara tiempo (semana habitual + novedades) y el motor clasifica; el pago base pasa de horas×valor hora a **salario proporcional** + recargos; salud/pensión se deducen automáticamente. UI rediseñada (tokens FinTech §06).
+>
 > **Nota de transición (v2.1):** la v2.0 fijaba SQLite + auth/sesiones propias. Esta revisión adopta **Supabase** solo donde el alcance ya lo pedía: Postgres gestionado (reemplaza SQLite desde la Fase 5, cuando aparece multi-tenant real), **Auth** (reemplaza bcrypt/sesiones e invitación propia) y **RLS** (aplica el scoping por empresa/colaborador de §08 directo en la base, como defensa adicional al service). No se adoptan Storage, Realtime, Edge Functions ni acceso a datos vía `supabase-js` desde el frontend — ninguno lo pide el alcance actual (detalle en §04).
 >
 > **Nota de transición (v2.0):** la v1 (`PLAN.md` + carpeta `sdd/`) definía solo el verificador anónimo con metodología de specs por capacidad + propuestas por cambio. La v2.0 (a) amplía el producto a dos modos compartiendo el mismo motor de reglas, y (b) adopta este documento único como fuente de verdad. Los requisitos de los 5 specs de `sdd/specs/` están absorbidos íntegros en §03; la carpeta `sdd/` queda como historial.
@@ -21,7 +23,7 @@
 
 ### ¿Qué construimos?
 
-**NóminaClara** es un "contador digital" para la nómina colombiana con dos caras sobre el mismo motor:
+**NomiCheck** es un "contador digital" para la nómina colombiana con dos caras sobre el mismo motor:
 
 1. **Verificador anónimo** (público, sin login, gratuito): un empleado sube su comprobante de pago (imagen/PDF) o digita sus datos, y la app valida si le pagaron correctamente según la legislación vigente en la fecha del periodo (Ley 2101 de 2021, Ley 2466 de 2025, decretos de salario mínimo). Muestra cada concepto con semáforo, explica cada cifra con fórmula y referencia legal, y ofrece un chat que responde como un contador humano. Además de su valor propio, es la puerta de entrada comercial hacia el modo empresa.
 
@@ -77,29 +79,34 @@ Cada requerimiento queda trazado a su entidad (§07) y su flujo (§10). Los requ
 | `fondo_solidaridad` | escalonado 1–2 % si IBC ≥ 4 SMLMV (4–16→1%, 16–17→1.2%, 17–18→1.4%, 18–19→1.6%, 19–20→1.8%, ≥20→2%) | — | Ley 100 de 1993, Ley 797 de 2003 art. 8 — **la reforma pensional (Ley 2381 de 2024) que la modificaría sigue suspendida por la Corte Constitucional (auto 841/25) por vicio de trámite; revisar si se reactiva** |
 | Retención en la fuente | según tabla vigente del Estatuto Tributario | — | E.T. art. 383 — no se calcula automáticamente en v1 (ver Módulo B) |
 
-### Módulo B — Verificador anónimo
+### Módulo B — Verificador anónimo (wizard de turnos)
+
+> **Principio (v2.2):** la carga cognitiva vive en el código. El usuario declara
+> **tiempo** (a qué hora entró y salió, qué días descansó); el motor clasifica
+> eso en conceptos legales y deduce salud/pensión automáticamente. La UI nunca
+> muestra selectores de "devengo extralegal" ni "deducción por convenio".
 
 | Requerimiento | Solución | Entidad |
 |---|---|---|
-| Formulario por turnos | Rango de fechas, salario básico, domingos trabajados, excepciones de horario; ver reglas de cálculo abajo | — (sin persistencia) |
-| Formulario salario fijo | Salario básico + lista abierta de conceptos (código/nombre, tipo, base, valor) | — (sin persistencia) |
-| Subir comprobante en vez de digitar | Extracción con Claude (Módulo E) precarga el formulario; el usuario revisa y edita antes de calcular | — |
-| Resultado transparente | Cada concepto con fórmula + referencia legal + semáforo (verde coincide · rojo difiere · gris no verificable) | — |
+| Wizard 3 pasos | 1) salario + periodo + neto recibido (opcional) · 2) semana habitual + novedades por día · 3) resultado | — (sin persistencia) |
+| Semana habitual | Editor de 7 días (trabajo/descanso + horas); default dom 10–16, lun descanso, mar–sáb 10–17 | — |
+| Novedades | Lista de días del periodo generada automáticamente (festivos pre-marcados como descanso vía `GET /api/festivos`); el usuario solo toca los días distintos | — |
+| Deducciones automáticas | Salud 4 % + pensión 4 % sobre IBC (sin auxilio) + fondo de solidaridad si aplica — calculadas siempre, jamás declaradas | — |
+| Subir comprobante en vez de digitar | Extracción con Claude (Módulo E) precarga los datos; el usuario revisa antes de calcular. El modo salario-fijo (conceptos) existe solo por esta vía | — |
+| Resultado transparente | Cada concepto con icono, horas, fórmula en tooltip + referencia legal + semáforo de comparación contra el neto recibido | — |
 | Chat contador | Sobre el resultado calculado (Módulo E) | — |
 | Privacidad | El flujo anónimo NO persiste nada: ni archivo, ni datos, ni resultado | — |
 
-**Reglas de cálculo por turnos** (spec v1 `calculo-turnos`, íntegro):
-1. Entrada: rango de fechas del periodo, salario básico mensual, domingos trabajados, lista de excepciones (días con horario distinto al base o adicionales en lunes/festivo).
-2. Horario base por defecto sin excepción: mar–sáb 10:00–17:00 (7 h diurnas), domingo 10:00–16:00 (6 h con recargo dominical), lunes y festivos descanso.
-3. Valor hora ordinaria = `salario ÷ divisor` según fecha del periodo (220 antes del 15-jul-2026, 210 después). Fixture Resplandor: $1.750.905 ÷ 220 = $7.959.
-4. Si el periodo cruza una fecha de corte normativo, cada tramo se calcula con su tarifa y se presenta por separado.
-5. Recargo dominical/festivo vigente en la fecha de cada día (80 %/90 %/100 %). Fixture: 16 h dominicales, recargo $15.121/h base 80 %, subtotal $241.943.
-6. Recargo nocturno 35 % a toda hora entre 7:00 p.m. y 6:00 a.m., incluidas excepciones que crucen ese horario.
-7. Hora extra = hora por encima de la jornada diaria ordinaria (7 h entre semana, 6 h domingo): extra diurna 25 %, extra nocturna 75 %, extra dominical/festiva = recargo dominical vigente + 25 %.
-8. Detectar festivos del rango automáticamente (tabla `Festivo`) y confirmarlos con el usuario antes de calcular.
-9. Validar coherencia (domingos declarados vs. reales del rango; excepciones que exceden jornada máxima sin marcar como extra) y señalarlo antes del resultado.
-10. NO presentar cálculo final sin: rango de fechas, domingos, y confirmación de excepciones (aunque sea "ninguna").
-11. Resultado mínimo: horas ordinarias, horas dominicales/festivas con recargo, extras por tipo, auxilio de transporte si aplica, estimado total, disclaimer.
+**Reglas de cálculo por turnos** (v2.2 — modelo salario proporcional):
+1. Entrada: salario básico mensual, periodo, `horarioBase` semanal (7 posiciones, null = descanso) y `novedades` (días que difieren: no trabajó, u horas distintas).
+2. Horario efectivo de un día: novedad declarada → festivo (descanso salvo novedad) → horario base del día de semana.
+3. **Devengo base = salario/30 × días calendario del periodo** (modelo estándar de nómina colombiana: el salario pactado cubre la jornada ordinaria). Los turnos solo generan recargos y extras.
+4. Valor hora = `salario ÷ divisor` según fecha (220 → 210 con corte 15-jul-2026); si el periodo cruza un corte normativo, cada tramo se presenta por separado.
+5. Recargos (solo el % adicional — la hora base ya está en el salario): nocturno 35 % (19:00–06:00), dominical/festivo vigente (80 %/90 %/100 %) sobre horas ordinarias en domingo/festivo; se acumulan.
+6. Horas extra (por encima de 7 h hábiles / 6 h dominicales por día): se pagan completas — hora × (1 + recargo): diurna 25 %, nocturna 75 %, dominical/festiva = recargo dominical + 25 %.
+7. Deducciones de ley automáticas sobre IBC = devengado salarial (base + recargos + extras, SIN auxilio de transporte).
+8. Advertencia de descanso compensatorio cuando se trabajan ≥ 3 domingos en el periodo (CST art. 181).
+9. Fixture de regresión (Resplandor, 16–30 jun 2026, horario default): base $875.453 + recargo dominical 12 h × 80 % = $76.403 + auxilio $124.548 − salud/pensión $76.148 → neto $1.000.255.
 
 **Reglas de cálculo salario fijo** (spec v1 `calculo-salario-fijo`, íntegro):
 1. Entrada: salario básico mensual + lista abierta de conceptos (código/nombre, tipo: devengo legal · devengo extralegal · deducción legal · deducción por convenio, base y valor).
@@ -239,9 +246,9 @@ payment_validation/
 
 ## 06 — Sistema de diseño
 
-- **Paleta simple**: neutros (slate) + un acento (verde esmeralda — confianza/dinero) + semáforo funcional: verde `coincide`, rojo `difiere`, gris `no verificable`, ámbar `advertencia`.
-- **Tokens Tailwind v4** en `@theme` (`apps/web/src/index.css`): `--color-acento`, `--color-ok`, `--color-alerta`, `--color-neutro-*`, `--font-body`, `--font-display` (números de dinero grandes).
-- **Componentes**: tarjeta de concepto (nombre + fórmula + referencia legal + valor + semáforo), tabla comparativa comprobante vs. esperado, grilla de turnos editable, panel de chat lateral.
+- **Dirección de arte (v2.2)**: FinTech moderna — fondo `surface #F8FAFC`, header `midnight #0F172A` con patrón de dots, acento `mint #10B981` (acciones/éxito), `coral #EF4444` (deducciones/alertas), textos slate. Tipografía Inter/Plus Jakarta Sans (fallback system).
+- **Tokens Tailwind v4** en `@theme` (`apps/web/src/index.css`): `--color-surface`, `--color-midnight`, `--color-mint`, `--color-coral`, `--color-ink`, `--color-muted`, `--font-sans`.
+- **Componentes**: `HeaderProfile` (header midnight con periodo), `SegmentedControl` (píldora Resumen/Recargos/Deducciones), `PaycheckCard` (blanca, rounded-2xl, shadow-sm), `ValidationRow` (icono + concepto + badge horas + valor + tooltip con fórmula), `FinancialProgressBar` (base azul · recargos mint · deducciones coral), `SkeletonResultado` (loading). Transiciones ease-in-out 200 ms.
 - **Disclaimer legal** siempre visible en resultado, recibo y chat: "estimado informativo, no reemplaza la liquidación oficial ni asesoría legal certificada".
 - Responsive móvil-primero (≥ 375 px): un colaborador verifica su recibo desde el celular.
 
@@ -430,6 +437,7 @@ Cada fase entrega algo usable de punta a punta.
 | Flujo anónimo sin persistencia | Ni archivo, ni datos, ni resultado. Privacidad por diseño |
 | Un solo motor para ambos modos | Liquidar (empresa) y verificar (anónimo/colaborador) usan las mismas calculadoras |
 | El recibo es snapshot; la verificación es en vivo | El recibo no se recalcula al cambiar reglas; la verificación sí — la diferencia es información |
+| La carga cognitiva vive en el código | El usuario declara tiempo (turnos, novedades); nunca conceptos contables ni deducciones — el motor clasifica y deduce |
 | Español en dominio, código y UI | Entidades, conceptos y mensajes |
 | Disclaimer legal siempre visible | Resultado, recibo y chat |
 | Supabase solo para Postgres + Auth + RLS | Sin Storage/Realtime/Edge Functions ni `supabase-js` de datos en el frontend — el alcance actual no los pide (detalle en §04) |

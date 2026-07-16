@@ -20,6 +20,21 @@ export const HORARIO_HABIL_FIN = "17:00";
 export const HORARIO_DOMINICAL_INICIO = "10:00";
 export const HORARIO_DOMINICAL_FIN = "16:00";
 
+/**
+ * Horario base semanal por defecto (índice 0=domingo … 6=sábado, null =
+ * descanso): dom 10–16, lun descanso, mar–sáb 10–17. Es el punto de partida
+ * editable en la UI del wizard — no una regla legal.
+ */
+export const HORARIO_BASE_DEFAULT: ({ horaInicio: string; horaFin: string } | null)[] = [
+  { horaInicio: HORARIO_DOMINICAL_INICIO, horaFin: HORARIO_DOMINICAL_FIN },
+  null,
+  { horaInicio: HORARIO_HABIL_INICIO, horaFin: HORARIO_HABIL_FIN },
+  { horaInicio: HORARIO_HABIL_INICIO, horaFin: HORARIO_HABIL_FIN },
+  { horaInicio: HORARIO_HABIL_INICIO, horaFin: HORARIO_HABIL_FIN },
+  { horaInicio: HORARIO_HABIL_INICIO, horaFin: HORARIO_HABIL_FIN },
+  { horaInicio: HORARIO_HABIL_INICIO, horaFin: HORARIO_HABIL_FIN },
+];
+
 // --- Jornada nocturna (Ley 2466 de 2025, art. 3 — vigente desde 25-dic-2025) ---
 
 /** Hora del día (24h) en que inicia la jornada nocturna. */

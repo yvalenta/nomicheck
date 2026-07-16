@@ -1,15 +1,45 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand: #2563eb;
-  --color-brand-dark: #1d4ed8;
-  --color-ok: #16a34a;
-  --color-warn: #dc2626;
-  --font-sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  /* NomiCheck — FinTech design tokens (SDD §06) */
+  --color-surface: #f8fafc; /* fondo de página            */
+  --color-midnight: #0f172a; /* header corporativo         */
+  --color-midnight-2: #1e293b; /* variante del header        */
+  --color-mint: #10b981; /* acción principal / éxito   */
+  --color-mint-dark: #059669; /* hover del mint             */
+  --color-coral: #ef4444; /* deducciones / alertas      */
+  --color-ink: #0f172a; /* texto principal            */
+  --color-muted: #64748b; /* texto secundario slate-500 */
+
+  --font-sans: "Inter", "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Patrón de dots sutil para el header midnight */
+.bg-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* Skeleton loader */
+@keyframes pulse-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.skeleton {
+  animation: pulse-skeleton 1.4s ease-in-out infinite;
+  background: #e2e8f0;
+  border-radius: 0.5rem;
 }

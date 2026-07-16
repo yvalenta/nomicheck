@@ -15,21 +15,30 @@ export interface Festivo {
   nombre: string;
 }
 
-// Entrada para el modo turnos
+// Entrada para el modo turnos: el usuario declara TIEMPO (horario semanal y
+// novedades por día), nunca conceptos contables — el motor clasifica (SDD §12).
+export interface HorarioDia {
+  horaInicio: string; // HH:mm
+  horaFin: string; // HH:mm
+}
+
+export interface NovedadDia {
+  fecha: string; // YYYY-MM-DD
+  trabajo: boolean; // false = ese día no trabajó (descanso, permiso)
+  horaInicio?: string; // requeridas cuando trabajo=true
+  horaFin?: string;
+}
+
 export interface DatosNominaTurnos {
   modo: "turnos";
   salarioBasicoMensual: number;
   recibeAuxilioTransporte: boolean;
   periodoDesde: string; // YYYY-MM-DD
   periodoHasta: string; // YYYY-MM-DD
-  dominicosTrabajaos: number;
-  excepciones: ExcepcionTurno[];
-}
-
-export interface ExcepcionTurno {
-  fecha: string; // YYYY-MM-DD
-  horaInicio: string; // HH:mm
-  horaFin: string; // HH:mm
+  // Horario base semanal: índice 0=domingo … 6=sábado; null = día de descanso.
+  horarioBase: (HorarioDia | null)[];
+  // Días que difieren del horario base (no trabajó, o trabajó otras horas).
+  novedades: NovedadDia[];
 }
 
 // Entrada para el modo salario fijo
