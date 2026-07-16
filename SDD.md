@@ -471,7 +471,7 @@ Cada fase entrega algo usable de punta a punta.
 - [x] Fase 1 — motor + tests de regresión con los 2 comprobantes reales (26 tests, `packages/reglas`) + Supabase Postgres conectado con schema inicial migrado
 - [x] Fase 2 — verificador anónimo manual end-to-end (formularios turnos/fijo, `POST /api/nomina/calcular`, resultado con comparación neto esperado vs. recibido)
 - [x] Fase 3 — extracción por imagen: código completo (`POST /api/comprobantes/extraer`, capa multi-proveedor Gemini/Claude, editable antes de calcular). **⏸ Pausado**: bloqueado por falta de facturación habilitada en el proyecto de GCP de las keys de Gemini provistas (429 `limit: 0`); Claude sigue con key placeholder. Retomar cuando haya una key funcional — cambiar `IA_PROVEEDOR` en `.env` no requiere tocar código.
-- [ ] Fase 4 — chat contador
+- [ ] Fase 4 — chat contador. **⏸ Pausado**: depende de un proveedor de IA con key funcional, igual que Fase 3 (ver nota ahí)
 - [ ] Fase 5 — cuentas + empresa + empleados
 - [ ] Fase 6 — liquidación y recibos
 - [ ] Fase 7 — portal colaborador + discrepancias
