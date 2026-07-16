@@ -450,7 +450,7 @@ Cada fase entrega algo usable de punta a punta.
 
 - [x] Fase 1 — motor + tests de regresión con los 2 comprobantes reales (26 tests, `packages/reglas`) + Supabase Postgres conectado con schema inicial migrado
 - [x] Fase 2 — verificador anónimo manual end-to-end (formularios turnos/fijo, `POST /api/nomina/calcular`, resultado con comparación neto esperado vs. recibido)
-- [ ] Fase 3 — extracción por imagen
+- [x] Fase 3 — extracción por imagen (`POST /api/comprobantes/extraer`, Claude visión + tool-use, editable antes de calcular). Pendiente: probar con `ANTHROPIC_API_KEY` real (hoy placeholder)
 - [ ] Fase 4 — chat contador
 - [ ] Fase 5 — cuentas + empresa + empleados
 - [ ] Fase 6 — liquidación y recibos

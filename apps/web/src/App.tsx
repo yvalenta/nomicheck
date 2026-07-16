@@ -1,25 +1,30 @@
 import { useEffect, useState } from "react";
 import {
   HORARIO_BASE_DEFAULT,
+  type ConceptoNomina,
   type Festivo,
   type HorarioDia,
   type NovedadDia,
   type ResultadoNomina,
 } from "@pv/reglas";
-import { calcularNomina, listarFestivos } from "./api";
+import { calcularNomina, listarFestivos, type ComprobanteExtraido } from "./api";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 import PasoSalario, { type DatosPaso1 } from "./components/PasoSalario.tsx";
 import PasoSemana from "./components/PasoSemana.tsx";
+import SubirComprobante from "./components/SubirComprobante.tsx";
+import PasoRevision from "./components/PasoRevision.tsx";
 import Resultado from "./components/Resultado.tsx";
 import SkeletonResultado from "./components/SkeletonResultado.tsx";
 
-type Paso = "salario" | "semana" | "calculando" | "resultado";
+type Paso = "salario" | "semana" | "subir" | "revision" | "calculando" | "resultado";
 
 const PASO_LABEL: Record<Paso, string> = {
   salario: "Paso 1 de 3 · Salario y fechas",
   semana: "Paso 2 de 3 · Tu semana",
+  subir: "Sube tu comprobante",
+  revision: "Revisa los datos",
   calculando: "Calculando…",
-  resultado: "Paso 3 de 3 · Resultado",
+  resultado: "Resultado",
 };
 
 export default function App() {
@@ -33,6 +38,7 @@ export default function App() {
   });
   const [horarioBase, setHorarioBase] = useState<(HorarioDia | null)[]>(HORARIO_BASE_DEFAULT);
   const [festivos, setFestivos] = useState<Festivo[]>([]);
+  const [extraido, setExtraido] = useState<ComprobanteExtraido | null>(null);
   const [resultado, setResultado] = useState<ResultadoNomina | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +46,7 @@ export default function App() {
     listarFestivos().then(setFestivos);
   }, []);
 
-  async function calcular(novedades: NovedadDia[]) {
+  async function calcularPorTurnos(novedades: NovedadDia[]) {
     setPaso("calculando");
     setError(null);
     try {
@@ -61,14 +67,42 @@ export default function App() {
     }
   }
 
+  async function calcularDesdeComprobante(datos: {
+    salario: string;
+    desde: string;
+    hasta: string;
+    auxilio: boolean;
+    conceptos: ConceptoNomina[];
+  }) {
+    setPaso("calculando");
+    setError(null);
+    try {
+      const r = await calcularNomina({
+        modo: "salario-fijo",
+        salarioBasicoMensual: Number(datos.salario),
+        recibeAuxilioTransporte: datos.auxilio,
+        periodoDesde: datos.desde,
+        periodoHasta: datos.hasta,
+        conceptos: datos.conceptos,
+      });
+      setDatos1((d) => ({ ...d, desde: datos.desde, hasta: datos.hasta }));
+      setResultado(r);
+      setPaso("resultado");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error inesperado");
+      setPaso("revision");
+    }
+  }
+
   function reiniciar() {
     setResultado(null);
+    setExtraido(null);
     setError(null);
     setPaso("salario");
   }
 
   const periodo =
-    paso !== "salario" && datos1.desde && datos1.hasta
+    (paso === "semana" || paso === "resultado") && datos1.desde && datos1.hasta
       ? { desde: datos1.desde, hasta: datos1.hasta }
       : undefined;
 
@@ -87,6 +121,12 @@ export default function App() {
               </p>
             </div>
             <PasoSalario datos={datos1} onCambio={setDatos1} onSiguiente={() => setPaso("semana")} />
+            <button
+              onClick={() => setPaso("subir")}
+              className="text-sm text-mint-dark hover:underline self-center"
+            >
+              O sube tu comprobante y lo leemos por ti
+            </button>
           </div>
         )}
 
@@ -100,8 +140,25 @@ export default function App() {
               onCambioHorarioBase={setHorarioBase}
               festivos={festivos}
               onAtras={() => setPaso("salario")}
-              onCalcular={calcular}
+              onCalcular={calcularPorTurnos}
             />
+          </div>
+        )}
+
+        {paso === "subir" && (
+          <SubirComprobante
+            onAtras={() => setPaso("salario")}
+            onExtraido={(datos) => {
+              setExtraido(datos);
+              setPaso("revision");
+            }}
+          />
+        )}
+
+        {paso === "revision" && extraido && (
+          <div className="flex flex-col gap-4">
+            {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
+            <PasoRevision extraido={extraido} onAtras={() => setPaso("subir")} onConfirmar={calcularDesdeComprobante} />
           </div>
         )}
 

@@ -13,16 +13,20 @@
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@pv/reglas": "workspace:*",
+    "@anthropic-ai/sdk": "^0.111.0",
     "@prisma/client": "^5.19.1",
-    "express": "^4.21.2",
+    "@pv/reglas": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2",
+    "multer": "^2.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.5.0",
     "prisma": "^5.19.1",
     "tsx": "^4.19.1",
