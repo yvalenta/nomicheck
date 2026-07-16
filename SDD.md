@@ -441,7 +441,7 @@ Cada fase entrega algo usable de punta a punta.
 ## 13 — Checklist MVP
 
 - [x] Fase 1 — motor + tests de regresión con los 2 comprobantes reales (26 tests, `packages/reglas`) + Supabase Postgres conectado con schema inicial migrado
-- [ ] Fase 2 — verificador anónimo manual end-to-end
+- [x] Fase 2 — verificador anónimo manual end-to-end (formularios turnos/fijo, `POST /api/nomina/calcular`, resultado con comparación neto esperado vs. recibido)
 - [ ] Fase 3 — extracción por imagen
 - [ ] Fase 4 — chat contador
 - [ ] Fase 5 — cuentas + empresa + empleados
