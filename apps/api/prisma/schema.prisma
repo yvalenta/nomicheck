@@ -33,6 +33,108 @@ model Usuario {
   nombre    String
   rol       String // admin_plataforma | admin_empresa | colaborador
   empresaId Int?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+
+  empleado          Empleado?           @relation("EmpleadoUsuario")
+  reportes          ReporteDiscrepancia[]
+  creadoEn          DateTime            @default(now())
 
   @@index([empresaId])
+}
+
+model Empresa {
+  id       Int    @id @default(autoincrement())
+  nombre   String
+  nit      String @unique
+  sector   String
+  creadoEn DateTime @default(now())
+
+  usuarios  Usuario[]
+  empleados Empleado[]
+  periodos  PeriodoNomina[]
+}
+
+model Empleado {
+  id                Int      @id @default(autoincrement())
+  empresaId         Int
+  empresa           Empresa  @relation(fields: [empresaId], references: [id])
+  usuarioId         String?  @unique @db.Uuid
+  usuario           Usuario? @relation("EmpleadoUsuario", fields: [usuarioId], references: [id])
+  nombre            String
+  documento         String
+  salarioBase       Float
+  tipoNomina        String // turnos | fijo
+  auxilioTransporte Boolean @default(false)
+  activo            Boolean @default(true)
+  creadoEn          DateTime @default(now())
+
+  turnos  Turno[]
+  recibos ReciboPago[]
+
+  @@unique([empresaId, documento])
+  @@index([empresaId])
+}
+
+model PeriodoNomina {
+  id          Int      @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  fechaInicio String // YYYY-MM-DD
+  fechaFin    String // YYYY-MM-DD
+  estado      String   @default("borrador") // borrador | liquidado | pagado
+  creadoEn    DateTime @default(now())
+
+  turnos  Turno[]
+  recibos ReciboPago[]
+
+  @@index([empresaId])
+}
+
+// Insumo de la calculadora por turnos — el motor deriva diurno/nocturno/
+// dominical/extra a partir de fecha+horaInicio+horaFin; nada de eso se
+// persiste aquí (SDD.md §07).
+model Turno {
+  id          Int           @id @default(autoincrement())
+  empleadoId  Int
+  empleado    Empleado      @relation(fields: [empleadoId], references: [id])
+  periodoId   Int
+  periodo     PeriodoNomina @relation(fields: [periodoId], references: [id])
+  fecha       String // YYYY-MM-DD
+  horaInicio  String // HH:mm
+  horaFin     String // HH:mm
+
+  @@index([empleadoId, periodoId])
+}
+
+// Documento emitido (snapshot histórico) — no se recalcula al cambiar reglas.
+model ReciboPago {
+  id              Int           @id @default(autoincrement())
+  empleadoId      Int
+  empleado        Empleado      @relation(fields: [empleadoId], references: [id])
+  periodoId       Int
+  periodo         PeriodoNomina @relation(fields: [periodoId], references: [id])
+  lineas          Json // [{ concepto, tipo, formula, referenciaLegal, cantidad?, valor }]
+  totalDevengado  Float
+  totalDeducido   Float
+  neto            Float
+  liquidadoEn     DateTime      @default(now())
+
+  reportes ReporteDiscrepancia[]
+
+  @@unique([empleadoId, periodoId])
+}
+
+model ReporteDiscrepancia {
+  id               Int        @id @default(autoincrement())
+  reciboId         Int
+  recibo           ReciboPago @relation(fields: [reciboId], references: [id])
+  colaboradorId    String     @db.Uuid
+  colaborador      Usuario    @relation(fields: [colaboradorId], references: [id])
+  tipo             String // pago_de_mas | pago_de_menos | concepto_faltante
+  detalle          String
+  estado           String     @default("abierto") // abierto | en_revision | resuelto
+  respuestaEmpresa String?
+  creadoEn         DateTime   @default(now())
+
+  @@index([reciboId])
 }

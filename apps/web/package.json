@@ -11,17 +11,18 @@
   },
   "dependencies": {
     "@pv/reglas": "workspace:*",
+    "@supabase/supabase-js": "^2.110.6",
     "lucide-react": "^0.469.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "recharts": "^2.13.3"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
-    "@tailwindcss/vite": "^4.0.0",
     "oxlint": "^1.71.0",
     "tailwindcss": "^4.0.0",
     "typescript": "~6.0.2",

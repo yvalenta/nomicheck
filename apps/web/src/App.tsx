@@ -173,9 +173,14 @@ export default function App() {
         )}
       </main>
 
-      <footer className="text-center text-xs text-muted py-4 px-6">
-        NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
-        certificada.
+      <footer className="text-center text-xs text-muted py-4 px-6 flex flex-col gap-1.5">
+        <span>
+          NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
+          certificada.
+        </span>
+        <a href="/empresa" className="text-mint-dark hover:underline">
+          ¿Eres empresa? Liquida y administra tu nómina
+        </a>
       </footer>
     </div>
   );

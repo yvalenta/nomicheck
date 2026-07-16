@@ -4,6 +4,9 @@ import rateLimit from "express-rate-limit";
 import { calcular } from "../controllers/nominaController.js";
 import { listarFestivos } from "../controllers/festivosController.js";
 import { extraer } from "../controllers/comprobanteController.js";
+import { registro, invitar } from "../controllers/authController.js";
+import { listar, crear, actualizar } from "../controllers/empleadosController.js";
+import { requiereAuth, requiereRol } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -28,8 +31,18 @@ router.get("/health", (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
+// Verificador anónimo — sin auth.
 router.post("/nomina/calcular", calcular);
 router.get("/festivos", listarFestivos);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
+
+// Auth y empresa.
+router.post("/auth/registro", registro);
+
+const soloEmpresa = [requiereAuth, requiereRol("admin_empresa")];
+router.get("/empresa/empleados", ...soloEmpresa, listar);
+router.post("/empresa/empleados", ...soloEmpresa, crear);
+router.put("/empresa/empleados/:id", ...soloEmpresa, actualizar);
+router.post("/empresa/empleados/:id/invitar", ...soloEmpresa, invitar);
 
 export default router;

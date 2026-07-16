@@ -16,6 +16,7 @@
     "@anthropic-ai/sdk": "^0.111.0",
     "@prisma/client": "^5.19.1",
     "@pv/reglas": "workspace:*",
+    "@supabase/supabase-js": "^2.110.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
