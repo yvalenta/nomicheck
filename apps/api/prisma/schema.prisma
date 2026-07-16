@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model ReglaLegal {
+  id           Int      @id @default(autoincrement())
+  clave        String
+  valor        Float
+  vigenteDesde String   // ISO date YYYY-MM-DD
+  vigenteHasta String?
+  fuente       String?
+  creadoEn     DateTime @default(now())
+
+  @@index([clave, vigenteDesde])
+}
+
+model Festivo {
+  id     Int    @id @default(autoincrement())
+  fecha  String @unique // YYYY-MM-DD
+  nombre String
+}
+
+// Perfil de dominio 1:1 con auth.users de Supabase (id = mismo UUID).
+// La identidad/credenciales viven en Supabase Auth, no aquí (SDD.md §07).
+model Usuario {
+  id        String  @id @db.Uuid
+  nombre    String
+  rol       String // admin_plataforma | admin_empresa | colaborador
+  empresaId Int?
+
+  @@index([empresaId])
+}

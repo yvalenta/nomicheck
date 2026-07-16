@@ -1,0 +1,12 @@
+{
+  "name": "payment-validation",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "build": "pnpm --filter '@pv/reglas' build && pnpm --parallel --filter './apps/*' build",
+    "typecheck": "pnpm --recursive typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

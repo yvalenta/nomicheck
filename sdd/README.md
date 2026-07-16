@@ -1,5 +1,11 @@
 # SDD (Spec-Driven Development) — metodología de este repo
 
+> **⚠️ Archivado (jul-2026).** La metodología del proyecto cambió con el pivot
+> v2.0: la fuente de verdad es ahora el documento único [`SDD.md`](../SDD.md)
+> en la raíz (módulos → entidades → flujos → fases → decisiones fijas). Los
+> requisitos de `sdd/specs/` fueron absorbidos íntegros en su §03. Esta
+> carpeta se conserva como historial de la etapa v1 y no se actualiza más.
+
 Adoptamos el espíritu de OpenSpec — specs como fuente de verdad, propuesta
 antes de código — implementado a mano, sin su CLI ni su tooling.
 

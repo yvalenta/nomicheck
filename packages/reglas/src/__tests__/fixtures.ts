@@ -1,0 +1,40 @@
+import type { Festivo, ReglaLegal } from "../types.js";
+
+// Misma semilla que apps/api/prisma/seed.ts (SDD.md §03 Módulo A) — se
+// duplica aquí a propósito: el motor no debe depender de Prisma para
+// testearse (packages/reglas es TS puro, sin ORM).
+export const REGLAS_JUL_2026: ReglaLegal[] = [
+  { clave: "smlmv", valor: 1750905, vigenteDesde: "2026-01-01", fuente: "Decreto 1469 de 2025" },
+  { clave: "auxilio_transporte", valor: 249095, vigenteDesde: "2026-01-01", fuente: "Decreto 1470 de 2025" },
+  { clave: "recargo_dominical", valor: 0.8, vigenteDesde: "2025-07-01", vigenteHasta: "2026-06-30", fuente: "Ley 2466 de 2025, art. 2" },
+  { clave: "recargo_dominical", valor: 0.9, vigenteDesde: "2026-07-01", vigenteHasta: "2027-06-30", fuente: "Ley 2466 de 2025, art. 2" },
+  { clave: "recargo_nocturno", valor: 0.35, vigenteDesde: "2025-12-25", fuente: "Ley 2466 de 2025, art. 3" },
+  { clave: "hora_extra_diurna", valor: 0.25, vigenteDesde: "2020-01-01", fuente: "CST art. 168" },
+  { clave: "hora_extra_nocturna", valor: 0.75, vigenteDesde: "2020-01-01", fuente: "CST art. 168" },
+  { clave: "aporte_salud_empleado", valor: 0.04, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993" },
+  { clave: "aporte_pension_empleado", valor: 0.04, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993" },
+  { clave: "fondo_solidaridad_umbral_smlmv", valor: 4, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993, art. 27" },
+  { clave: "divisor_hora_ordinaria", valor: 220, vigenteDesde: "2021-01-01", vigenteHasta: "2026-07-14", fuente: "Ley 2101 de 2021" },
+  { clave: "divisor_hora_ordinaria", valor: 210, vigenteDesde: "2026-07-15", fuente: "Ley 2101 de 2021" },
+];
+
+export const FESTIVOS_2026: Festivo[] = [
+  { fecha: "2026-01-01", nombre: "Año Nuevo" },
+  { fecha: "2026-01-12", nombre: "Reyes Magos (trasladado)" },
+  { fecha: "2026-03-23", nombre: "San José (trasladado)" },
+  { fecha: "2026-04-02", nombre: "Jueves Santo" },
+  { fecha: "2026-04-03", nombre: "Viernes Santo" },
+  { fecha: "2026-05-01", nombre: "Día del Trabajo" },
+  { fecha: "2026-05-18", nombre: "Ascensión del Señor (trasladado)" },
+  { fecha: "2026-06-08", nombre: "Corpus Christi (trasladado)" },
+  { fecha: "2026-06-15", nombre: "Sagrado Corazón (trasladado)" },
+  { fecha: "2026-06-29", nombre: "San Pedro y San Pablo (trasladado)" },
+  { fecha: "2026-07-20", nombre: "Día de la Independencia" },
+  { fecha: "2026-08-07", nombre: "Batalla de Boyacá" },
+  { fecha: "2026-08-17", nombre: "Asunción de la Virgen (trasladado)" },
+  { fecha: "2026-10-12", nombre: "Día de la Raza (trasladado)" },
+  { fecha: "2026-11-02", nombre: "Todos los Santos (trasladado)" },
+  { fecha: "2026-11-16", nombre: "Independencia de Cartagena (trasladado)" },
+  { fecha: "2026-12-08", nombre: "Inmaculada Concepción" },
+  { fecha: "2026-12-25", nombre: "Navidad" },
+];
