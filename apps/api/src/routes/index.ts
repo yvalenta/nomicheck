@@ -21,6 +21,13 @@ import {
   recibos,
 } from "../controllers/periodosController.js";
 import { misRecibos, reportar } from "../controllers/colaboradorController.js";
+import {
+  listarReglas,
+  crearRegla,
+  listarFestivosAdminHandler,
+  crearFestivoHandler,
+  eliminarFestivoHandler,
+} from "../controllers/reglasAdminController.js";
 import { listar as listarDiscrepancias, responder as responderDiscrepancia } from "../controllers/discrepanciasController.js";
 import { requiereAuth, requiereRol } from "../middleware/auth.js";
 
@@ -93,5 +100,15 @@ router.put("/empresa/discrepancias/:id", ...soloEmpresa, responderDiscrepancia);
 const soloColaborador = [requiereAuth, requiereRol("colaborador")];
 router.get("/colaborador/recibos", ...soloColaborador, misRecibos);
 router.post("/colaborador/recibos/:id/reportar", ...soloColaborador, reportar);
+
+// Panel admin de reglas legales (Fase 8) — rol de plataforma, no de empresa.
+// No hay auto-registro público: el primer admin_plataforma se crea a mano
+// (SQL directo o seed.ts en desarrollo), ver SDD.md §11.
+const soloPlataforma = [requiereAuth, requiereRol("admin_plataforma")];
+router.get("/admin/reglas", ...soloPlataforma, listarReglas);
+router.post("/admin/reglas", ...soloPlataforma, crearRegla);
+router.get("/admin/festivos", ...soloPlataforma, listarFestivosAdminHandler);
+router.post("/admin/festivos", ...soloPlataforma, crearFestivoHandler);
+router.delete("/admin/festivos/:id", ...soloPlataforma, eliminarFestivoHandler);
 
 export default router;
