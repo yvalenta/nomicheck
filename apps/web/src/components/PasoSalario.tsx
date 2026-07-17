@@ -1,5 +1,15 @@
 import { useEffect } from "react";
-import { ArrowRight, Bus, CalendarRange, Gavel, PiggyBank, Wallet } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  Bus,
+  CalendarRange,
+  Gavel,
+  HandCoins,
+  PiggyBank,
+  RefreshCw,
+  Wallet,
+} from "lucide-react";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 
@@ -14,6 +24,9 @@ export interface DatosPaso1 {
   auxilio: boolean;
   netoRecibido: string;
   aporteAfc: string;
+  prestamo: string;
+  ahorro: string;
+  reproceso: string;
   embargoTipo: TipoEmbargo | "";
   embargoValor: string;
 }
@@ -83,6 +96,11 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
     onCambio({ ...datos, hasta, periodicidad: "personalizado" });
   }
 
+  function marcarEmbargo(tipo: TipoEmbargo, marcado: boolean) {
+    set("embargoTipo", marcado ? tipo : "");
+    if (!marcado) set("embargoValor", "");
+  }
+
   return (
     <form
       className="flex flex-col gap-4"
@@ -127,39 +145,67 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               {parametros?.auxilioTransporteTopeSmlmv} SMLMV (Decreto de salario mínimo vigente).
             </p>
           )}
+        </div>
+      </PaycheckCard>
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            <span className="flex items-center gap-2">
-              <PiggyBank size={16} className="text-coral" /> Aporte a cuenta AFC (opcional)
-            </span>
-            <input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={datos.aporteAfc}
-              onChange={(e) => set("aporteAfc", e.target.value)}
-              className={inputCls}
-              placeholder="Monto mensual autorizado, si aplica"
-            />
-            <span className="text-xs text-muted font-normal">
-              Descuento por convenio que autorizaste a tu empleador — no afecta tu salud ni tu
-              pensión.
-            </span>
-          </label>
+      <PaycheckCard titulo="Deducciones opcionales — marca solo las que apliquen">
+        <div className="px-3 pb-3 pt-1 flex flex-col gap-3.5">
+          <CheckMonto
+            icono={PiggyBank}
+            etiqueta="Aporte a cuenta AFC"
+            ayuda="Descuento por convenio — no afecta tu salud ni tu pensión."
+            marcado={datos.aporteAfc !== ""}
+            valor={datos.aporteAfc}
+            onMarcar={(m) => set("aporteAfc", m ? "0" : "")}
+            onValor={(v) => set("aporteAfc", v)}
+          />
+          <CheckMonto
+            icono={Banknote}
+            etiqueta="Préstamo con la empresa"
+            marcado={datos.prestamo !== ""}
+            valor={datos.prestamo}
+            onMarcar={(m) => set("prestamo", m ? "0" : "")}
+            onValor={(v) => set("prestamo", v)}
+          />
+          <CheckMonto
+            icono={HandCoins}
+            etiqueta="Ahorro programado"
+            marcado={datos.ahorro !== ""}
+            valor={datos.ahorro}
+            onMarcar={(m) => set("ahorro", m ? "0" : "")}
+            onValor={(v) => set("ahorro", v)}
+          />
+          <CheckMonto
+            icono={RefreshCw}
+            etiqueta="Reproceso"
+            ayuda="Descuento por un error o novedad operativa acordada con la empresa."
+            marcado={datos.reproceso !== ""}
+            valor={datos.reproceso}
+            onMarcar={(m) => set("reproceso", m ? "0" : "")}
+            onValor={(v) => set("reproceso", v)}
+          />
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            <span className="flex items-center gap-2">
-              <Gavel size={16} className="text-coral" /> Embargo judicial (opcional)
-            </span>
-            <select
-              value={datos.embargoTipo}
-              onChange={(e) => set("embargoTipo", e.target.value as DatosPaso1["embargoTipo"])}
-              className={inputCls}
-            >
-              <option value="">No tengo</option>
-              <option value="ordinario">Ordinario (bancos, tarjetas, créditos)</option>
-              <option value="alimentos_o_cooperativa">Cuota alimentaria / cooperativa</option>
-            </select>
+          <div className="border-t border-slate-100 pt-3.5 flex flex-col gap-2">
+            <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+              <input
+                type="checkbox"
+                checked={datos.embargoTipo === "ordinario"}
+                onChange={(e) => marcarEmbargo("ordinario", e.target.checked)}
+                className="w-4 h-4 accent-coral"
+              />
+              <Gavel size={16} className="text-coral" /> Tengo un embargo ordinario (bancos,
+              tarjetas, créditos)
+            </label>
+            <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+              <input
+                type="checkbox"
+                checked={datos.embargoTipo === "alimentos_o_cooperativa"}
+                onChange={(e) => marcarEmbargo("alimentos_o_cooperativa", e.target.checked)}
+                className="w-4 h-4 accent-coral"
+              />
+              <Gavel size={16} className="text-coral" /> Tengo un embargo por cuota alimentaria o
+              cooperativa
+            </label>
             {datos.embargoTipo && (
               <>
                 <input
@@ -178,7 +224,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
                 </span>
               </>
             )}
-          </label>
+          </div>
         </div>
       </PaycheckCard>
 
@@ -256,5 +302,52 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
         Siguiente: tu semana <ArrowRight size={18} />
       </button>
     </form>
+  );
+}
+
+function CheckMonto({
+  icono: Icono,
+  etiqueta,
+  ayuda,
+  marcado,
+  valor,
+  onMarcar,
+  onValor,
+}: {
+  icono: typeof Wallet;
+  etiqueta: string;
+  ayuda?: string;
+  marcado: boolean;
+  valor: string;
+  onMarcar: (marcado: boolean) => void;
+  onValor: (valor: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+        <input
+          type="checkbox"
+          checked={marcado}
+          onChange={(e) => onMarcar(e.target.checked)}
+          className="w-4 h-4 accent-coral"
+        />
+        <Icono size={16} className="text-coral" /> {etiqueta}
+      </label>
+      {marcado && (
+        <>
+          <input
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={valor === "0" ? "" : valor}
+            onChange={(e) => onValor(e.target.value)}
+            className={inputCls}
+            placeholder="Monto mensual"
+            autoFocus
+          />
+          {ayuda && <span className="text-xs text-muted font-normal">{ayuda}</span>}
+        </>
+      )}
+    </div>
   );
 }

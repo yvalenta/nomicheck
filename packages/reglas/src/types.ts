@@ -39,10 +39,15 @@ export interface DatosNominaTurnos {
   horarioBase: (HorarioDia | null)[];
   // Días que difieren del horario base (no trabajó, o trabajó otras horas).
   novedades: NovedadDia[];
-  // Aporte AFC mensual autorizado por el trabajador (deducción por convenio,
-  // Fase 1 — ver deducciones.ts). Se prorratea por días del periodo igual
-  // que el auxilio de transporte. undefined/0 = sin aporte AFC.
+  // Deducciones por convenio, monto fijo mensual autorizado por el
+  // trabajador (Fase 1 — ver deducciones.ts). Cada una se prorratea por
+  // días del periodo igual que el auxilio de transporte. undefined/0 =
+  // sin esa deducción. Checks simples e independientes en la UI — el
+  // empleador solo marca las que aplican, cada una con su monto.
   aporteAfcMensual?: number;
+  prestamoMensual?: number;
+  ahorroMensual?: number;
+  reprocesoMensual?: number;
   // Embargo judicial mensual (ordinario CST art. 154-155, o alimentos/
   // cooperativa art. 156). Se prorratea por días del periodo y se limita al
   // tope legal de cada régimen — ver deducciones.ts, limiteEmbargo().

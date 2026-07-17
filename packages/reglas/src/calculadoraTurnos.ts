@@ -292,11 +292,22 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
     );
 
-    // Deducciones de ley + AFC (por convenio) + embargo judicial — el
-    // usuario nunca declara salud/pensión/fondo, solo los montos
-    // autorizados/ordenados si aplican. Ambos se prorratean por días del
-    // periodo igual que el auxilio de transporte.
-    const afcPeriodo = ((d.aporteAfcMensual ?? 0) / DIAS_MES_COMERCIAL) * diasPeriodo;
+    // Deducciones de ley + convenio (AFC, préstamo, ahorro, reproceso) +
+    // embargo judicial — el usuario nunca declara salud/pensión/fondo,
+    // solo los montos autorizados/ordenados si aplican. Todas se
+    // prorratean por días del periodo igual que el auxilio de transporte.
+    const prorratear = (mensual: number | undefined) =>
+      ((mensual ?? 0) / DIAS_MES_COMERCIAL) * diasPeriodo;
+    const deduccionesConvenio = [
+      {
+        concepto: "Aporte AFC (convenio)",
+        valorMensual: prorratear(d.aporteAfcMensual),
+        ley: "E.T. art. 126-4 — deducción por convenio, no afecta IBC (Fase 1: sin declaración de renta)",
+      },
+      { concepto: "Préstamo (convenio)", valorMensual: prorratear(d.prestamoMensual) },
+      { concepto: "Ahorro (convenio)", valorMensual: prorratear(d.ahorroMensual) },
+      { concepto: "Reproceso", valorMensual: prorratear(d.reprocesoMensual) },
+    ];
     const embargoPeriodo = d.descuentoJudicial
       ? {
           tipo: d.descuentoJudicial.tipo,
@@ -309,7 +320,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         ibc,
         reglas,
         d.periodoHasta,
-        { aporteAfcMensual: afcPeriodo, descuentoJudicial: embargoPeriodo },
+        { deduccionesConvenio, descuentoJudicial: embargoPeriodo },
         diasPeriodo / DIAS_MES_COMERCIAL
       );
     lineas.push(...lineasDeduccion);

@@ -43,6 +43,9 @@ export default function App() {
     auxilio: true,
     netoRecibido: "",
     aporteAfc: "",
+    prestamo: "",
+    ahorro: "",
+    reproceso: "",
     embargoTipo: "",
     embargoValor: "",
   });
@@ -71,6 +74,9 @@ export default function App() {
         horarioBase,
         novedades,
         aporteAfcMensual: datos1.aporteAfc ? Number(datos1.aporteAfc) : undefined,
+        prestamoMensual: datos1.prestamo ? Number(datos1.prestamo) : undefined,
+        ahorroMensual: datos1.ahorro ? Number(datos1.ahorro) : undefined,
+        reprocesoMensual: datos1.reproceso ? Number(datos1.reproceso) : undefined,
         descuentoJudicial:
           datos1.embargoTipo && datos1.embargoValor
             ? { tipo: datos1.embargoTipo, valorMensual: Number(datos1.embargoValor) }

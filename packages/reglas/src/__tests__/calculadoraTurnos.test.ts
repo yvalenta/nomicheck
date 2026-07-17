@@ -257,6 +257,75 @@ describe("CalculadoraPorTurnos — embargo judicial", () => {
   });
 });
 
+describe("CalculadoraPorTurnos — caso RESPLANDOR: cierre nocturno en domingo", () => {
+  it("acumula recargo dominical Y recargo nocturno dominical cuando el cierre pasa de las 19:00", () => {
+    // Mesera con horario base dominical 10:00-16:00 (default); el domingo
+    // 21-jun tuvo un cierre especial 14:00-20:00 (novedad), 6h ordinarias
+    // dominicales de las cuales 1h (19:00-20:00) cae en jornada nocturna.
+    // El otro domingo (28-jun) sigue el horario base sin nocturnidad.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [{ fecha: "2026-06-21", trabajo: true, horaInicio: "14:00", horaFin: "20:00" }],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const valorHora = 1750905 / 220;
+
+    const dominical = resultado.lineas.find((l) => l.concepto.startsWith("Recargo dominical"));
+    expect(dominical?.horas).toBe(12); // 6h (21-jun) + 6h (28-jun)
+    expect(dominical?.recargoPct).toBe(0.8);
+    expect(dominical?.valorCalculado).toBeCloseTo(12 * valorHora * 0.8, 1);
+
+    const nocturnoDominical = resultado.lineas.find((l) =>
+      l.concepto.startsWith("Recargo nocturno dominical")
+    );
+    expect(nocturnoDominical?.horas).toBe(1); // 19:00-20:00
+    expect(nocturnoDominical?.recargoPct).toBe(0.35);
+    expect(nocturnoDominical?.valorCalculado).toBeCloseTo(1 * valorHora * 0.35, 1);
+    expect(nocturnoDominical?.ley).toContain("Ley 2466 de 2025");
+  });
+});
+
+describe("CalculadoraPorTurnos — deducciones por convenio (AFC, préstamo, ahorro, reproceso)", () => {
+  it("cada deducción es una línea independiente, sin afectar el IBC", () => {
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ aporteAfcMensual: 100000, prestamoMensual: 60000, ahorroMensual: 40000, reprocesoMensual: 20000 }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
+    expect(salud?.base).toBeCloseTo(951855.63, 1); // IBC sin cambios
+
+    // Prorrateo 15/30: 100.000→50.000, 60.000→30.000, 40.000→20.000, 20.000→10.000.
+    expect(resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)")?.valorCalculado).toBeCloseTo(50000, 1);
+    expect(resultado.lineas.find((l) => l.concepto === "Préstamo (convenio)")?.valorCalculado).toBeCloseTo(30000, 1);
+    expect(resultado.lineas.find((l) => l.concepto === "Ahorro (convenio)")?.valorCalculado).toBeCloseTo(20000, 1);
+    expect(resultado.lineas.find((l) => l.concepto === "Reproceso")?.valorCalculado).toBeCloseTo(10000, 1);
+  });
+
+  it("recorta TODAS las deducciones por convenio proporcionalmente si juntas superan el 50% del devengado", () => {
+    // Devengado del periodo ≈ 1.076.403,13 → tope 50% ≈ 538.201,57;
+    // ley (salud+pensión) ≈ 76.148,46 → disponible para convenio ≈ 462.053,11.
+    // Solicitado: AFC 500.000 + préstamo 300.000 + ahorro 200.000 (prorrateados
+    // 15/30 de 1.000.000/600.000/400.000 por mes) = 1.000.000 solicitado.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ aporteAfcMensual: 1000000, prestamoMensual: 600000, ahorroMensual: 400000 }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const afc = resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)")!.valorCalculado;
+    const prestamo = resultado.lineas.find((l) => l.concepto === "Préstamo (convenio)")!.valorCalculado;
+    const ahorro = resultado.lineas.find((l) => l.concepto === "Ahorro (convenio)")!.valorCalculado;
+
+    // Proporción solicitada 5:3:2 debe conservarse tras el recorte.
+    expect(afc / prestamo).toBeCloseTo(500000 / 300000, 1);
+    expect(afc / ahorro).toBeCloseTo(500000 / 200000, 1);
+    expect(resultado.totalDeducciones).toBeCloseTo(resultado.totalDevengos * 0.5, 0);
+    expect(resultado.advertencias.some((a) => a.includes("convenio"))).toBe(true);
+  });
+});
+
 describe("CalculadoraPorTurnos — validaciones de entrada", () => {
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>

@@ -29,6 +29,9 @@ const datosNominaTurnos = z.object({
   horarioBase: z.array(horarioDia.nullable()).length(7),
   novedades: z.array(novedadDia),
   aporteAfcMensual: z.number().nonnegative().optional(),
+  prestamoMensual: z.number().nonnegative().optional(),
+  ahorroMensual: z.number().nonnegative().optional(),
+  reprocesoMensual: z.number().nonnegative().optional(),
   descuentoJudicial: z
     .object({
       tipo: z.enum(["ordinario", "alimentos_o_cooperativa"]),
