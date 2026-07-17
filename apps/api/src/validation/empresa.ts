@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fecha } from "./comunes.js";
 
 export const registroSchema = z.object({
   email: z.string().email(),
@@ -17,6 +18,8 @@ export const empleadoSchema = z.object({
   salarioBase: z.number().positive(),
   tipoNomina: z.enum(["turnos", "fijo"]),
   auxilioTransporte: z.boolean().default(false),
+  // Base de antigüedad para cesantías/intereses/prima/vacaciones (prestaciones.ts).
+  fechaIngreso: fecha,
 });
 
 export const empleadoUpdateSchema = empleadoSchema.partial().extend({

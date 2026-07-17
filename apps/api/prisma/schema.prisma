@@ -65,6 +65,7 @@ model Empleado {
   salarioBase       Float
   tipoNomina        String // turnos | fijo
   auxilioTransporte Boolean @default(false)
+  fechaIngreso      String // YYYY-MM-DD — base de antigüedad para prestaciones sociales
   activo            Boolean @default(true)
   creadoEn          DateTime @default(now())
 

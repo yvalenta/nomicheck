@@ -1,4 +1,11 @@
-import { CalculadoraPorTurnos, CalculadoraSalarioFijo, type DatosNominaTurnos } from "@pv/reglas";
+import {
+  calcularPrestacionesSociales,
+  CalculadoraPorTurnos,
+  CalculadoraSalarioFijo,
+  crearResolutorReglas,
+  type DatosNominaTurnos,
+  type LineaResultado,
+} from "@pv/reglas";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
@@ -26,6 +33,8 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
     prisma.turno.findMany({ where: { periodoId } }),
     obtenerReglasYFestivos(),
   ]);
+
+  const resolutor = crearResolutorReglas(reglas);
 
   const recibos = empleados.map((empleado) => {
     const resultado =
@@ -58,13 +67,34 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
             festivos
           );
 
+    // Provisión mensual de prestaciones sociales (cesantías, intereses,
+    // prima, vacaciones) — ventana de ESTE periodo únicamente (no desde
+    // fechaIngreso): son montos incrementales, no el acumulado de carrera.
+    // Se listan como líneas informativas tipo "provision" (pasivo del
+    // empleador) que NO afectan totalDevengado/totalDeducido/neto — el
+    // colaborador no recibe ese dinero hoy.
+    const prestaciones = calcularPrestacionesSociales({
+      fechaIngreso: periodo.fechaInicio,
+      fechaCorte: periodo.fechaFin,
+      salarioBase: empleado.salarioBase,
+      auxilioTransporte: empleado.auxilioTransporte
+        ? resolutor.en("auxilio_transporte", periodo.fechaFin)
+        : undefined,
+    });
+    const lineasProvision: LineaResultado[] = [
+      { concepto: "Provisión cesantías", valorCalculado: prestaciones.cesantias, tipo: "provision", ley: "CST art. 249" },
+      { concepto: "Provisión intereses a las cesantías", valorCalculado: prestaciones.interesesCesantias, tipo: "provision", ley: "Ley 52 de 1975, art. 1" },
+      { concepto: "Provisión prima de servicios", valorCalculado: prestaciones.prima, tipo: "provision", ley: "CST art. 306" },
+      { concepto: "Provisión vacaciones", valorCalculado: prestaciones.vacaciones, tipo: "provision", ley: "CST art. 186" },
+    ];
+
     return {
       empleadoId: empleado.id,
       periodoId,
       // Prisma tipa `Json` como InputJsonValue; LineaResultado[] es JSON
       // plano (solo strings/números/undefined opcionales) — el cast evita
       // el round-trip por JSON.parse(JSON.stringify()).
-      lineas: resultado.lineas as unknown as Prisma.InputJsonValue,
+      lineas: [...resultado.lineas, ...lineasProvision] as unknown as Prisma.InputJsonValue,
       totalDevengado: resultado.totalDevengos,
       totalDeducido: resultado.totalDeducciones,
       neto: resultado.netoEsperado,

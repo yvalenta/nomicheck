@@ -118,13 +118,14 @@ function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "act
   const [salarioBase, setSalarioBase] = useState("");
   const [tipoNomina, setTipoNomina] = useState<Empleado["tipoNomina"]>("turnos");
   const [auxilioTransporte, setAuxilioTransporte] = useState(true);
+  const [fechaIngreso, setFechaIngreso] = useState("");
 
   return (
     <PaycheckCard titulo="Nuevo colaborador">
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte });
+          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso });
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
@@ -146,6 +147,16 @@ function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "act
             <option value="fijo">Salario fijo</option>
           </select>
         </div>
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          Fecha de ingreso (antigüedad para cesantías, prima y vacaciones)
+          <input
+            required
+            type="date"
+            value={fechaIngreso}
+            onChange={(e) => setFechaIngreso(e.target.value)}
+            className={inputCls}
+          />
+        </label>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"

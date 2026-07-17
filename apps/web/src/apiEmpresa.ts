@@ -7,6 +7,7 @@ export interface Empleado {
   salarioBase: number;
   tipoNomina: "turnos" | "fijo";
   auxilioTransporte: boolean;
+  fechaIngreso: string;
   activo: boolean;
 }
 
@@ -74,7 +75,7 @@ export interface LineaRecibo {
   base?: number;
   recargoPct?: number;
   valorCalculado: number;
-  tipo: "devengo" | "deduccion";
+  tipo: "devengo" | "deduccion" | "provision";
   ley?: string;
 }
 
