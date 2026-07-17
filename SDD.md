@@ -617,5 +617,6 @@ Ideas del "proyecto grande" para no perderlas — ninguna entra al MVP:
 - **Comparador de ofertas**: "¿me conviene este turno/salario?" usando el mismo motor.
 - **API pública del motor de reglas** legales colombianas (el activo más defendible del proyecto).
 - **Nómina electrónica DIAN** cuando el producto madure hacia empleadores formales medianos.
-- **`tipoContrato` — UI del wizard anónimo**: aprendizaje SENA y prestación de servicios ya están implementados en el motor y la API (§07, §13) — falta el selector de tipo de contrato en el paso 1 del wizard anónimo (hoy solo se puede usar vía API directa o, para SENA, desde el modo empresa) y una advertencia si el salario coincide con patrones de aprendiz (50-75 % SMLMV).
 - **Término fijo/obra/tiempo parcial** (§07): siguen sin rama de cálculo diferenciada (impacto documentado como bajo para el MVP).
+- **Advertencia de patrón de aprendiz por salario**: si el salario declarado coincide con 50-75% del SMLMV en un contrato "indefinido", advertir que podría tratarse de un aprendiz mal clasificado.
+- **Contratista de servicios en el wizard anónimo**: `CalculadoraServicios`/`DatosNominaServicios` ya funcionan en `/nomina/calcular`, pero el wizard de `apps/web` (`App.tsx`) no tiene una rama de captura para "honorarios" — solo se puede probar vía API directa.
