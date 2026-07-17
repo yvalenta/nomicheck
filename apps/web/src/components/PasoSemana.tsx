@@ -16,6 +16,11 @@ interface EstadoDia {
   trabajo: boolean;
   horaInicio: string;
   horaFin: string;
+  // Solo relevante cuando trabajo=false: por defecto un día no trabajado es
+  // descanso remunerado (dominical/festivo). El usuario puede marcarlo como
+  // ausentismo NO remunerado — el motor nunca reduce el salario en silencio,
+  // agrega una línea de deducción explícita (Regla 2, calculadoraTurnos.ts).
+  remunerada: boolean;
 }
 
 interface Props {
@@ -41,8 +46,8 @@ function estadoDerivado(
   const esFestivo = festivos.some((f) => f.fecha === fecha);
   const base = esFestivo ? null : horarioBase[diaSemana(fecha)];
   return base
-    ? { trabajo: true, horaInicio: base.horaInicio, horaFin: base.horaFin }
-    : { trabajo: false, horaInicio: "10:00", horaFin: "17:00" };
+    ? { trabajo: true, horaInicio: base.horaInicio, horaFin: base.horaFin, remunerada: true }
+    : { trabajo: false, horaInicio: "10:00", horaFin: "17:00", remunerada: true };
 }
 
 export default function PasoSemana({
@@ -89,12 +94,13 @@ export default function PasoSemana({
       const difiere =
         actual.trabajo !== derivado.trabajo ||
         (actual.trabajo &&
-          (actual.horaInicio !== derivado.horaInicio || actual.horaFin !== derivado.horaFin));
+          (actual.horaInicio !== derivado.horaInicio || actual.horaFin !== derivado.horaFin)) ||
+        (!actual.trabajo && actual.remunerada !== derivado.remunerada);
       if (difiere) {
         novedades.push(
           actual.trabajo
             ? { fecha, trabajo: true, horaInicio: actual.horaInicio, horaFin: actual.horaFin }
-            : { fecha, trabajo: false }
+            : { fecha, trabajo: false, remunerada: actual.remunerada }
         );
       }
     }
@@ -180,6 +186,17 @@ export default function PasoSemana({
                   />
                   {estado.trabajo ? "Trabajé" : festivo ? "Festivo" : "Descansé"}
                 </label>
+                {!estado.trabajo && !festivo && (
+                  <label className="flex items-center gap-1 text-xs text-coral shrink-0" title="El salario básico no se reduce en silencio: se agrega una línea de deducción explícita por este día.">
+                    <input
+                      type="checkbox"
+                      checked={!estado.remunerada}
+                      onChange={(e) => setDia(fecha, { remunerada: !e.target.checked })}
+                      className="w-3.5 h-3.5 accent-coral"
+                    />
+                    Ausentismo no remunerado
+                  </label>
+                )}
                 <div className="flex items-center gap-1 ml-auto">
                   <input
                     type="time"
