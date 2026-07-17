@@ -69,3 +69,40 @@ describe("CalculadoraSalarioFijo — fixture nómina ejecutiva", () => {
     expect(resultado.netoEsperado).toBeCloseTo(resultado.totalDevengos - resultado.totalDeducciones, 2);
   });
 });
+
+describe("CalculadoraSalarioFijo — auxilio de transporte (antes ignorado en este modo)", () => {
+  const base: DatosNominaFija = {
+    modo: "salario-fijo",
+    salarioBasicoMensual: 1750905,
+    recibeAuxilioTransporte: true,
+    periodoDesde: "2026-06-01",
+    periodoHasta: "2026-06-30",
+    conceptos: [],
+  };
+
+  it("paga el auxilio completo en un mes de 30 días si el salario está bajo el tope", () => {
+    const r = CalculadoraSalarioFijo.calcular(base, REGLAS_JUL_2026, []);
+    const aux = r.lineas.find((l) => l.concepto === "Auxilio de transporte");
+    expect(aux?.valorCalculado).toBe(249095);
+  });
+
+  it("no paga auxilio y advierte si el salario supera 2 SMLMV", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      { ...base, salarioBasicoMensual: 4000000 },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.lineas.some((l) => l.concepto === "Auxilio de transporte")).toBe(false);
+    expect(r.advertencias.some((a) => a.includes("auxilio de transporte"))).toBe(true);
+  });
+
+  it("no genera línea de auxilio si recibeAuxilioTransporte es false", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      { ...base, recibeAuxilioTransporte: false },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.lineas.some((l) => l.concepto === "Auxilio de transporte")).toBe(false);
+    expect(r.advertencias).toHaveLength(0);
+  });
+});

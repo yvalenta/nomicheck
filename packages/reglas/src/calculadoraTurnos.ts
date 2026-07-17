@@ -9,6 +9,7 @@ import type {
 import { diaSemana, esDomingo, esFechaValida, rangoFechas, reglaEn, validarPeriodo } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
+import { calcularAuxilioTransporte } from "./auxilio.js";
 import {
   DIAS_MES_COMERCIAL,
   HORA_FIN_JORNADA_NOCTURNA,
@@ -354,21 +355,14 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     const ibc = lineas.reduce((s, l) => s + l.valorCalculado, 0);
 
     if (d.recibeAuxilioTransporte) {
-      const smlmv = reglaEn(reglas, "smlmv", d.periodoHasta);
-      const topeSmlmv = reglaEn(reglas, "auxilio_transporte_tope_smlmv", d.periodoHasta);
-      if (d.salarioBasicoMensual <= smlmv * topeSmlmv) {
-        const auxilioMensual = reglaEn(reglas, "auxilio_transporte", d.periodoHasta);
-        lineas.push({
-          concepto: "Auxilio de transporte",
-          valorCalculado: redondearPeso((auxilioMensual / DIAS_MES_COMERCIAL) * diasPeriodo),
-          tipo: "devengo",
-          ley: "Decreto de salario mínimo vigente",
-        });
-      } else {
-        advertencias.push(
-          `No se reconoce auxilio de transporte: el salario ($${d.salarioBasicoMensual.toLocaleString("es-CO")}) supera ${topeSmlmv} SMLMV ($${redondearPeso(smlmv * topeSmlmv).toLocaleString("es-CO")}) — Decreto de salario mínimo vigente.`
-        );
-      }
+      const auxilio = calcularAuxilioTransporte(
+        d.salarioBasicoMensual,
+        diasPeriodo,
+        reglas,
+        d.periodoHasta
+      );
+      if (auxilio.linea) lineas.push(auxilio.linea);
+      if (auxilio.advertencia) advertencias.push(auxilio.advertencia);
     }
 
     const totalDevengos = redondearPeso(

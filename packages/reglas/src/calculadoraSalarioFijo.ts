@@ -1,7 +1,9 @@
 import type { CalculadoraNomina, DatosNominaFija, LineaResultado } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
-import { validarPeriodo } from "./utils.js";
+import { calcularAuxilioTransporte } from "./auxilio.js";
+import { rangoFechas, validarPeriodo } from "./utils.js";
+import { DIAS_MES_COMERCIAL } from "./constantes.js";
 
 export const CalculadoraSalarioFijo: CalculadoraNomina = {
   calcular(datos, reglas, _festivos) {
@@ -28,6 +30,20 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       tipo: "devengo",
       ley: "Contrato de trabajo",
     });
+
+    // Auxilio de transporte: mismo helper que el modo turnos (antes este
+    // modo ignoraba recibeAuxilioTransporte por completo — asimetría).
+    if (d.recibeAuxilioTransporte) {
+      const diasPeriodo = Math.min(rangoFechas(d.periodoDesde, d.periodoHasta).length, DIAS_MES_COMERCIAL);
+      const auxilio = calcularAuxilioTransporte(
+        d.salarioBasicoMensual,
+        diasPeriodo,
+        reglas,
+        d.periodoHasta
+      );
+      if (auxilio.linea) lineas.push(auxilio.linea);
+      if (auxilio.advertencia) advertencias.push(auxilio.advertencia);
+    }
 
     // Solo se aplica el tope del 50% (CST art. 149) a salud/pensión/fondo:
     // los conceptos declarados abajo (incl. AFC si viene del comprobante)
