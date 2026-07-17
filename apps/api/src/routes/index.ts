@@ -5,6 +5,7 @@ import { calcular } from "../controllers/nominaController.js";
 import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
+import { explicar } from "../controllers/chatController.js";
 import { registro, invitar } from "../controllers/authController.js";
 import { listar, crear, actualizar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
@@ -69,6 +70,10 @@ router.post("/nomina/calcular", limitadorCalculo, calcular);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
+// Chat contador (Fase 4, SDD §03 Módulo E): disponible sobre cualquier
+// ResultadoNomina ya calculado — anónimo o del portal colaborador, mismo
+// endpoint. Mismo límite que extraer (costo de IA real por request).
+router.post("/chat/explicar", limitadorIA, explicar);
 
 // Auth y empresa.
 router.post("/auth/registro", registro);

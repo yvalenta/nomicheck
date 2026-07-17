@@ -5,6 +5,7 @@ import PaycheckCard from "./PaycheckCard.tsx";
 import SegmentedControl from "./SegmentedControl.tsx";
 import ValidationRow from "./ValidationRow.tsx";
 import FinancialProgressBar from "./FinancialProgressBar.tsx";
+import ChatContador from "./ChatContador.tsx";
 
 interface Props {
   resultado: ResultadoNomina;
@@ -120,6 +121,8 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
           </div>
         </div>
       </PaycheckCard>
+
+      <ChatContador resultado={resultado} />
 
       <p className="text-xs text-muted text-center px-4">
         Estimado informativo — no reemplaza la liquidación oficial ni asesoría legal certificada.

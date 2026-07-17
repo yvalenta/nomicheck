@@ -56,3 +56,27 @@ export async function calcularNomina(
   }
   return body as ResultadoNomina;
 }
+
+export interface MensajeChat {
+  rol: "usuario" | "asistente";
+  texto: string;
+}
+
+// Chat contador (Fase 4, SDD §03 Módulo E): explica un ResultadoNomina ya
+// calculado — nunca lo recalcula ni lo contradice, server-side (Claude).
+export async function explicarChat(
+  resultado: ResultadoNomina,
+  pregunta: string,
+  historial: MensajeChat[]
+): Promise<string> {
+  const res = await fetch("/api/chat/explicar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resultado, pregunta, historial }),
+  });
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body.error ?? "No se pudo generar la respuesta");
+  }
+  return body.respuesta as string;
+}

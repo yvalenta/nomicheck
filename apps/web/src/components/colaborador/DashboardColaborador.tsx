@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { AlertCircle, Flag } from "lucide-react";
-import { formatCOP } from "@pv/reglas";
+import { formatCOP, type ResultadoNomina } from "@pv/reglas";
 import {
   listarMisRecibos,
   reportarDiscrepancia,
@@ -9,12 +9,30 @@ import {
 } from "../../apiColaborador";
 import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
+import ChatContador from "../ChatContador.tsx";
 
 const TIPO_LABEL: Record<TipoDiscrepancia, string> = {
   pago_de_mas: "Me pagaron de más",
   pago_de_menos: "Me pagaron de menos",
   concepto_faltante: "Falta un concepto",
 };
+
+// El chat contador (Fase 4) opera sobre la forma ResultadoNomina del motor —
+// el recibo propio no la tiene exactamente (viene de Prisma/ReciboPago), así
+// que se adapta aquí en vez de duplicar la lógica de contexto en el backend.
+function comoResultadoNomina(r: ReciboPropio): ResultadoNomina {
+  return {
+    modo: "turnos",
+    periodoDesde: r.periodo.fechaInicio,
+    periodoHasta: r.periodo.fechaFin,
+    salarioBasicoMensual: r.lineas.find((l) => l.base !== undefined)?.base ?? 0,
+    lineas: r.lineas,
+    totalDevengos: r.totalDevengado,
+    totalDeducciones: r.totalDeducido,
+    netoEsperado: r.neto,
+    advertencias: [],
+  };
+}
 
 export default function DashboardColaborador() {
   const [recibos, setRecibos] = useState<ReciboPropio[]>([]);
@@ -41,7 +59,8 @@ export default function DashboardColaborador() {
       )}
 
       {recibos.map((r) => (
-        <PaycheckCard key={r.id} titulo={`${r.periodo.fechaInicio} — ${r.periodo.fechaFin}`}>
+        <Fragment key={r.id}>
+        <PaycheckCard titulo={`${r.periodo.fechaInicio} — ${r.periodo.fechaFin}`}>
           <div className="flex flex-col">
             {r.lineas.map((l, i) => (
               <ValidationRow key={i} linea={l} />
@@ -84,6 +103,8 @@ export default function DashboardColaborador() {
             </button>
           )}
         </PaycheckCard>
+        <ChatContador resultado={comoResultadoNomina(r)} />
+        </Fragment>
       ))}
     </div>
   );
