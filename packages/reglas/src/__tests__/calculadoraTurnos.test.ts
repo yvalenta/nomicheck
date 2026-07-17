@@ -463,6 +463,51 @@ describe("CalculadoraPorTurnos — validaciones de entrada", () => {
     }
   });
 
+  it("un turno que cruza medianoche (22:00→06:00) divide bien ordinarias/extra/nocturnas", () => {
+    // Martes 16-jun: 8h totales, jornada hábil 7h → 7 ordinarias (22:00-05:00,
+    // todas nocturnas) + 1 extra (05:00-06:00, nocturna).
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [{ fecha: "2026-06-16", trabajo: true, horaInicio: "22:00", horaFin: "06:00" }],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const nocturno = resultado.lineas.find(
+      (l) => l.concepto.startsWith("Recargo nocturno") && !l.concepto.includes("dominical")
+    );
+    const extraNocturna = resultado.lineas.find((l) => l.concepto.startsWith("Hora extra nocturna"));
+    expect(nocturno?.horas).toBe(7);
+    expect(extraNocturna?.horas).toBe(1);
+  });
+
+  it("un turno de 2 minutos a caballo de las 19:00 genera exactamente 1 minuto nocturno", () => {
+    // Martes 16-jun 18:59→19:01: 2 min ordinarios, 1 de ellos nocturno.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [{ fecha: "2026-06-16", trabajo: true, horaInicio: "18:59", horaFin: "19:01" }],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const nocturno = resultado.lineas.find(
+      (l) => l.concepto.startsWith("Recargo nocturno") && !l.concepto.includes("dominical")
+    );
+    expect(nocturno?.horas).toBeCloseTo(1 / 60, 2);
+  });
+
+  it("rechaza un turno con inicio y fin iguales (ambiguo entre 0 y 24 horas)", () => {
+    expect(() =>
+      CalculadoraPorTurnos.calcular(
+        datosBase({
+          novedades: [{ fecha: "2026-06-16", trabajo: true, horaInicio: "10:00", horaFin: "10:00" }],
+        }),
+        REGLAS_JUL_2026,
+        FESTIVOS_2026
+      )
+    ).toThrow(/ambiguo/i);
+  });
+
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>
       CalculadoraPorTurnos.calcular(

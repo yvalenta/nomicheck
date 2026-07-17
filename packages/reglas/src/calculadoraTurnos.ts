@@ -65,10 +65,18 @@ function minutosNocturnosEnTramo(inicioMin: number, duracionMin: number): number
 // diurnas/nocturnas. Las primeras `jornadaOrdinariaHoras` horas del turno son
 // ordinarias; el resto es extra.
 function dividirTurno(horaInicio: string, horaFin: string, jornadaOrdinariaHoras: number) {
+  if (horaInicio === horaFin) {
+    // Ambiguo: ¿0 horas o 24 horas? Antes se interpretaba en silencio como
+    // 24h (turno "10:00→10:00" = jornada completa de un día). Se exige que
+    // el llamador sea explícito.
+    throw new Error(
+      `Turno ambiguo: hora de inicio y fin iguales (${horaInicio}) — no se puede distinguir entre 0 y 24 horas`
+    );
+  }
   const inicioMin = hhmmAMinutos(horaInicio);
   const finMin = hhmmAMinutos(horaFin);
   let totalMin = finMin - inicioMin;
-  if (totalMin <= 0) totalMin += MINUTOS_POR_DIA; // turno cruza medianoche
+  if (totalMin < 0) totalMin += MINUTOS_POR_DIA; // turno cruza medianoche
 
   const ordinariaMin = Math.min(totalMin, jornadaOrdinariaHoras * MINUTOS_POR_HORA);
   const extraMin = totalMin - ordinariaMin;
