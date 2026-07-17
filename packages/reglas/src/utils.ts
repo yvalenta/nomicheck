@@ -1,24 +1,64 @@
 import type { ReglaLegal } from "./types.js";
 
+export interface ResolutorReglas {
+  en(clave: string, fecha: string): number;
+}
+
+// Resolutor pre-indexado: agrupa las reglas por clave UNA vez (ordenadas
+// desc por vigenteDesde) y cachea cada (clave, fecha) consultada. Un
+// cálculo de turnos de 15 días hace ~40 consultas de reglas — con el
+// filter+sort de reglaEn() cada una recorría y ordenaba el arreglo
+// completo; aquí el índice se construye una vez por cálculo, sin estado
+// global ni problema de invalidación (vive lo que dura el cálculo).
+export function crearResolutorReglas(reglas: ReglaLegal[]): ResolutorReglas {
+  const porClave = new Map<string, ReglaLegal[]>();
+  for (const r of reglas) {
+    if (!porClave.has(r.clave)) porClave.set(r.clave, []);
+    porClave.get(r.clave)!.push(r);
+  }
+  // Desc por vigenteDesde: la primera vigente que se encuentre es también
+  // la más reciente — preserva la semántica de reglaEn ante solapamientos.
+  for (const lista of porClave.values()) {
+    lista.sort((a, b) => b.vigenteDesde.localeCompare(a.vigenteDesde));
+  }
+
+  const cache = new Map<string, number>();
+  return {
+    en(clave: string, fecha: string): number {
+      const claveCache = `${clave}|${fecha}`;
+      const memo = cache.get(claveCache);
+      if (memo !== undefined) return memo;
+
+      const vigente = (porClave.get(clave) ?? []).find(
+        (r) => r.vigenteDesde <= fecha && (r.vigenteHasta === undefined || r.vigenteHasta >= fecha)
+      );
+      if (!vigente) {
+        throw new Error(`No hay regla legal vigente para "${clave}" en ${fecha}`);
+      }
+      cache.set(claveCache, vigente.valor);
+      return vigente.valor;
+    },
+  };
+}
+
+// Normaliza el parámetro de reglas: los helpers del motor aceptan tanto
+// el arreglo crudo (compatibilidad con llamadores/tests existentes) como
+// un resolutor ya construido (para compartir el índice y el cache dentro
+// de un mismo cálculo).
+export function comoResolutor(reglas: ReglaLegal[] | ResolutorReglas): ResolutorReglas {
+  return Array.isArray(reglas) ? crearResolutorReglas(reglas) : reglas;
+}
+
 // Devuelve el valor de una regla legal vigente en la fecha dada.
 // Si el periodo cruza una fecha de corte, el llamador debe consultar
-// la regla para cada sub-tramo de forma independiente.
+// la regla para cada sub-tramo de forma independiente. Para consultas
+// repetidas dentro de un mismo cálculo, usar crearResolutorReglas().
 export function reglaEn(
   reglas: ReglaLegal[],
   clave: string,
   fecha: string
 ): number {
-  const vigentes = reglas.filter(
-    (r) =>
-      r.clave === clave &&
-      r.vigenteDesde <= fecha &&
-      (r.vigenteHasta === undefined || r.vigenteHasta >= fecha)
-  );
-  if (vigentes.length === 0) {
-    throw new Error(`No hay regla legal vigente para "${clave}" en ${fecha}`);
-  }
-  // Si por error hay solapamiento, usamos la más reciente (vigenteDesde mayor)
-  return vigentes.sort((a, b) => b.vigenteDesde.localeCompare(a.vigenteDesde))[0].valor;
+  return crearResolutorReglas(reglas).en(clave, fecha);
 }
 
 // Valida que una fecha YYYY-MM-DD exista realmente en el calendario:

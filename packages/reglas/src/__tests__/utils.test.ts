@@ -3,6 +3,7 @@ import {
   diaSemana,
   esDomingo,
   esFechaValida,
+  crearResolutorReglas,
   esLunes,
   finDePeriodoMensual,
   horasEntre,
@@ -38,6 +39,35 @@ describe("reglaEn", () => {
     // necesita un valor "abierto" para que una regla siga vigente, solo que
     // la fecha consultada caiga dentro de [vigenteDesde, vigenteHasta].
     expect(reglaEn(REGLAS_JUL_2026, "recargo_dominical", "2026-12-31")).toBe(0.9);
+  });
+});
+
+describe("crearResolutorReglas — paridad con reglaEn", () => {
+  it("devuelve lo mismo que reglaEn para todas las claves y fechas del fixture", () => {
+    const r = crearResolutorReglas(REGLAS_JUL_2026);
+    const claves = [...new Set(REGLAS_JUL_2026.map((x) => x.clave))];
+    for (const clave of claves) {
+      for (const fecha of ["2026-06-30", "2026-07-01", "2026-07-14", "2026-07-15", "2026-12-31"]) {
+        expect(r.en(clave, fecha)).toBe(reglaEn(REGLAS_JUL_2026, clave, fecha));
+      }
+    }
+  });
+
+  it("ante solapamiento gana la regla con vigenteDesde mayor (misma semántica que reglaEn)", () => {
+    const solapadas = [
+      { clave: "x", valor: 1, vigenteDesde: "2026-01-01" },
+      { clave: "x", valor: 2, vigenteDesde: "2026-06-01" }, // solapa: sin vigenteHasta ambas
+    ];
+    expect(crearResolutorReglas(solapadas).en("x", "2026-07-01")).toBe(2);
+    expect(reglaEn(solapadas, "x", "2026-07-01")).toBe(2);
+  });
+
+  it("cachea la consulta repetida sin alterar el resultado", () => {
+    const r = crearResolutorReglas(REGLAS_JUL_2026);
+    const a = r.en("recargo_dominical", "2026-06-30");
+    const b = r.en("recargo_dominical", "2026-06-30");
+    expect(a).toBe(b);
+    expect(a).toBe(0.8);
   });
 });
 

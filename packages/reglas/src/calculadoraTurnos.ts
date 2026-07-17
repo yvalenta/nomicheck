@@ -6,7 +6,7 @@ import type {
   LineaResultado,
   NovedadDia,
 } from "./types.js";
-import { diaSemana, esDomingo, esFechaValida, rangoFechas, reglaEn, validarPeriodo } from "./utils.js";
+import { crearResolutorReglas, diaSemana, esDomingo, esFechaValida, rangoFechas, validarPeriodo } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 import { calcularAuxilioTransporte } from "./auxilio.js";
@@ -145,6 +145,8 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       fechasNovedades.add(n.fecha);
     }
     const advertencias: string[] = [];
+    // Índice + cache de reglas compartido por todo el cálculo (~40 consultas).
+    const r = crearResolutorReglas(reglas);
     const fechas = rangoFechas(d.periodoDesde, d.periodoHasta);
 
     const dias: DiaTrabajado[] = [];
@@ -171,7 +173,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       const extrasDia = dia.extraDiurna + dia.extraNocturna;
       if (extrasDia === 0) continue;
 
-      const maxDia = reglaEn(reglas, "max_horas_extra_dia", dia.fecha);
+      const maxDia = r.en("max_horas_extra_dia", dia.fecha);
       if (extrasDia > maxDia) {
         advertencias.push(
           `El ${dia.fecha} trabajaste ${redondearHoras(extrasDia)} horas extra — supera el máximo legal de ${maxDia} h/día (D.L. 13 de 1967, art. 1). Se pagan completas, pero la jornada excede lo permitido.`
@@ -182,7 +184,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       extrasPorSemana.set(semana, (extrasPorSemana.get(semana) ?? 0) + extrasDia);
     }
     for (const [semana, extrasSemana] of extrasPorSemana) {
-      const maxSemana = reglaEn(reglas, "max_horas_extra_semana", semana);
+      const maxSemana = r.en("max_horas_extra_semana", semana);
       if (extrasSemana > maxSemana) {
         advertencias.push(
           `En la semana del ${semana} acumulaste ${redondearHoras(extrasSemana)} horas extra — supera el máximo legal de ${maxSemana} h/semana (Ley 6 de 1981). Se pagan completas, pero la jornada excede lo permitido.`
@@ -203,7 +205,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     // dominical) para presentar por separado si el periodo cruza un corte
     // normativo.
     const claveTramo = (fecha: string) =>
-      `${reglaEn(reglas, "divisor_hora_ordinaria", fecha)}|${reglaEn(reglas, "recargo_dominical", fecha)}`;
+      `${r.en("divisor_hora_ordinaria", fecha)}|${r.en("recargo_dominical", fecha)}`;
 
     const tramos = new Map<string, DiaTrabajado[]>();
     for (const dia of dias) {
@@ -230,11 +232,11 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
 
     for (const diasTramo of tramos.values()) {
       const fechaRef = diasTramo[0].fecha;
-      const divisor = reglaEn(reglas, "divisor_hora_ordinaria", fechaRef);
-      const recargoDominical = reglaEn(reglas, "recargo_dominical", fechaRef);
-      const recargoNocturno = reglaEn(reglas, "recargo_nocturno", fechaRef);
-      const extraDiurnaPct = reglaEn(reglas, "hora_extra_diurna", fechaRef);
-      const extraNocturnaPct = reglaEn(reglas, "hora_extra_nocturna", fechaRef);
+      const divisor = r.en("divisor_hora_ordinaria", fechaRef);
+      const recargoDominical = r.en("recargo_dominical", fechaRef);
+      const recargoNocturno = r.en("recargo_nocturno", fechaRef);
+      const extraDiurnaPct = r.en("hora_extra_diurna", fechaRef);
+      const extraNocturnaPct = r.en("hora_extra_nocturna", fechaRef);
       const valorHora = d.salarioBasicoMensual / divisor;
 
       const primeraFecha = diasTramo[0].fecha;
@@ -358,7 +360,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       const auxilio = calcularAuxilioTransporte(
         d.salarioBasicoMensual,
         diasPeriodo,
-        reglas,
+        r,
         d.periodoHasta
       );
       if (auxilio.linea) lineas.push(auxilio.linea);
@@ -395,7 +397,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       aplicarDeducciones(
         totalDevengos,
         ibc,
-        reglas,
+        r,
         d.periodoHasta,
         { deduccionesConvenio, descuentoJudicial: embargoPeriodo },
         diasPeriodo / DIAS_MES_COMERCIAL

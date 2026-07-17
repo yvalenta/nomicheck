@@ -1,5 +1,5 @@
 import type { LineaResultado, ReglaLegal } from "./types.js";
-import { reglaEn } from "./utils.js";
+import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { DIAS_MES_COMERCIAL } from "./constantes.js";
 
@@ -15,17 +15,18 @@ export interface ResultadoAuxilio {
 export function calcularAuxilioTransporte(
   salarioBasicoMensual: number,
   diasPeriodo: number,
-  reglas: ReglaLegal[],
+  reglas: ReglaLegal[] | ResolutorReglas,
   fecha: string
 ): ResultadoAuxilio {
-  const smlmv = reglaEn(reglas, "smlmv", fecha);
-  const topeSmlmv = reglaEn(reglas, "auxilio_transporte_tope_smlmv", fecha);
+  const r = comoResolutor(reglas);
+  const smlmv = r.en("smlmv", fecha);
+  const topeSmlmv = r.en("auxilio_transporte_tope_smlmv", fecha);
   if (salarioBasicoMensual > smlmv * topeSmlmv) {
     return {
       advertencia: `No se reconoce auxilio de transporte: el salario ($${salarioBasicoMensual.toLocaleString("es-CO")}) supera ${topeSmlmv} SMLMV ($${redondearPeso(smlmv * topeSmlmv).toLocaleString("es-CO")}) — Decreto de salario mínimo vigente.`,
     };
   }
-  const auxilioMensual = reglaEn(reglas, "auxilio_transporte", fecha);
+  const auxilioMensual = r.en("auxilio_transporte", fecha);
   return {
     linea: {
       concepto: "Auxilio de transporte",

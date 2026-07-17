@@ -1,5 +1,5 @@
 import type { LineaResultado, ReglaLegal } from "./types.js";
-import { reglaEn } from "./utils.js";
+import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { TABLA_FONDO_SOLIDARIDAD } from "./constantes.js";
 
@@ -18,11 +18,12 @@ export function pctFondoSolidaridad(ibcEnSmlmv: number): number {
 // IBC (devengado salarial, excluye auxilio de transporte): salud 4%,
 // pensión 4% y fondo de solidaridad si IBC ≥ 4 SMLMV. Compartida por ambas
 // calculadoras — el usuario nunca declara estas deducciones (SDD §12).
-export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[], fecha: string): LineaResultado[] {
-  const pctSalud = reglaEn(reglas, "aporte_salud_empleado", fecha);
-  const pctPension = reglaEn(reglas, "aporte_pension_empleado", fecha);
-  const umbralSolidaridadSmlmv = reglaEn(reglas, "fondo_solidaridad_umbral_smlmv", fecha);
-  const smlmv = reglaEn(reglas, "smlmv", fecha);
+export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[] | ResolutorReglas, fecha: string): LineaResultado[] {
+  const r = comoResolutor(reglas);
+  const pctSalud = r.en("aporte_salud_empleado", fecha);
+  const pctPension = r.en("aporte_pension_empleado", fecha);
+  const umbralSolidaridadSmlmv = r.en("fondo_solidaridad_umbral_smlmv", fecha);
+  const smlmv = r.en("smlmv", fecha);
 
   const lineas: LineaResultado[] = [
     {
@@ -105,16 +106,17 @@ export interface OpcionesDeducciones {
 export function limiteEmbargo(
   tipo: TipoEmbargo,
   totalDevengado: number,
-  reglas: ReglaLegal[],
+  reglas: ReglaLegal[] | ResolutorReglas,
   fecha: string,
   factorPeriodo = 1
 ): number {
+  const r = comoResolutor(reglas);
   if (tipo === "alimentos_o_cooperativa") {
-    const pctMax = reglaEn(reglas, "embargo_alimentos_pct_max", fecha);
+    const pctMax = r.en("embargo_alimentos_pct_max", fecha);
     return redondearPeso(totalDevengado * pctMax);
   }
-  const smlmvPeriodo = reglaEn(reglas, "smlmv", fecha) * factorPeriodo;
-  const fraccion = reglaEn(reglas, "embargo_ordinario_fraccion_excedente", fecha);
+  const smlmvPeriodo = r.en("smlmv", fecha) * factorPeriodo;
+  const fraccion = r.en("embargo_ordinario_fraccion_excedente", fecha);
   const excedente = Math.max(0, totalDevengado - smlmvPeriodo);
   return redondearPeso(excedente * fraccion);
 }
@@ -133,12 +135,13 @@ export function limiteEmbargo(
 export function aplicarDeducciones(
   totalDevengado: number,
   ibc: number,
-  reglas: ReglaLegal[],
+  reglas: ReglaLegal[] | ResolutorReglas,
   fecha: string,
   opciones: OpcionesDeducciones = {},
   factorPeriodo = 1
 ): ResultadoDeducciones {
-  const lineas = deduccionesDeLey(ibc, reglas, fecha);
+  const r = comoResolutor(reglas);
+  const lineas = deduccionesDeLey(ibc, r, fecha);
   const advertencias: string[] = [];
 
   const convenio = (opciones.deduccionesConvenio ?? []).filter((c) => c.valorMensual > 0);
@@ -151,7 +154,7 @@ export function aplicarDeducciones(
   lineas.push(...lineasConvenio);
 
   const totalConvenioSolicitado = redondearPeso(lineasConvenio.reduce((s, l) => s + l.valorCalculado, 0));
-  const topePct = reglaEn(reglas, "limite_deducciones_salario", fecha);
+  const topePct = r.en("limite_deducciones_salario", fecha);
   const topeMonto = redondearPeso(totalDevengado * topePct);
   let totalDeducciones = redondearPeso(lineas.reduce((s, l) => s + l.valorCalculado, 0));
 
@@ -169,7 +172,7 @@ export function aplicarDeducciones(
   const embargo = opciones.descuentoJudicial;
   if (embargo && embargo.valorMensual > 0) {
     const solicitado = redondearPeso(embargo.valorMensual);
-    const limite = limiteEmbargo(embargo.tipo, totalDevengado, reglas, fecha, factorPeriodo);
+    const limite = limiteEmbargo(embargo.tipo, totalDevengado, r, fecha, factorPeriodo);
     const embargable = Math.min(solicitado, limite);
     const ley =
       embargo.tipo === "alimentos_o_cooperativa"
