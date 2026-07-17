@@ -5,6 +5,7 @@ import {
   crearResolutorReglas,
   type DatosNominaTurnos,
   type LineaResultado,
+  type TipoContrato,
 } from "@pv/reglas";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
@@ -37,6 +38,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
   const resolutor = crearResolutorReglas(reglas);
 
   const recibos = empleados.map((empleado) => {
+    const tipoContrato = empleado.tipoContrato as TipoContrato;
     const resultado =
       empleado.tipoNomina === "turnos"
         ? CalculadoraPorTurnos.calcular(
@@ -50,6 +52,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
               novedades: turnos
                 .filter((t) => t.empleadoId === empleado.id)
                 .map((t) => ({ fecha: t.fecha, trabajo: true as const, horaInicio: t.horaInicio, horaFin: t.horaFin })),
+              tipoContrato,
             },
             reglas,
             festivos
@@ -62,6 +65,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
               periodoDesde: periodo.fechaInicio,
               periodoHasta: periodo.fechaFin,
               conceptos: [],
+              tipoContrato,
             },
             reglas,
             festivos
@@ -72,21 +76,26 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
     // fechaIngreso): son montos incrementales, no el acumulado de carrera.
     // Se listan como líneas informativas tipo "provision" (pasivo del
     // empleador) que NO afectan totalDevengado/totalDeducido/neto — el
-    // colaborador no recibe ese dinero hoy.
-    const prestaciones = calcularPrestacionesSociales({
-      fechaIngreso: periodo.fechaInicio,
-      fechaCorte: periodo.fechaFin,
-      salarioBase: empleado.salarioBase,
-      auxilioTransporte: empleado.auxilioTransporte
-        ? resolutor.en("auxilio_transporte", periodo.fechaFin)
-        : undefined,
-    });
-    const lineasProvision: LineaResultado[] = [
-      { concepto: "Provisión cesantías", valorCalculado: prestaciones.cesantias, tipo: "provision", ley: "CST art. 249" },
-      { concepto: "Provisión intereses a las cesantías", valorCalculado: prestaciones.interesesCesantias, tipo: "provision", ley: "Ley 52 de 1975, art. 1" },
-      { concepto: "Provisión prima de servicios", valorCalculado: prestaciones.prima, tipo: "provision", ley: "CST art. 306" },
-      { concepto: "Provisión vacaciones", valorCalculado: prestaciones.vacaciones, tipo: "provision", ley: "CST art. 186" },
-    ];
+    // colaborador no recibe ese dinero hoy. El contrato de aprendizaje
+    // (Ley 789 de 2002, art. 30) NO genera estas prestaciones — se omiten.
+    const lineasProvision: LineaResultado[] = tipoContrato?.startsWith("aprendizaje_sena")
+      ? []
+      : (() => {
+          const prestaciones = calcularPrestacionesSociales({
+            fechaIngreso: periodo.fechaInicio,
+            fechaCorte: periodo.fechaFin,
+            salarioBase: empleado.salarioBase,
+            auxilioTransporte: empleado.auxilioTransporte
+              ? resolutor.en("auxilio_transporte", periodo.fechaFin)
+              : undefined,
+          });
+          return [
+            { concepto: "Provisión cesantías", valorCalculado: prestaciones.cesantias, tipo: "provision", ley: "CST art. 249" },
+            { concepto: "Provisión intereses a las cesantías", valorCalculado: prestaciones.interesesCesantias, tipo: "provision", ley: "Ley 52 de 1975, art. 1" },
+            { concepto: "Provisión prima de servicios", valorCalculado: prestaciones.prima, tipo: "provision", ley: "CST art. 306" },
+            { concepto: "Provisión vacaciones", valorCalculado: prestaciones.vacaciones, tipo: "provision", ley: "CST art. 186" },
+          ];
+        })();
 
     return {
       empleadoId: empleado.id,

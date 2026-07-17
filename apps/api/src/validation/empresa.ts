@@ -20,6 +20,8 @@ export const empleadoSchema = z.object({
   auxilioTransporte: z.boolean().default(false),
   // Base de antigüedad para cesantías/intereses/prima/vacaciones (prestaciones.ts).
   fechaIngreso: fecha,
+  // "servicios" NO aplica aquí — un contratista de servicios no es Empleado (SDD §07).
+  tipoContrato: z.enum(["indefinido", "aprendizaje_sena_lectiva", "aprendizaje_sena_practica"]).default("indefinido"),
 });
 
 export const empleadoUpdateSchema = empleadoSchema.partial().extend({

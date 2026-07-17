@@ -1,7 +1,9 @@
 import {
   CalculadoraPorTurnos,
   CalculadoraSalarioFijo,
+  CalculadoraServicios,
   type DatosNominaFija,
+  type DatosNominaServicios,
   type DatosNominaTurnos,
   type Festivo,
   type ReglaLegal,
@@ -49,9 +51,10 @@ export async function obtenerReglasYFestivos(): Promise<{ reglas: ReglaLegal[]; 
 }
 
 export async function calcularNomina(
-  datos: DatosNominaTurnos | DatosNominaFija
+  datos: DatosNominaTurnos | DatosNominaFija | DatosNominaServicios
 ): Promise<ResultadoNomina> {
   const { reglas, festivos } = await obtenerReglasYFestivos();
-  const calculadora = datos.modo === "turnos" ? CalculadoraPorTurnos : CalculadoraSalarioFijo;
+  const calculadora =
+    datos.modo === "turnos" ? CalculadoraPorTurnos : datos.modo === "salario-fijo" ? CalculadoraSalarioFijo : CalculadoraServicios;
   return calculadora.calcular(datos, reglas, festivos);
 }

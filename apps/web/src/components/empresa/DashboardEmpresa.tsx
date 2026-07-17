@@ -159,13 +159,14 @@ function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "act
   const [tipoNomina, setTipoNomina] = useState<Empleado["tipoNomina"]>("turnos");
   const [auxilioTransporte, setAuxilioTransporte] = useState(true);
   const [fechaIngreso, setFechaIngreso] = useState("");
+  const [tipoContrato, setTipoContrato] = useState<Empleado["tipoContrato"]>("indefinido");
 
   return (
     <PaycheckCard titulo="Nuevo colaborador">
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso });
+          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso, tipoContrato });
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
@@ -187,6 +188,18 @@ function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "act
             <option value="fijo">Salario fijo</option>
           </select>
         </div>
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          Tipo de contrato
+          <select
+            value={tipoContrato}
+            onChange={(e) => setTipoContrato(e.target.value as Empleado["tipoContrato"])}
+            className={inputCls}
+          >
+            <option value="indefinido">Término indefinido (u otro contrato laboral ordinario)</option>
+            <option value="aprendizaje_sena_lectiva">Aprendizaje SENA — etapa lectiva</option>
+            <option value="aprendizaje_sena_practica">Aprendizaje SENA — etapa práctica</option>
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm text-ink">
           Fecha de ingreso (antigüedad para cesantías, prima y vacaciones)
           <input
