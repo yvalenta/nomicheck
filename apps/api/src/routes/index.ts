@@ -36,12 +36,22 @@ const limitadorIA = rateLimit({
   message: { error: "Demasiadas solicitudes — intenta de nuevo en unos minutos." },
 });
 
+// El cálculo es anónimo y CPU-bound: límite generoso (30/min por IP,
+// muy por encima del uso legítimo del wizard) que corta abuso automatizado.
+const limitadorCalculo = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes — intenta de nuevo en un minuto." },
+});
+
 router.get("/health", (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
 // Verificador anónimo — sin auth.
-router.post("/nomina/calcular", calcular);
+router.post("/nomina/calcular", limitadorCalculo, calcular);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
