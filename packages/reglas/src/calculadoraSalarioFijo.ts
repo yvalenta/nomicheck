@@ -10,6 +10,9 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     }
     const d = datos as DatosNominaFija;
     validarPeriodo(d.periodoDesde, d.periodoHasta);
+    if (!(d.salarioBasicoMensual > 0)) {
+      throw new Error(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
+    }
     const advertencias: string[] = [];
     const lineas: LineaResultado[] = [];
 

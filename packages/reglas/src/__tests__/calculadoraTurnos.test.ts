@@ -508,6 +508,55 @@ describe("CalculadoraPorTurnos — validaciones de entrada", () => {
     ).toThrow(/ambiguo/i);
   });
 
+  it("rechaza salario 0 o negativo (la DB puede traer basura sin pasar por zod)", () => {
+    for (const salario of [0, -1, NaN]) {
+      expect(() =>
+        CalculadoraPorTurnos.calcular(
+          datosBase({ salarioBasicoMensual: salario }),
+          REGLAS_JUL_2026,
+          FESTIVOS_2026
+        )
+      ).toThrow(/mayor que cero/);
+    }
+  });
+
+  it("no crashea con el salario extremo mínimo de $1", () => {
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ salarioBasicoMensual: 1 }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado.netoEsperado).toBeGreaterThanOrEqual(0);
+    expect(resultado.totalDeducciones).toBeGreaterThanOrEqual(0);
+  });
+
+  it("rechaza dos novedades para la misma fecha", () => {
+    expect(() =>
+      CalculadoraPorTurnos.calcular(
+        datosBase({
+          novedades: [
+            { fecha: "2026-06-16", trabajo: false },
+            { fecha: "2026-06-16", trabajo: true, horaInicio: "10:00", horaFin: "14:00" },
+          ],
+        }),
+        REGLAS_JUL_2026,
+        FESTIVOS_2026
+      )
+    ).toThrow(/2026-06-16.*duplicada/);
+  });
+
+  it("rechaza una novedad con fecha inexistente", () => {
+    expect(() =>
+      CalculadoraPorTurnos.calcular(
+        datosBase({
+          novedades: [{ fecha: "2026-06-31", trabajo: false }],
+        }),
+        REGLAS_JUL_2026,
+        FESTIVOS_2026
+      )
+    ).toThrow(/inexistente|inválida/i);
+  });
+
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>
       CalculadoraPorTurnos.calcular(

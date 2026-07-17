@@ -130,6 +130,19 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       throw new Error("horarioBase debe tener 7 posiciones (domingo a sábado)");
     }
     validarPeriodo(d.periodoDesde, d.periodoHasta);
+    if (!(d.salarioBasicoMensual > 0)) {
+      throw new Error(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
+    }
+    const fechasNovedades = new Set<string>();
+    for (const n of d.novedades) {
+      if (!esFechaValida(n.fecha)) {
+        throw new Error(`Fecha inválida o inexistente en una novedad: "${n.fecha}"`);
+      }
+      if (fechasNovedades.has(n.fecha)) {
+        throw new Error(`Hay dos novedades para la misma fecha (${n.fecha}) — elimina la duplicada`);
+      }
+      fechasNovedades.add(n.fecha);
+    }
     const advertencias: string[] = [];
     const fechas = rangoFechas(d.periodoDesde, d.periodoHasta);
 
