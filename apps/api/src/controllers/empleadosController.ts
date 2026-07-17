@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
-import { empleadoSchema, empleadoUpdateSchema } from "../validation/empresa.js";
-import { actualizarEmpleado, crearEmpleado, listarEmpleados } from "../services/empleadosService.js";
+import { empleadoSchema, empleadoUpdateSchema, retiroSchema } from "../validation/empresa.js";
+import { actualizarEmpleado, crearEmpleado, listarEmpleados, retirarEmpleado } from "../services/empleadosService.js";
+import { liquidarFinal } from "../services/liquidacionFinalService.js";
 
 export async function listar(req: Request, res: Response) {
   const empleados = await listarEmpleados(req.usuario!.empresaId!);
@@ -28,5 +29,28 @@ export async function actualizar(req: Request, res: Response) {
     res.json(empleado);
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });
+  }
+}
+
+export async function retirar(req: Request, res: Response) {
+  const parseo = retiroSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+  try {
+    const empleado = await retirarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
+    res.json(empleado);
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo retirar" });
+  }
+}
+
+export async function liquidacionFinal(req: Request, res: Response) {
+  try {
+    const recibo = await liquidarFinal(req.usuario!.empresaId!, Number(req.params.id));
+    res.json(recibo);
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo liquidar" });
   }
 }

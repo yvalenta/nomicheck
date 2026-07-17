@@ -8,6 +8,7 @@ export interface Empleado {
   tipoNomina: "turnos" | "fijo";
   auxilioTransporte: boolean;
   fechaIngreso: string;
+  fechaRetiro: string | null;
   activo: boolean;
 }
 
@@ -42,7 +43,7 @@ export function listarEmpleados(): Promise<Empleado[]> {
   return autenticado("/empresa/empleados");
 }
 
-export function crearEmpleado(datos: Omit<Empleado, "id" | "activo">): Promise<Empleado> {
+export function crearEmpleado(datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">): Promise<Empleado> {
   return autenticado("/empresa/empleados", { method: "POST", body: JSON.stringify(datos) });
 }
 
@@ -52,6 +53,14 @@ export function actualizarEmpleado(id: number, datos: Partial<Empleado>): Promis
 
 export function invitarEmpleado(id: number, email: string) {
   return autenticado(`/empresa/empleados/${id}/invitar`, { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export function retirarEmpleado(id: number, fechaRetiro: string): Promise<Empleado> {
+  return autenticado(`/empresa/empleados/${id}/retirar`, { method: "POST", body: JSON.stringify({ fechaRetiro }) });
+}
+
+export function liquidarFinalEmpleado(id: number): Promise<Recibo> {
+  return autenticado(`/empresa/empleados/${id}/liquidacion-final`, { method: "POST" });
 }
 
 export interface Periodo {

@@ -29,3 +29,7 @@ export const empleadoUpdateSchema = empleadoSchema.partial().extend({
 export const invitarSchema = z.object({
   email: z.string().email(),
 });
+
+export const retiroSchema = z.object({
+  fechaRetiro: fecha,
+});

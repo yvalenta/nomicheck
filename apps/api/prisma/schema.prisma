@@ -66,6 +66,7 @@ model Empleado {
   tipoNomina        String // turnos | fijo
   auxilioTransporte Boolean @default(false)
   fechaIngreso      String // YYYY-MM-DD — base de antigüedad para prestaciones sociales
+  fechaRetiro       String? // YYYY-MM-DD — si está seteada, el empleado puede liquidarse (prestacionesService)
   activo            Boolean @default(true)
   creadoEn          DateTime @default(now())
 

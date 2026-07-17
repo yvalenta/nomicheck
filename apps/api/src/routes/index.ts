@@ -6,7 +6,7 @@ import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { registro, invitar } from "../controllers/authController.js";
-import { listar, crear, actualizar } from "../controllers/empleadosController.js";
+import { listar, crear, actualizar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
   listar as listarPeriodos,
   crear as crearPeriodo,
@@ -64,6 +64,8 @@ router.get("/empresa/empleados", ...soloEmpresa, listar);
 router.post("/empresa/empleados", ...soloEmpresa, crear);
 router.put("/empresa/empleados/:id", ...soloEmpresa, actualizar);
 router.post("/empresa/empleados/:id/invitar", ...soloEmpresa, invitar);
+router.post("/empresa/empleados/:id/retirar", ...soloEmpresa, retirar);
+router.post("/empresa/empleados/:id/liquidacion-final", ...soloEmpresa, liquidacionFinal);
 
 router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
 router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);

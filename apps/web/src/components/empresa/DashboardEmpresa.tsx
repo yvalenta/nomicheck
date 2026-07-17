@@ -5,7 +5,9 @@ import { supabase } from "../../lib/supabase";
 import {
   crearEmpleado,
   invitarEmpleado,
+  liquidarFinalEmpleado,
   listarEmpleados,
+  retirarEmpleado,
   type Empleado,
 } from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
@@ -28,7 +30,7 @@ export default function DashboardEmpresa() {
 
   useEffect(recargar, []);
 
-  async function agregar(datos: Omit<Empleado, "id" | "activo">) {
+  async function agregar(datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">) {
     setError(null);
     try {
       await crearEmpleado(datos);
@@ -47,6 +49,26 @@ export default function DashboardEmpresa() {
       window.alert("Invitación enviada.");
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "No se pudo invitar");
+    }
+  }
+
+  async function retirar(id: number) {
+    const fechaRetiro = window.prompt("Fecha de retiro (YYYY-MM-DD):");
+    if (!fechaRetiro) return;
+    try {
+      await retirarEmpleado(id, fechaRetiro);
+      recargar();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "No se pudo registrar el retiro");
+    }
+  }
+
+  async function liquidarFinal(id: number) {
+    try {
+      const recibo = await liquidarFinalEmpleado(id);
+      window.alert(`Liquidación final generada. Neto: ${formatCOP(recibo.neto)}`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "No se pudo liquidar");
     }
   }
 
@@ -104,6 +126,24 @@ export default function DashboardEmpresa() {
               >
                 <Mail size={17} />
               </button>
+              {!e.fechaRetiro && (
+                <button
+                  onClick={() => retirar(e.id)}
+                  title="Registrar retiro"
+                  className="text-xs text-muted hover:text-coral shrink-0 underline"
+                >
+                  Retirar
+                </button>
+              )}
+              {e.fechaRetiro && (
+                <button
+                  onClick={() => liquidarFinal(e.id)}
+                  title="Liquidar prestaciones finales"
+                  className="text-xs text-mint-dark hover:underline shrink-0"
+                >
+                  Liquidar final
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -112,7 +152,7 @@ export default function DashboardEmpresa() {
   );
 }
 
-function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "activo">) => void }) {
+function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "activo" | "fechaRetiro">) => void }) {
   const [nombre, setNombre] = useState("");
   const [documento, setDocumento] = useState("");
   const [salarioBase, setSalarioBase] = useState("");
