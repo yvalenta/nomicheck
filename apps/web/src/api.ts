@@ -64,6 +64,44 @@ export async function calcularNomina(
   return body as ResultadoNomina;
 }
 
+export type DatosIndemnizacion =
+  | {
+      tipoContrato: "fijo" | "obra_labor";
+      salarioMensual: number;
+      fechaTerminacion: string;
+      fechaVencimientoPactada: string;
+      conJustaCausa: boolean;
+    }
+  | {
+      tipoContrato: "indefinido" | "tiempo_parcial";
+      salarioMensual: number;
+      fechaIngreso: string;
+      fechaTerminacion: string;
+      conJustaCausa: boolean;
+    };
+
+export interface ResultadoIndemnizacion {
+  diasIndemnizacion: number;
+  valor: number;
+  explicacion: string;
+  ley: string;
+}
+
+// Calculadora aparte de indemnización por terminación (SDD §14) — no es
+// parte del recibo de nómina periódico, es informativa/aproximada.
+export async function calcularIndemnizacion(datos: DatosIndemnizacion): Promise<ResultadoIndemnizacion> {
+  const res = await fetch("/api/indemnizacion/calcular", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body.error ?? "No se pudo calcular la indemnización");
+  }
+  return body as ResultadoIndemnizacion;
+}
+
 export interface MensajeChat {
   rol: "usuario" | "asistente";
   texto: string;

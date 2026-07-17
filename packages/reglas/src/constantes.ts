@@ -116,6 +116,25 @@ export const PATRON_APRENDIZ_MIN_PCT_SMLMV = 0.5;
 /** Techo del rango sospechoso, en múltiplos de SMLMV. */
 export const PATRON_APRENDIZ_MAX_PCT_SMLMV = 0.75;
 
+// --- Indemnización por terminación sin justa causa (CST art. 64, modificado por la Ley 50 de 1990, art. 6) ---
+//
+// El umbral de 10 SMLMV separa dos escalas de días de indemnización para
+// contrato indefinido/tiempo parcial. Son cifras estructurales de la ley,
+// no ReglaLegal versionada por decreto anual.
+
+/** Umbral de salario (en SMLMV) que separa las dos escalas de indemnización. */
+export const INDEMNIZACION_UMBRAL_SALARIO_SMLMV = 10;
+
+/** Bajo el umbral: días del primer año de indemnización. */
+export const INDEMNIZACION_DIAS_PRIMER_ANIO_BAJO_UMBRAL = 30;
+/** Bajo el umbral: días adicionales por cada año subsiguiente (proporcional por fracción). */
+export const INDEMNIZACION_DIAS_ANIO_ADICIONAL_BAJO_UMBRAL = 20;
+
+/** Igual o sobre el umbral: días del primer año de indemnización. */
+export const INDEMNIZACION_DIAS_PRIMER_ANIO_SOBRE_UMBRAL = 20;
+/** Igual o sobre el umbral: días adicionales por cada año subsiguiente (proporcional por fracción). */
+export const INDEMNIZACION_DIAS_ANIO_ADICIONAL_SOBRE_UMBRAL = 15;
+
 /** Aporte a pensión del independiente — paga el 100%. Ley 100 de 1993, art. 20. */
 export const PCT_PENSION_INDEPENDIENTE = 0.16;
 

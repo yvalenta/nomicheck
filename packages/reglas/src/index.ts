@@ -10,3 +10,4 @@ export * from "./prestaciones.js";
 export * from "./calculadoraTurnos.js";
 export * from "./calculadoraSalarioFijo.js";
 export * from "./calculadoraServicios.js";
+export * from "./indemnizacion.js";

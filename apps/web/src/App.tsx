@@ -21,8 +21,9 @@ import SubirComprobante from "./components/SubirComprobante.tsx";
 import PasoRevision from "./components/PasoRevision.tsx";
 import Resultado from "./components/Resultado.tsx";
 import SkeletonResultado from "./components/SkeletonResultado.tsx";
+import IndemnizacionCalculadora from "./components/IndemnizacionCalculadora.tsx";
 
-type Paso = "salario" | "semana" | "subir" | "revision" | "calculando" | "resultado";
+type Paso = "salario" | "semana" | "subir" | "revision" | "calculando" | "resultado" | "indemnizacion";
 
 const PASO_LABEL: Record<Paso, string> = {
   salario: "Paso 1 de 3 · Salario y fechas",
@@ -31,6 +32,7 @@ const PASO_LABEL: Record<Paso, string> = {
   revision: "Revisa los datos",
   calculando: "Calculando…",
   resultado: "Resultado",
+  indemnizacion: "Indemnización por terminación",
 };
 
 export default function App() {
@@ -187,8 +189,16 @@ export default function App() {
             >
               O sube tu comprobante y lo leemos por ti
             </button>
+            <button
+              onClick={() => setPaso("indemnizacion")}
+              className="text-sm text-mint-dark hover:underline self-center"
+            >
+              ¿Te despidieron o terminaron tu contrato antes de tiempo? Calcula tu indemnización
+            </button>
           </div>
         )}
+
+        {paso === "indemnizacion" && <IndemnizacionCalculadora onAtras={() => setPaso("salario")} />}
 
         {paso === "semana" && (
           <div className="flex flex-col gap-4">

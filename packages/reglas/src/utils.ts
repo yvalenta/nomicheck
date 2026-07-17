@@ -115,6 +115,14 @@ export function esDomingo(fecha: string): boolean {
 // conoce el calendario real), por eso "iniciar el 1 de febrero" ya daba bien
 // 28/29 de febrero incluso sin este fix — el bug solo aparecía en los días
 // 29/30/31 de un mes cuando el mes siguiente es más corto.
+// Días calendario entre dos fechas (hasta - desde), puede ser negativo si
+// "hasta" es anterior a "desde" — quien llama decide si eso es un error.
+export function diasEntreFechas(desde: string, hasta: string): number {
+  const d = new Date(`${desde}T00:00:00Z`).getTime();
+  const h = new Date(`${hasta}T00:00:00Z`).getTime();
+  return Math.round((h - d) / 86_400_000);
+}
+
 export function finDePeriodoMensual(desde: string): string {
   const d = new Date(`${desde}T00:00:00Z`);
   const anio = d.getUTCFullYear();
