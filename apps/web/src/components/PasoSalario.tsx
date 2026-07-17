@@ -16,7 +16,11 @@ import PaycheckCard from "./PaycheckCard.tsx";
 
 export type Periodicidad = "semanal" | "quincenal" | "mensual" | "personalizado";
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
-export type TipoContrato = "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica";
+export type TipoContrato =
+  | "indefinido"
+  | "aprendizaje_sena_lectiva"
+  | "aprendizaje_sena_practica"
+  | "servicios";
 
 export interface DatosPaso1 {
   salario: string;
@@ -55,6 +59,7 @@ const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
   indefinido: "Contrato laboral ordinario (indefinido, fijo, obra)",
   aprendizaje_sena_lectiva: "Aprendizaje SENA — etapa lectiva",
   aprendizaje_sena_practica: "Aprendizaje SENA — etapa práctica",
+  servicios: "Prestación de servicios (contratista independiente)",
 };
 
 // Fecha fin sugerida a partir de la fecha de inicio y la periodicidad — el
@@ -119,7 +124,10 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
         <div className="px-3 pb-3 pt-1 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
             <span className="flex items-center gap-2">
-              <Wallet size={16} className="text-mint-dark" /> Salario básico mensual pactado
+              <Wallet size={16} className="text-mint-dark" />{" "}
+              {datos.tipoContrato === "servicios"
+                ? "Honorarios mensuales pactados"
+                : "Salario básico mensual pactado"}
             </span>
             <input
               required
@@ -165,7 +173,8 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
                 </option>
               ))}
             </select>
-            {datos.tipoContrato !== "indefinido" && (
+            {(datos.tipoContrato === "aprendizaje_sena_lectiva" ||
+              datos.tipoContrato === "aprendizaje_sena_practica") && (
               <span className="text-xs text-muted font-normal">
                 Como aprendiz SENA no aplica auxilio de transporte
                 {datos.tipoContrato === "aprendizaje_sena_lectiva"
@@ -173,10 +182,18 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
                   : ", y en etapa práctica solo se cotiza salud (sin pensión ni fondo de solidaridad)."}
               </span>
             )}
+            {datos.tipoContrato === "servicios" && (
+              <span className="text-xs text-muted font-normal">
+                No es una relación laboral: sin auxilio de transporte, sin recargos ni prestaciones
+                sociales. Tú mismo liquidas y pagas tus aportes a salud y pensión por PILA (Ley 1819
+                de 2016, art. 244) — te mostramos una referencia de cuánto sería.
+              </span>
+            )}
           </label>
         </div>
       </PaycheckCard>
 
+      {datos.tipoContrato !== "servicios" && (
       <PaycheckCard titulo="Deducciones opcionales — marca solo las que apliquen">
         <div className="px-3 pb-3 pt-1 flex flex-col gap-3.5">
           <CheckMonto
@@ -256,6 +273,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
           </div>
         </div>
       </PaycheckCard>
+      )}
 
       <PaycheckCard titulo="Periodo a revisar">
         <div className="px-3 pb-3 pt-1 flex flex-col gap-3">
@@ -328,7 +346,8 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
         disabled={!listo}
         className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Siguiente: tu semana <ArrowRight size={18} />
+        {datos.tipoContrato === "servicios" ? "Calcular" : "Siguiente: tu semana"}{" "}
+        <ArrowRight size={18} />
       </button>
     </form>
   );

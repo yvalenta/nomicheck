@@ -1,4 +1,11 @@
-import type { ConceptoNomina, DatosNominaFija, DatosNominaTurnos, Festivo, ResultadoNomina } from "@pv/reglas";
+import type {
+  ConceptoNomina,
+  DatosNominaFija,
+  DatosNominaServicios,
+  DatosNominaTurnos,
+  Festivo,
+  ResultadoNomina,
+} from "@pv/reglas";
 
 export interface ComprobanteExtraido {
   salarioBasicoMensual?: number;
@@ -42,7 +49,7 @@ export async function obtenerParametros(): Promise<ParametrosPublicos | null> {
 }
 
 export async function calcularNomina(
-  datos: DatosNominaTurnos | DatosNominaFija
+  datos: DatosNominaTurnos | DatosNominaFija | DatosNominaServicios
 ): Promise<ResultadoNomina> {
   const res = await fetch("/api/nomina/calcular", {
     method: "POST",

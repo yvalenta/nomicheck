@@ -62,6 +62,14 @@ export default function App() {
     obtenerParametros().then(setParametros);
   }, []);
 
+  // "servicios" no es un TipoContrato del motor de turnos/salario-fijo (es
+  // un modo de cálculo aparte, ver DatosNominaServicios) — este helper solo
+  // se usa en las dos rutas que jamás lo reciben (el wizard desvía
+  // "servicios" directo a calcularServicios antes de llegar aquí).
+  function tipoContratoLaboral(): "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica" {
+    return datos1.tipoContrato === "servicios" ? "indefinido" : datos1.tipoContrato;
+  }
+
   async function calcularPorTurnos(novedades: NovedadDia[]) {
     setPaso("calculando");
     setError(null);
@@ -74,7 +82,7 @@ export default function App() {
         periodoHasta: datos1.hasta,
         horarioBase,
         novedades,
-        tipoContrato: datos1.tipoContrato,
+        tipoContrato: tipoContratoLaboral(),
         aporteAfcMensual: datos1.aporteAfc ? Number(datos1.aporteAfc) : undefined,
         prestamoMensual: datos1.prestamo ? Number(datos1.prestamo) : undefined,
         ahorroMensual: datos1.ahorro ? Number(datos1.ahorro) : undefined,
@@ -89,6 +97,24 @@ export default function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
       setPaso("semana");
+    }
+  }
+
+  async function calcularServicios() {
+    setPaso("calculando");
+    setError(null);
+    try {
+      const r = await calcularNomina({
+        modo: "servicios",
+        honorariosMensuales: Number(datos1.salario),
+        periodoDesde: datos1.desde,
+        periodoHasta: datos1.hasta,
+      });
+      setResultado(r);
+      setPaso("resultado");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error inesperado");
+      setPaso("salario");
     }
   }
 
@@ -109,7 +135,7 @@ export default function App() {
         periodoDesde: datos.desde,
         periodoHasta: datos.hasta,
         conceptos: datos.conceptos,
-        tipoContrato: datos1.tipoContrato,
+        tipoContrato: tipoContratoLaboral(),
       });
       setDatos1((d) => ({ ...d, desde: datos.desde, hasta: datos.hasta }));
       setResultado(r);
@@ -146,10 +172,13 @@ export default function App() {
                 colombiana vigente.
               </p>
             </div>
+            {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
             <PasoSalario
               datos={datos1}
               onCambio={setDatos1}
-              onSiguiente={() => setPaso("semana")}
+              onSiguiente={() =>
+                datos1.tipoContrato === "servicios" ? calcularServicios() : setPaso("semana")
+              }
               parametros={parametros}
             />
             <button
