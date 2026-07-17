@@ -16,6 +16,7 @@ import PaycheckCard from "./PaycheckCard.tsx";
 
 export type Periodicidad = "semanal" | "quincenal" | "mensual" | "personalizado";
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
+export type TipoContrato = "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica";
 
 export interface DatosPaso1 {
   salario: string;
@@ -23,6 +24,7 @@ export interface DatosPaso1 {
   desde: string;
   hasta: string;
   auxilio: boolean;
+  tipoContrato: TipoContrato;
   netoRecibido: string;
   aporteAfc: string;
   prestamo: string;
@@ -47,6 +49,12 @@ const PERIODICIDAD_LABEL: Record<Periodicidad, string> = {
   quincenal: "Quincenal (15 días)",
   mensual: "Mensual",
   personalizado: "Personalizado",
+};
+
+const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
+  indefinido: "Contrato laboral ordinario (indefinido, fijo, obra)",
+  aprendizaje_sena_lectiva: "Aprendizaje SENA — etapa lectiva",
+  aprendizaje_sena_practica: "Aprendizaje SENA — etapa práctica",
 };
 
 // Fecha fin sugerida a partir de la fecha de inicio y la periodicidad — el
@@ -125,7 +133,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
             />
           </label>
 
-          {!superaTopeAuxilio && (
+          {!superaTopeAuxilio && datos.tipoContrato === "indefinido" && (
             <label className="flex items-center gap-2.5 text-sm text-ink">
               <input
                 type="checkbox"
@@ -136,13 +144,36 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               <Bus size={16} className="text-muted" /> Recibo auxilio de transporte
             </label>
           )}
-          {superaTopeAuxilio && (
+          {superaTopeAuxilio && datos.tipoContrato === "indefinido" && (
             <p className="text-xs text-muted flex items-center gap-2">
               <Bus size={16} className="text-muted shrink-0" />
               No aplica auxilio de transporte: tu salario supera{" "}
               {parametros?.auxilioTransporteTopeSmlmv} SMLMV (Decreto de salario mínimo vigente).
             </p>
           )}
+
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            <span>Tipo de contrato</span>
+            <select
+              value={datos.tipoContrato}
+              onChange={(e) => set("tipoContrato", e.target.value as TipoContrato)}
+              className={inputCls}
+            >
+              {(Object.keys(TIPO_CONTRATO_LABEL) as TipoContrato[]).map((t) => (
+                <option key={t} value={t}>
+                  {TIPO_CONTRATO_LABEL[t]}
+                </option>
+              ))}
+            </select>
+            {datos.tipoContrato !== "indefinido" && (
+              <span className="text-xs text-muted font-normal">
+                Como aprendiz SENA no aplica auxilio de transporte
+                {datos.tipoContrato === "aprendizaje_sena_lectiva"
+                  ? " ni ningún aporte a salud/pensión en etapa lectiva (Ley 789 de 2002, art. 30)."
+                  : ", y en etapa práctica solo se cotiza salud (sin pensión ni fondo de solidaridad)."}
+              </span>
+            )}
+          </label>
         </div>
       </PaycheckCard>
 

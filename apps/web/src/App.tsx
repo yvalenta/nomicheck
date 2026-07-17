@@ -41,6 +41,7 @@ export default function App() {
     desde: "",
     hasta: "",
     auxilio: true,
+    tipoContrato: "indefinido",
     netoRecibido: "",
     aporteAfc: "",
     prestamo: "",
@@ -73,6 +74,7 @@ export default function App() {
         periodoHasta: datos1.hasta,
         horarioBase,
         novedades,
+        tipoContrato: datos1.tipoContrato,
         aporteAfcMensual: datos1.aporteAfc ? Number(datos1.aporteAfc) : undefined,
         prestamoMensual: datos1.prestamo ? Number(datos1.prestamo) : undefined,
         ahorroMensual: datos1.ahorro ? Number(datos1.ahorro) : undefined,
@@ -107,6 +109,7 @@ export default function App() {
         periodoDesde: datos.desde,
         periodoHasta: datos.hasta,
         conceptos: datos.conceptos,
+        tipoContrato: datos1.tipoContrato,
       });
       setDatos1((d) => ({ ...d, desde: datos.desde, hasta: datos.hasta }));
       setResultado(r);
