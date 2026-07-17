@@ -6,7 +6,7 @@ import type {
   LineaResultado,
   NovedadDia,
 } from "./types.js";
-import { diaSemana, esDomingo, rangoFechas, reglaEn } from "./utils.js";
+import { diaSemana, esDomingo, esFechaValida, rangoFechas, reglaEn, validarPeriodo } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 import {
@@ -121,6 +121,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     if (d.horarioBase.length !== 7) {
       throw new Error("horarioBase debe tener 7 posiciones (domingo a sábado)");
     }
+    validarPeriodo(d.periodoDesde, d.periodoHasta);
     const advertencias: string[] = [];
     const fechas = rangoFechas(d.periodoDesde, d.periodoHasta);
 

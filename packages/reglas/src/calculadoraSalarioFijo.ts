@@ -1,6 +1,7 @@
 import type { CalculadoraNomina, DatosNominaFija, LineaResultado } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
+import { validarPeriodo } from "./utils.js";
 
 export const CalculadoraSalarioFijo: CalculadoraNomina = {
   calcular(datos, reglas, _festivos) {
@@ -8,6 +9,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       throw new Error("CalculadoraSalarioFijo solo acepta datos en modo 'salario-fijo'");
     }
     const d = datos as DatosNominaFija;
+    validarPeriodo(d.periodoDesde, d.periodoHasta);
     const advertencias: string[] = [];
     const lineas: LineaResultado[] = [];
 

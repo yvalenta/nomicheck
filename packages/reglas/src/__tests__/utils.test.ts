@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   diaSemana,
   esDomingo,
+  esFechaValida,
   esLunes,
   finDePeriodoMensual,
   horasEntre,
@@ -37,6 +38,20 @@ describe("reglaEn", () => {
     // necesita un valor "abierto" para que una regla siga vigente, solo que
     // la fecha consultada caiga dentro de [vigenteDesde, vigenteHasta].
     expect(reglaEn(REGLAS_JUL_2026, "recargo_dominical", "2026-12-31")).toBe(0.9);
+  });
+});
+
+describe("esFechaValida", () => {
+  it("acepta fechas reales, incluido el 29 de febrero de años bisiestos", () => {
+    expect(esFechaValida("2026-06-16")).toBe(true);
+    expect(esFechaValida("2028-02-29")).toBe(true); // 2028 es bisiesto
+  });
+
+  it("rechaza fechas que solo existen por desborde de Date", () => {
+    expect(esFechaValida("2026-02-30")).toBe(false);
+    expect(esFechaValida("2027-02-29")).toBe(false); // 2027 NO es bisiesto
+    expect(esFechaValida("2026-13-01")).toBe(false);
+    expect(esFechaValida("no-es-fecha")).toBe(false);
   });
 });
 

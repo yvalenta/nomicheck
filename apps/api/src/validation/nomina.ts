@@ -1,6 +1,10 @@
 import { z } from "zod";
+import { esFechaValida } from "@pv/reglas";
 
-const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)");
+const fecha = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)")
+  .refine(esFechaValida, "Fecha inexistente en el calendario");
 const horaHHmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:mm)");
 
 const horarioDia = z.object({
@@ -57,7 +61,8 @@ const datosNominaFija = z.object({
   conceptos: z.array(conceptoNomina),
 });
 
-export const datosNominaSchema = z.discriminatedUnion("modo", [
-  datosNominaTurnos,
-  datosNominaFija,
-]);
+export const datosNominaSchema = z
+  .discriminatedUnion("modo", [datosNominaTurnos, datosNominaFija])
+  .refine((d) => d.periodoDesde <= d.periodoHasta, {
+    message: "periodoDesde debe ser anterior o igual a periodoHasta",
+  });

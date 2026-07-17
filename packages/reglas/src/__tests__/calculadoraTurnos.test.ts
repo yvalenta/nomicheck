@@ -441,6 +441,28 @@ describe("CalculadoraPorTurnos — tope legal de horas extra (pagar + advertir)"
 });
 
 describe("CalculadoraPorTurnos — validaciones de entrada", () => {
+  it("rechaza un periodo invertido (desde > hasta) en vez de devolver $0 silencioso", () => {
+    expect(() =>
+      CalculadoraPorTurnos.calcular(
+        datosBase({ periodoDesde: "2026-01-15", periodoHasta: "2026-01-01" }),
+        REGLAS_JUL_2026,
+        FESTIVOS_2026
+      )
+    ).toThrow(/invertido/);
+  });
+
+  it("rechaza fechas inexistentes en el calendario (2026-02-30 desbordaría a marzo)", () => {
+    for (const hasta of ["2026-02-30", "2026-13-01", "2027-02-29"]) {
+      expect(() =>
+        CalculadoraPorTurnos.calcular(
+          datosBase({ periodoDesde: "2026-02-01", periodoHasta: hasta }),
+          REGLAS_JUL_2026,
+          FESTIVOS_2026
+        )
+      ).toThrow(/inexistente|inválida/i);
+    }
+  });
+
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>
       CalculadoraPorTurnos.calcular(

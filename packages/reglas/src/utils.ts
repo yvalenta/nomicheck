@@ -21,6 +21,29 @@ export function reglaEn(
   return vigentes.sort((a, b) => b.vigenteDesde.localeCompare(a.vigenteDesde))[0].valor;
 }
 
+// Valida que una fecha YYYY-MM-DD exista realmente en el calendario:
+// "2026-02-30" pasa un regex de formato pero Date la desborda a marzo en
+// silencio — el round-trip la detecta porque la fecha normalizada difiere.
+export function esFechaValida(fecha: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
+  const d = new Date(`${fecha}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === fecha;
+}
+
+// Validación de periodo compartida por ambas calculadoras — última línea
+// de defensa: liquidacionService pasa datos de la DB sin pasar por zod, y
+// un periodo invertido produciría un resultado silencioso de $0.
+export function validarPeriodo(desde: string, hasta: string): void {
+  for (const f of [desde, hasta]) {
+    if (!esFechaValida(f)) {
+      throw new Error(`Fecha inválida o inexistente en el calendario: "${f}"`);
+    }
+  }
+  if (desde > hasta) {
+    throw new Error(`El periodo está invertido: desde ${desde} es posterior a hasta ${hasta}`);
+  }
+}
+
 // Genera la lista de fechas (YYYY-MM-DD) entre dos fechas inclusive.
 export function rangoFechas(desde: string, hasta: string): string[] {
   const fechas: string[] = [];
