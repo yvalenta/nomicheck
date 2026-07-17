@@ -377,6 +377,69 @@ describe("CalculadoraPorTurnos — prorrateo dinámico por días del periodo (nu
   });
 });
 
+describe("CalculadoraPorTurnos — tope legal de horas extra (pagar + advertir)", () => {
+  it("advierte cuando un día supera 2h extra, pero las paga completas", () => {
+    // Martes 16-jun 10:00-21:00 (11h): 7h ordinarias + 4h extra (2 diurnas
+    // 17:00-19:00 + 2 nocturnas 19:00-21:00) — supera el tope diario de 2h.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [{ fecha: "2026-06-16", trabajo: true, horaInicio: "10:00", horaFin: "21:00" }],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado.advertencias.some((a) => a.includes("2026-06-16") && a.includes("máximo legal de 2 h/día"))).toBe(true);
+    // Las 4h extra se pagan completas (2 diurnas + 2 nocturnas):
+    const extraDiurna = resultado.lineas.find((l) => l.concepto.startsWith("Hora extra diurna"));
+    const extraNocturna = resultado.lineas.find((l) => l.concepto.startsWith("Hora extra nocturna"));
+    expect((extraDiurna?.horas ?? 0) + (extraNocturna?.horas ?? 0)).toBe(4);
+  });
+
+  it("NO advierte con exactamente 2h extra en el día (borde inclusivo)", () => {
+    // Martes 16-jun 10:00-19:00 (9h): 7h ordinarias + exactamente 2h extra.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [{ fecha: "2026-06-16", trabajo: true, horaInicio: "10:00", horaFin: "19:00" }],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado.advertencias.some((a) => a.includes("h/día"))).toBe(false);
+  });
+
+  it("advierte cuando la semana acumula más de 12h extra aunque ningún día supere 2h", () => {
+    // Semana lun 22-jun a dom 28-jun: mar-sáb (23-27) con turnos de 9h
+    // (7 ord + 2 extra c/u = 10h extra) + domingo 28 con novedad 08:00-16:30
+    // (6 ord + 2.5 extra) = 12.5h extra en la semana. Ningún día supera 2h
+    // extra hábiles... el domingo tiene 2.5 (dispara también la diaria, así
+    // que usamos solo días de 2h y sumamos con el domingo al límite justo).
+    // Mejor: 6 días × 2h extra + domingo 2h extra = 14h > 12h.
+    const novedades = ["2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-27"].map(
+      (fecha) => ({ fecha, trabajo: true as const, horaInicio: "10:00", horaFin: "19:00" })
+    );
+    // Domingo 28-jun: 6h ordinarias + 2h extra (08:00-16:00).
+    novedades.push({ fecha: "2026-06-28", trabajo: true as const, horaInicio: "08:00", horaFin: "16:00" });
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ novedades }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    // 5 días hábiles × 2h + domingo 2h = 12h... exactamente el tope: NO advierte.
+    expect(resultado.advertencias.some((a) => a.includes("h/semana"))).toBe(false);
+
+    // Ahora empujamos el sábado a 3h extra (10:00-20:00): total semanal 13h.
+    const novedades13 = novedades.map((n) =>
+      n.fecha === "2026-06-27" ? { ...n, horaFin: "20:00" } : n
+    );
+    const resultado13 = CalculadoraPorTurnos.calcular(
+      datosBase({ novedades: novedades13 }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado13.advertencias.some((a) => a.includes("máximo legal de 12 h/semana"))).toBe(true);
+  });
+});
+
 describe("CalculadoraPorTurnos — validaciones de entrada", () => {
   it("rechaza un horarioBase que no tenga 7 posiciones", () => {
     expect(() =>

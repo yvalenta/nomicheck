@@ -36,6 +36,11 @@ const reglas = [
   { clave: "embargo_ordinario_fraccion_excedente", valor: 0.20, vigenteDesde: "1950-01-01", fuente: "CST art. 154 y 155" },
   { clave: "embargo_alimentos_pct_max", valor: 0.50, vigenteDesde: "1950-01-01", fuente: "CST art. 156" },
 
+  // Tope legal de trabajo suplementario: se PAGA todo lo trabajado
+  // (primacía de la realidad) pero el motor advierte si se excede.
+  { clave: "max_horas_extra_dia", valor: 2, vigenteDesde: "1967-01-01", fuente: "D.L. 13 de 1967, art. 1" },
+  { clave: "max_horas_extra_semana", valor: 12, vigenteDesde: "1981-01-01", fuente: "Ley 6 de 1981" },
+
   // --- Constantes tributarias (preparación Fase 2: alivios para quienes
   // declaran renta — AFC como renta exenta, no solo deducción de convenio).
   // No se usan todavía en el cálculo, solo quedan disponibles en el panel

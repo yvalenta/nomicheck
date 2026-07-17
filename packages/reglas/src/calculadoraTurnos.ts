@@ -28,6 +28,21 @@ interface DiaTrabajado {
   extraNocturna: number;
 }
 
+// Lunes de la semana calendario a la que pertenece la fecha (la semana
+// laboral colombiana se cuenta de lunes a domingo para el tope de extras).
+function lunesDeLaSemana(fecha: string): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  const retroceso = (d.getUTCDay() + 6) % 7; // dom=6, lun=0, mar=1…
+  d.setUTCDate(d.getUTCDate() - retroceso);
+  return d.toISOString().slice(0, 10);
+}
+
+// Horas con hasta 2 decimales para mensajes de advertencia (las horas no
+// son pesos — redondearPeso las dejaría en enteros y "1.5 h" se perdería).
+function redondearHoras(horas: number): number {
+  return Math.round(horas * 100) / 100;
+}
+
 function hhmmAMinutos(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * MINUTOS_POR_HORA + m;
@@ -124,6 +139,34 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       dias.push({ fecha, esDominicalFestivo, ...partes });
     }
 
+    // Tope legal de trabajo suplementario (D.L. 13 de 1967 art. 1: 2h/día;
+    // Ley 6 de 1981: 12h/semana). NO se recorta el pago — primacía de la
+    // realidad: las horas trabajadas se deben — pero se advierte la
+    // infracción para que empresa y trabajador la detecten.
+    const extrasPorSemana = new Map<string, number>();
+    for (const dia of dias) {
+      const extrasDia = dia.extraDiurna + dia.extraNocturna;
+      if (extrasDia === 0) continue;
+
+      const maxDia = reglaEn(reglas, "max_horas_extra_dia", dia.fecha);
+      if (extrasDia > maxDia) {
+        advertencias.push(
+          `El ${dia.fecha} trabajaste ${redondearHoras(extrasDia)} horas extra — supera el máximo legal de ${maxDia} h/día (D.L. 13 de 1967, art. 1). Se pagan completas, pero la jornada excede lo permitido.`
+        );
+      }
+
+      const semana = lunesDeLaSemana(dia.fecha);
+      extrasPorSemana.set(semana, (extrasPorSemana.get(semana) ?? 0) + extrasDia);
+    }
+    for (const [semana, extrasSemana] of extrasPorSemana) {
+      const maxSemana = reglaEn(reglas, "max_horas_extra_semana", semana);
+      if (extrasSemana > maxSemana) {
+        advertencias.push(
+          `En la semana del ${semana} acumulaste ${redondearHoras(extrasSemana)} horas extra — supera el máximo legal de ${maxSemana} h/semana (Ley 6 de 1981). Se pagan completas, pero la jornada excede lo permitido.`
+        );
+      }
+    }
+
     // Derecho a descanso compensatorio: 3+ domingos trabajados en el periodo
     // (CST art. 181; reiterado por la Ley 2466 de 2025).
     const domingosTrabajados = dias.filter((dia) => esDomingo(dia.fecha)).length;
@@ -201,7 +244,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (ordinariaHabilNocturna > 0) {
         lineas.push({
           concepto: `Recargo nocturno${sufijo}`,
-          horas: redondearPeso(ordinariaHabilNocturna),
+          horas: redondearHoras(ordinariaHabilNocturna),
           recargoPct: recargoNocturno,
           valorCalculado: redondearPeso(ordinariaHabilNocturna * valorHora * recargoNocturno),
           tipo: "devengo",
@@ -212,7 +255,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (ordinariaDominical > 0) {
         lineas.push({
           concepto: `Recargo dominical/festivo${sufijo}`,
-          horas: redondearPeso(ordinariaDominical),
+          horas: redondearHoras(ordinariaDominical),
           recargoPct: recargoDominical,
           valorCalculado: redondearPeso(ordinariaDominical * valorHora * recargoDominical),
           tipo: "devengo",
@@ -223,7 +266,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (ordinariaDominicalNocturna > 0) {
         lineas.push({
           concepto: `Recargo nocturno dominical/festivo${sufijo}`,
-          horas: redondearPeso(ordinariaDominicalNocturna),
+          horas: redondearHoras(ordinariaDominicalNocturna),
           recargoPct: recargoNocturno,
           valorCalculado: redondearPeso(ordinariaDominicalNocturna * valorHora * recargoNocturno),
           tipo: "devengo",
@@ -236,7 +279,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (extraDiurna > 0) {
         lineas.push({
           concepto: `Hora extra diurna${sufijo}`,
-          horas: redondearPeso(extraDiurna),
+          horas: redondearHoras(extraDiurna),
           recargoPct: extraDiurnaPct,
           valorCalculado: redondearPeso(extraDiurna * valorHora * (1 + extraDiurnaPct)),
           tipo: "devengo",
@@ -247,7 +290,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (extraNocturna > 0) {
         lineas.push({
           concepto: `Hora extra nocturna${sufijo}`,
-          horas: redondearPeso(extraNocturna),
+          horas: redondearHoras(extraNocturna),
           recargoPct: extraNocturnaPct,
           valorCalculado: redondearPeso(extraNocturna * valorHora * (1 + extraNocturnaPct)),
           tipo: "devengo",
@@ -263,7 +306,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         const pct = recargoDominical + extraDiurnaPct;
         lineas.push({
           concepto: `Hora extra dominical/festiva diurna${sufijo}`,
-          horas: redondearPeso(extraDominicalDiurna),
+          horas: redondearHoras(extraDominicalDiurna),
           recargoPct: pct,
           valorCalculado: redondearPeso(extraDominicalDiurna * valorHora * (1 + pct)),
           tipo: "devengo",
@@ -275,7 +318,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         const pct = recargoDominical + extraNocturnaPct;
         lineas.push({
           concepto: `Hora extra dominical/festiva nocturna${sufijo}`,
-          horas: redondearPeso(extraDominicalNocturna),
+          horas: redondearHoras(extraDominicalNocturna),
           recargoPct: pct,
           valorCalculado: redondearPeso(extraDominicalNocturna * valorHora * (1 + pct)),
           tipo: "devengo",

@@ -20,6 +20,8 @@ export const REGLAS_JUL_2026: ReglaLegal[] = [
   { clave: "auxilio_transporte_tope_smlmv", valor: 2, vigenteDesde: "1950-01-01", fuente: "Decreto de salario mínimo vigente" },
   { clave: "embargo_ordinario_fraccion_excedente", valor: 0.2, vigenteDesde: "1950-01-01", fuente: "CST art. 154 y 155" },
   { clave: "embargo_alimentos_pct_max", valor: 0.5, vigenteDesde: "1950-01-01", fuente: "CST art. 156" },
+  { clave: "max_horas_extra_dia", valor: 2, vigenteDesde: "1967-01-01", fuente: "D.L. 13 de 1967, art. 1" },
+  { clave: "max_horas_extra_semana", valor: 12, vigenteDesde: "1981-01-01", fuente: "Ley 6 de 1981" },
 ];
 
 export const FESTIVOS_2026: Festivo[] = [

@@ -1,16 +1,18 @@
-# NomiCheck — Software Design Document · v2.2
+# NomiCheck — Software Design Document · v2.3
 
-> **SDD v2.2** · Plataforma de nómina Colombia con dos modos: **verificador anónimo** de comprobantes de pago y **versión empresa** para liquidar nómina de colaboradores, con verificación y reporte de discrepancias por parte del empleado.
+> **SDD v2.3** · Plataforma de nómina Colombia con dos modos: **verificador anónimo** de comprobantes de pago y **versión empresa** para liquidar nómina de colaboradores, con verificación y reporte de discrepancias por parte del empleado. Incluye **prestaciones sociales completas** (cesantías, intereses, prima, vacaciones) con provisiones mensuales en el modo empresa.
 > Stack: pnpm monorepo TypeScript · React 19 + Vite + Tailwind CSS (SPA) · Express + Prisma + **Supabase (Postgres + Auth + RLS)** · `packages/reglas` (motor puro compartido) · Claude API (extracción + chat).
 
 | Metadato | Valor |
 |---|---|
-| Versión | 2.2 — rebrand a NomiCheck, wizard de turnos basado en tiempo (salario proporcional + deducciones automáticas) y UI FinTech |
+| Versión | 2.3 — prestaciones sociales completas (cesantías, intereses, prima, vacaciones) en scope; `CalculadoraPrestaciones` + provisiones mensuales en modo empresa; documentación de escenarios edge con tests Vitest |
 | Estado | Definición del pivot, en implementación |
 | Stack | TypeScript end-to-end · React 19 · Express · Prisma sobre Supabase Postgres · Supabase Auth · Claude API |
 | Actualizado | Julio 2026 |
 | Documentos de referencia | `PLAN.md` (v1, superseded) · `sdd/` (metodología v1, archivada) · Advance Fitness SDD v2.0 (formato) |
 
+> **Nota de transición (v2.3):** las **prestaciones sociales completas** (cesantías, intereses sobre cesantías, prima de servicios, vacaciones) pasan de out-of-scope a in-scope. Se agrega `CalculadoraPrestaciones` en `packages/reglas` con sus tipos (`DatosPrestaciones`, `ResultadoPrestaciones`) y una suite completa de tests Vitest con escenarios nominales y edge cases (bisiesto, suspensión disciplinaria, salario variable, periodo que cruza cambio de SMLMV, etc.). El modo empresa agrega **provisiones mensuales** de cada prestación como líneas tipo `provision_*` en `ReciboPago.lineas`. El tipo de contrato (`tipoContrato`) documentado en §07 se vuelve relevante para el cálculo de prestaciones — aprendices SENA y prestación de servicios tienen reglas distintas (ver §07).
+>
 > **Nota de transición (v2.2):** el producto se renombra **NomiCheck**. El verificador anónimo abandona los formularios de conceptos contables: el usuario declara tiempo (semana habitual + novedades) y el motor clasifica; el pago base pasa de horas×valor hora a **salario proporcional** + recargos; salud/pensión se deducen automáticamente. UI rediseñada (tokens FinTech §06).
 >
 > **Nota de transición (v2.1):** la v2.0 fijaba SQLite + auth/sesiones propias. Esta revisión adopta **Supabase** solo donde el alcance ya lo pedía: Postgres gestionado (reemplaza SQLite desde la Fase 5, cuando aparece multi-tenant real), **Auth** (reemplaza bcrypt/sesiones e invitación propia) y **RLS** (aplica el scoping por empresa/colaborador de §08 directo en la base, como defensa adicional al service). No se adoptan Storage, Realtime, Edge Functions ni acceso a datos vía `supabase-js` desde el frontend — ninguno lo pide el alcance actual (detalle en §04).
@@ -45,7 +47,8 @@
 | Cuentas: admin de plataforma, admin de empresa, colaborador | Contabilidad general (solo nómina) |
 | Empresa: CRUD de empleados, captura de turnos, liquidación de periodo, recibos | Pagos en línea / dispersión bancaria |
 | Colaborador: ver recibos, verificación automática, reporte de discrepancia | Notificaciones email/push (v1: todo in-app) |
-| Panel admin de reglas legales y festivos con historial de vigencias | Prestaciones sociales completas (cesantías, intereses, vacaciones) — solo prima cuando aparece como concepto |
+| Panel admin de reglas legales y festivos con historial de vigencias | Facturación electrónica / nómina electrónica DIAN |
+| **Prestaciones sociales completas** (cesantías CST art. 249, intereses CST art. 264, prima de servicios CST art. 306, vacaciones CST art. 186) + provisiones mensuales en modo empresa | — |
 | Responsive móvil-primero, interactividad SPA sin recargas | Reportes financieros avanzados / exportes contables |
 
 ---
@@ -399,6 +402,20 @@ la tabla de **perfil** de dominio, 1:1 con `auth.users` por `id` (mismo UUID):
 | `tipoNomina` | string | enum: `turnos` · `fijo` |
 | `auxilioTransporte` | boolean | si aplica (salario ≤ 2 SMLMV) |
 | `activo` | boolean | retiro sin borrar historial |
+| `tipoContrato` | string? | **Futuro (out of scope MVP)** — ver nota abajo |
+
+> **Nota — `tipoContrato` (pendiente):** el tipo de contrato laboral es una dimensión **ortogonal** a `tipoNomina` (`turnos`/`fijo`) y afecta los cálculos de formas que el motor actual no maneja. Queda documentado aquí para que ninguna fase futura lo asuma como "igual al estándar" sin revisarlo:
+>
+> | Tipo de contrato | Impacto en el cálculo | Estado |
+> |---|---|---|
+> | **Término indefinido** | Reglas estándar — es lo que el motor implementa hoy | ✅ cubierto implícitamente |
+> | **Término fijo** | Devengos/deducciones idénticos al indefinido; prima y liquidación se prorratean si el plazo < 12 meses (aplica en §14 prestaciones sociales, fuera del MVP) | ⚠️ sin impacto en MVP (prestaciones out of scope) |
+> | **Obra o labor** | Ídem término fijo en la práctica; prestaciones proporcionales al tiempo de vinculación | ⚠️ sin impacto en MVP |
+> | **Aprendizaje SENA** | El "salario" es un **auxilio de sostenimiento** (no salarial): en la etapa **lectiva** el empleador NO paga aportes a seguridad social; en la **práctica** paga el 50 % del SMLMV como auxilio. El motor actual deduciría salud/pensión sobre ese auxilio — **error de cálculo** si se procesa un aprendiz como si fuera contrato ordinario | 🚫 no implementado — el motor actual produce cálculo incorrecto para este caso |
+> | **Prestación de servicios** | Técnicamente no es contrato laboral: el contratista cotiza como **independiente** sobre el 40 % del ingreso bruto (Ley 1819 de 2016, no el 100 %); no hay auxilio de transporte, no hay recargos nocturnos/dominicales, no hay prestaciones. El extractor de Claude podría clasificar un comprobante de honorarios como nómina dependiente | 🚫 no implementado — requiere modo de cálculo distinto |
+> | **Tiempo parcial** | El IBC mínimo para cotizar es 1 SMLMV sin importar lo ganado (tope inferior de cotización) — si el salario parcial < SMLMV, la base de aportes se eleva al mínimo | 🚫 no implementado |
+>
+> **Implicación para el MVP:** el motor asume tácitamente contrato a término indefinido u obra/fijo ordinario. Los casos de aprendizaje SENA, prestación de servicios y tiempo parcial por debajo del mínimo producirían resultados incorrectos si se ingresan hoy. La solución definitiva es agregar `tipoContrato` al schema y una rama en `aplicarDeducciones()` / `calculadoraTurnos.ts`; mientras tanto, el wizard debería al menos advertir al usuario si el salario declarado es exactamente el 50 % del SMLMV (posible aprendiz). Tarea registrada en §14.
 
 ### `PeriodoNomina`
 | Columna | Tipo | Notas |
@@ -579,8 +596,8 @@ Cada fase entrega algo usable de punta a punta.
 Ideas del "proyecto grande" para no perderlas — ninguna entra al MVP:
 
 - **SaaS multi-empresa con pricing**: plan gratuito (verificador) como embudo hacia planes de pago por empleados activos.
-- **PILA / aportes patronales**: liquidar también el costo patronal (salud, pensión, ARL, parafiscales, cesantías) — la contabilidad completa del empleador.
-- **Prestaciones sociales**: cesantías, intereses, prima automática, vacaciones y provisiones mensuales.
+- **PILA / aportes patronales**: liquidar también el costo patronal (salud, pensión, ARL, parafiscales, cesantías patronales) — la contabilidad completa del empleador.
+- **Provisiones mensuales avanzadas**: panel de acumulado de provisiones por empleado a lo largo del año (cesantías provisión corriente vs. lo consignado al fondo, intereses acumulados, vacaciones acumuladas — más allá de las líneas en el recibo ya en scope desde v2.3).
 - **Exportes contables**: integración o archivo plano hacia Siigo/Alegra/World Office.
 - **Notificaciones**: email al colaborador cuando hay recibo nuevo o respuesta a su reporte.
 - **Firma/acuse del recibo** por el colaborador (valor probatorio).
@@ -588,3 +605,4 @@ Ideas del "proyecto grande" para no perderlas — ninguna entra al MVP:
 - **Comparador de ofertas**: "¿me conviene este turno/salario?" usando el mismo motor.
 - **API pública del motor de reglas** legales colombianas (el activo más defendible del proyecto).
 - **Nómina electrónica DIAN** cuando el producto madure hacia empleadores formales medianos.
+- **`tipoContrato` en el motor**: agregar `Empleado.tipoContrato` (indefinido · fijo · obra · aprendizaje_sena · servicios · tiempo_parcial) con ramas de cálculo diferenciadas — ver análisis completo en §07. Prioridad mínima: aprendizaje SENA (IBC especial, sin aportes en etapa lectiva) y prestación de servicios (IBC = 40 % del bruto, sin recargos ni prestaciones). En el verificador anónimo: agregar selector de tipo de contrato en el paso 1 del wizard con una advertencia si el salario coincide con patrones de aprendiz (50 % SMLMV).
