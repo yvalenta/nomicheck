@@ -150,3 +150,26 @@ export function liquidarPeriodo(periodoId: number): Promise<Recibo[]> {
 export function listarRecibos(periodoId?: number): Promise<Recibo[]> {
   return autenticado(`/empresa/recibos${periodoId ? `?periodoId=${periodoId}` : ""}`);
 }
+
+export type TipoDiscrepancia = "pago_de_mas" | "pago_de_menos" | "concepto_faltante";
+
+export interface DiscrepanciaEmpresa {
+  id: number;
+  reciboId: number;
+  tipo: TipoDiscrepancia;
+  detalle: string;
+  estado: "abierto" | "en_revision" | "resuelto";
+  respuestaEmpresa: string | null;
+  recibo: Recibo;
+}
+
+export function listarDiscrepancias(): Promise<DiscrepanciaEmpresa[]> {
+  return autenticado("/empresa/discrepancias");
+}
+
+export function responderDiscrepancia(
+  id: number,
+  datos: { estado: "en_revision" | "resuelto"; respuestaEmpresa: string }
+): Promise<DiscrepanciaEmpresa> {
+  return autenticado(`/empresa/discrepancias/${id}`, { method: "PUT", body: JSON.stringify(datos) });
+}

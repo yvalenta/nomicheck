@@ -20,6 +20,8 @@ import {
   liquidar,
   recibos,
 } from "../controllers/periodosController.js";
+import { misRecibos, reportar } from "../controllers/colaboradorController.js";
+import { listar as listarDiscrepancias, responder as responderDiscrepancia } from "../controllers/discrepanciasController.js";
 import { requiereAuth, requiereRol } from "../middleware/auth.js";
 
 const router = Router();
@@ -82,5 +84,14 @@ router.get("/empresa/periodos/:id/turnos", ...soloEmpresa, obtenerTurnos);
 router.put("/empresa/periodos/:id/turnos", ...soloEmpresa, guardarTurnos);
 router.post("/empresa/periodos/:id/liquidar", ...soloEmpresa, liquidar);
 router.get("/empresa/recibos", ...soloEmpresa, recibos);
+router.get("/empresa/discrepancias", ...soloEmpresa, listarDiscrepancias);
+router.put("/empresa/discrepancias/:id", ...soloEmpresa, responderDiscrepancia);
+
+// Portal colaborador (Fase 7): un colaborador solo ve/reporta sobre SUS
+// propios recibos — requiereAuth ya adjunta empleadoId, el controller
+// valida que exista antes de tocar la DB.
+const soloColaborador = [requiereAuth, requiereRol("colaborador")];
+router.get("/colaborador/recibos", ...soloColaborador, misRecibos);
+router.post("/colaborador/recibos/:id/reportar", ...soloColaborador, reportar);
 
 export default router;

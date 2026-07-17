@@ -3,11 +3,16 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import EmpresaApp from './EmpresaApp.tsx'
+import PortalColaborador from './PortalColaborador.tsx'
 
-const esModoEmpresa = window.location.pathname.startsWith('/empresa')
+function Raiz() {
+  if (window.location.pathname.startsWith('/empresa')) return <EmpresaApp />
+  if (window.location.pathname.startsWith('/colaborador')) return <PortalColaborador />
+  return <App />
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {esModoEmpresa ? <EmpresaApp /> : <App />}
+    <Raiz />
   </StrictMode>,
 )

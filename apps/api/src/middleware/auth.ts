@@ -7,6 +7,8 @@ export interface UsuarioAutenticado {
   nombre: string;
   rol: string;
   empresaId: number | null;
+  /** Solo poblado para rol "colaborador" — Empleado.usuarioId → este Usuario. */
+  empleadoId: number | null;
 }
 
 declare global {
@@ -35,13 +37,19 @@ export async function requiereAuth(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  const perfil = await prisma.usuario.findUnique({ where: { id: data.user.id } });
+  const perfil = await prisma.usuario.findUnique({ where: { id: data.user.id }, include: { empleado: true } });
   if (!perfil) {
     res.status(403).json({ error: "El usuario no tiene un perfil en NomiCheck" });
     return;
   }
 
-  req.usuario = { id: perfil.id, nombre: perfil.nombre, rol: perfil.rol, empresaId: perfil.empresaId };
+  req.usuario = {
+    id: perfil.id,
+    nombre: perfil.nombre,
+    rol: perfil.rol,
+    empresaId: perfil.empresaId,
+    empleadoId: perfil.empleado?.id ?? null,
+  };
   next();
 }
 

@@ -7,8 +7,9 @@ import AuthEmpresa from "./components/empresa/AuthEmpresa.tsx";
 import DashboardEmpresa from "./components/empresa/DashboardEmpresa.tsx";
 import PeriodosEmpresa from "./components/empresa/PeriodosEmpresa.tsx";
 import ContratistasEmpresa from "./components/empresa/ContratistasEmpresa.tsx";
+import DiscrepanciasEmpresa from "./components/empresa/DiscrepanciasEmpresa.tsx";
 
-type Seccion = "colaboradores" | "contratistas" | "periodos";
+type Seccion = "colaboradores" | "contratistas" | "periodos" | "discrepancias";
 
 export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -34,6 +35,7 @@ export default function EmpresaApp() {
                   { valor: "colaboradores", etiqueta: "Colaboradores" },
                   { valor: "contratistas", etiqueta: "Contratistas" },
                   { valor: "periodos", etiqueta: "Periodos" },
+                  { valor: "discrepancias", etiqueta: "Discrepancias" },
                 ]}
                 activo={seccion}
                 onCambio={setSeccion}
@@ -42,6 +44,7 @@ export default function EmpresaApp() {
             {seccion === "colaboradores" && <DashboardEmpresa />}
             {seccion === "contratistas" && <ContratistasEmpresa />}
             {seccion === "periodos" && <PeriodosEmpresa />}
+            {seccion === "discrepancias" && <DiscrepanciasEmpresa />}
           </div>
         )}
       </main>
