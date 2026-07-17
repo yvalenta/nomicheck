@@ -7,7 +7,7 @@ import type {
   NovedadDia,
 } from "./types.js";
 import { diaSemana, esDomingo, rangoFechas, reglaEn } from "./utils.js";
-import { round2 } from "./numero.js";
+import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 import {
   DIAS_MES_COMERCIAL,
@@ -156,8 +156,8 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     const salarioBase = (d.salarioBasicoMensual / DIAS_MES_COMERCIAL) * diasPeriodo;
     lineas.push({
       concepto: `Salario básico (${diasPeriodo} días)`,
-      base: round2(d.salarioBasicoMensual),
-      valorCalculado: round2(salarioBase),
+      base: redondearPeso(d.salarioBasicoMensual),
+      valorCalculado: redondearPeso(salarioBase),
       tipo: "devengo",
       ley: "Contrato de trabajo; CST art. 127",
     });
@@ -199,9 +199,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (ordinariaHabilNocturna > 0) {
         lineas.push({
           concepto: `Recargo nocturno${sufijo}`,
-          horas: round2(ordinariaHabilNocturna),
+          horas: redondearPeso(ordinariaHabilNocturna),
           recargoPct: recargoNocturno,
-          valorCalculado: round2(ordinariaHabilNocturna * valorHora * recargoNocturno),
+          valorCalculado: redondearPeso(ordinariaHabilNocturna * valorHora * recargoNocturno),
           tipo: "devengo",
           ley: "Ley 2466 de 2025, art. 3",
         });
@@ -210,9 +210,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (ordinariaDominical > 0) {
         lineas.push({
           concepto: `Recargo dominical/festivo${sufijo}`,
-          horas: round2(ordinariaDominical),
+          horas: redondearPeso(ordinariaDominical),
           recargoPct: recargoDominical,
-          valorCalculado: round2(ordinariaDominical * valorHora * recargoDominical),
+          valorCalculado: redondearPeso(ordinariaDominical * valorHora * recargoDominical),
           tipo: "devengo",
           ley: "Ley 2466 de 2025, art. 2",
         });
@@ -221,9 +221,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (ordinariaDominicalNocturna > 0) {
         lineas.push({
           concepto: `Recargo nocturno dominical/festivo${sufijo}`,
-          horas: round2(ordinariaDominicalNocturna),
+          horas: redondearPeso(ordinariaDominicalNocturna),
           recargoPct: recargoNocturno,
-          valorCalculado: round2(ordinariaDominicalNocturna * valorHora * recargoNocturno),
+          valorCalculado: redondearPeso(ordinariaDominicalNocturna * valorHora * recargoNocturno),
           tipo: "devengo",
           ley: "Ley 2466 de 2025, art. 3",
         });
@@ -234,9 +234,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (extraDiurna > 0) {
         lineas.push({
           concepto: `Hora extra diurna${sufijo}`,
-          horas: round2(extraDiurna),
+          horas: redondearPeso(extraDiurna),
           recargoPct: extraDiurnaPct,
-          valorCalculado: round2(extraDiurna * valorHora * (1 + extraDiurnaPct)),
+          valorCalculado: redondearPeso(extraDiurna * valorHora * (1 + extraDiurnaPct)),
           tipo: "devengo",
           ley: "CST art. 168",
         });
@@ -245,9 +245,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       if (extraNocturna > 0) {
         lineas.push({
           concepto: `Hora extra nocturna${sufijo}`,
-          horas: round2(extraNocturna),
+          horas: redondearPeso(extraNocturna),
           recargoPct: extraNocturnaPct,
-          valorCalculado: round2(extraNocturna * valorHora * (1 + extraNocturnaPct)),
+          valorCalculado: redondearPeso(extraNocturna * valorHora * (1 + extraNocturnaPct)),
           tipo: "devengo",
           ley: "CST art. 168",
         });
@@ -257,9 +257,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         const pct = recargoDominical + extraDiurnaPct;
         lineas.push({
           concepto: `Hora extra dominical/festiva${sufijo}`,
-          horas: round2(extraDominical),
+          horas: redondearPeso(extraDominical),
           recargoPct: pct,
-          valorCalculado: round2(extraDominical * valorHora * (1 + pct)),
+          valorCalculado: redondearPeso(extraDominical * valorHora * (1 + pct)),
           tipo: "devengo",
           ley: "Ley 2466 de 2025; CST art. 168",
         });
@@ -277,18 +277,18 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         const auxilioMensual = reglaEn(reglas, "auxilio_transporte", d.periodoHasta);
         lineas.push({
           concepto: "Auxilio de transporte",
-          valorCalculado: round2((auxilioMensual / DIAS_MES_COMERCIAL) * diasPeriodo),
+          valorCalculado: redondearPeso((auxilioMensual / DIAS_MES_COMERCIAL) * diasPeriodo),
           tipo: "devengo",
           ley: "Decreto de salario mínimo vigente",
         });
       } else {
         advertencias.push(
-          `No se reconoce auxilio de transporte: el salario ($${d.salarioBasicoMensual.toLocaleString("es-CO")}) supera ${topeSmlmv} SMLMV ($${round2(smlmv * topeSmlmv).toLocaleString("es-CO")}) — Decreto de salario mínimo vigente.`
+          `No se reconoce auxilio de transporte: el salario ($${d.salarioBasicoMensual.toLocaleString("es-CO")}) supera ${topeSmlmv} SMLMV ($${redondearPeso(smlmv * topeSmlmv).toLocaleString("es-CO")}) — Decreto de salario mínimo vigente.`
         );
       }
     }
 
-    const totalDevengos = round2(
+    const totalDevengos = redondearPeso(
       lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
     );
 
@@ -334,7 +334,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       lineas,
       totalDevengos,
       totalDeducciones,
-      netoEsperado: round2(totalDevengos - totalDeducciones),
+      netoEsperado: redondearPeso(totalDevengos - totalDeducciones),
       advertencias,
     };
   },

@@ -1,5 +1,5 @@
 import type { CalculadoraNomina, DatosNominaFija, LineaResultado } from "./types.js";
-import { round2 } from "./numero.js";
+import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 
 export const CalculadoraSalarioFijo: CalculadoraNomina = {
@@ -18,8 +18,8 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
 
     lineas.push({
       concepto: "Salario básico",
-      base: round2(d.salarioBasicoMensual),
-      valorCalculado: round2(d.salarioBasicoMensual),
+      base: redondearPeso(d.salarioBasicoMensual),
+      valorCalculado: redondearPeso(d.salarioBasicoMensual),
       tipo: "devengo",
       ley: "Contrato de trabajo",
     });
@@ -43,8 +43,8 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       const tipo = c.tipo.startsWith("devengo") ? "devengo" : "deduccion";
       lineas.push({
         concepto: c.nombre,
-        base: c.base !== undefined ? round2(c.base) : undefined,
-        valorCalculado: round2(c.valor),
+        base: c.base !== undefined ? redondearPeso(c.base) : undefined,
+        valorCalculado: redondearPeso(c.valor),
         tipo,
         ley: c.tipo === "deduccion-legal" ? "Estatuto Tributario" : undefined,
       });
@@ -56,10 +56,10 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       }
     }
 
-    const totalDevengos = round2(
+    const totalDevengos = redondearPeso(
       lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
     );
-    const totalDeducciones = round2(
+    const totalDeducciones = redondearPeso(
       lineas.filter((l) => l.tipo === "deduccion").reduce((s, l) => s + l.valorCalculado, 0)
     );
 
@@ -71,7 +71,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       lineas,
       totalDevengos,
       totalDeducciones,
-      netoEsperado: round2(totalDevengos - totalDeducciones),
+      netoEsperado: redondearPeso(totalDevengos - totalDeducciones),
       advertencias,
     };
   },

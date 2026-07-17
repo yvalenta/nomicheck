@@ -1,6 +1,6 @@
 import type { LineaResultado, ReglaLegal } from "./types.js";
 import { reglaEn } from "./utils.js";
-import { round2 } from "./numero.js";
+import { redondearPeso } from "./numero.js";
 import { TABLA_FONDO_SOLIDARIDAD } from "./constantes.js";
 
 // Recorre TABLA_FONDO_SOLIDARIDAD (constantes.ts) de mayor a menor rango y
@@ -27,17 +27,17 @@ export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[], fecha: strin
   const lineas: LineaResultado[] = [
     {
       concepto: "Salud (aporte empleado)",
-      base: round2(ibc),
+      base: redondearPeso(ibc),
       recargoPct: pctSalud,
-      valorCalculado: round2(ibc * pctSalud),
+      valorCalculado: redondearPeso(ibc * pctSalud),
       tipo: "deduccion",
       ley: "Ley 100 de 1993",
     },
     {
       concepto: "Pensión (aporte empleado)",
-      base: round2(ibc),
+      base: redondearPeso(ibc),
       recargoPct: pctPension,
-      valorCalculado: round2(ibc * pctPension),
+      valorCalculado: redondearPeso(ibc * pctPension),
       tipo: "deduccion",
       ley: "Ley 100 de 1993",
     },
@@ -48,9 +48,9 @@ export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[], fecha: strin
     const pct = pctFondoSolidaridad(ibcEnSmlmv);
     lineas.push({
       concepto: "Fondo de solidaridad pensional",
-      base: round2(ibc),
+      base: redondearPeso(ibc),
       recargoPct: pct,
-      valorCalculado: round2(ibc * pct),
+      valorCalculado: redondearPeso(ibc * pct),
       tipo: "deduccion",
       ley: "Ley 100 de 1993, art. 27; Ley 797 de 2003, art. 8",
     });
@@ -111,12 +111,12 @@ export function limiteEmbargo(
 ): number {
   if (tipo === "alimentos_o_cooperativa") {
     const pctMax = reglaEn(reglas, "embargo_alimentos_pct_max", fecha);
-    return round2(totalDevengado * pctMax);
+    return redondearPeso(totalDevengado * pctMax);
   }
   const smlmvPeriodo = reglaEn(reglas, "smlmv", fecha) * factorPeriodo;
   const fraccion = reglaEn(reglas, "embargo_ordinario_fraccion_excedente", fecha);
   const excedente = Math.max(0, totalDevengado - smlmvPeriodo);
-  return round2(excedente * fraccion);
+  return redondearPeso(excedente * fraccion);
 }
 
 // Deducciones completas de un periodo: ley (deduccionesDeLey) + deducciones
@@ -144,31 +144,31 @@ export function aplicarDeducciones(
   const convenio = (opciones.deduccionesConvenio ?? []).filter((c) => c.valorMensual > 0);
   const lineasConvenio = convenio.map((c) => ({
     concepto: c.concepto,
-    valorCalculado: round2(c.valorMensual),
+    valorCalculado: redondearPeso(c.valorMensual),
     tipo: "deduccion" as const,
     ley: c.ley,
   }));
   lineas.push(...lineasConvenio);
 
-  const totalConvenioSolicitado = round2(lineasConvenio.reduce((s, l) => s + l.valorCalculado, 0));
+  const totalConvenioSolicitado = redondearPeso(lineasConvenio.reduce((s, l) => s + l.valorCalculado, 0));
   const topePct = reglaEn(reglas, "limite_deducciones_salario", fecha);
-  const topeMonto = round2(totalDevengado * topePct);
-  let totalDeducciones = round2(lineas.reduce((s, l) => s + l.valorCalculado, 0));
+  const topeMonto = redondearPeso(totalDevengado * topePct);
+  let totalDeducciones = redondearPeso(lineas.reduce((s, l) => s + l.valorCalculado, 0));
 
   if (totalDeducciones > topeMonto && totalConvenioSolicitado > 0) {
-    const totalLey = round2(totalDeducciones - totalConvenioSolicitado);
-    const convenioDisponible = Math.max(0, round2(topeMonto - totalLey));
+    const totalLey = redondearPeso(totalDeducciones - totalConvenioSolicitado);
+    const convenioDisponible = Math.max(0, redondearPeso(topeMonto - totalLey));
     const factorRecorte = convenioDisponible / totalConvenioSolicitado;
-    for (const l of lineasConvenio) l.valorCalculado = round2(l.valorCalculado * factorRecorte);
-    totalDeducciones = round2(totalLey + convenioDisponible);
+    for (const l of lineasConvenio) l.valorCalculado = redondearPeso(l.valorCalculado * factorRecorte);
+    totalDeducciones = redondearPeso(totalLey + convenioDisponible);
     advertencias.push(
-      `Tus deducciones por convenio (AFC, préstamos, ahorro, etc.) se recortaron de $${totalConvenioSolicitado.toLocaleString("es-CO")} a $${convenioDisponible.toLocaleString("es-CO")} porque el total de deducciones no puede superar el ${round2(topePct * 100)}% del salario devengado (CST art. 149 — mínimo vital).`
+      `Tus deducciones por convenio (AFC, préstamos, ahorro, etc.) se recortaron de $${totalConvenioSolicitado.toLocaleString("es-CO")} a $${convenioDisponible.toLocaleString("es-CO")} porque el total de deducciones no puede superar el ${redondearPeso(topePct * 100)}% del salario devengado (CST art. 149 — mínimo vital).`
     );
   }
 
   const embargo = opciones.descuentoJudicial;
   if (embargo && embargo.valorMensual > 0) {
-    const solicitado = round2(embargo.valorMensual);
+    const solicitado = redondearPeso(embargo.valorMensual);
     const limite = limiteEmbargo(embargo.tipo, totalDevengado, reglas, fecha, factorPeriodo);
     const embargable = Math.min(solicitado, limite);
     const ley =
@@ -177,11 +177,11 @@ export function aplicarDeducciones(
         : "CST art. 154 y 155 — inembargable hasta 1 SMLMV, 1/5 del excedente";
     lineas.push({
       concepto: `Embargo judicial (${embargo.tipo === "alimentos_o_cooperativa" ? "alimentos/cooperativa" : "ordinario"})`,
-      valorCalculado: round2(embargable),
+      valorCalculado: redondearPeso(embargable),
       tipo: "deduccion",
       ley,
     });
-    totalDeducciones = round2(totalDeducciones + embargable);
+    totalDeducciones = redondearPeso(totalDeducciones + embargable);
     if (embargable < solicitado) {
       advertencias.push(
         `El embargo ordenado ($${solicitado.toLocaleString("es-CO")}) se limitó a $${embargable.toLocaleString("es-CO")} por el tope legal de embargabilidad (${ley}).`

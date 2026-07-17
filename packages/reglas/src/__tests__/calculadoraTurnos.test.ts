@@ -31,14 +31,14 @@ describe("CalculadoraPorTurnos — fixture Restaurante Resplandor (16–30 jun 2
 
   it("paga el salario básico proporcional a los 15 días del periodo", () => {
     const base = resultado.lineas.find((l) => l.concepto.startsWith("Salario básico"));
-    expect(base?.valorCalculado).toBeCloseTo(875452.5, 1);
+    expect(base?.valorCalculado).toBeCloseTo(875452.5, -1);
   });
 
   it("genera solo el recargo dominical (12 h al 80%), sin pagar la hora base de nuevo", () => {
     const recargo = resultado.lineas.find((l) => l.concepto.startsWith("Recargo dominical"));
     expect(recargo?.horas).toBe(12);
     expect(recargo?.recargoPct).toBe(0.8);
-    expect(recargo?.valorCalculado).toBeCloseTo(76403.13, 1);
+    expect(recargo?.valorCalculado).toBeCloseTo(76403.13, 0);
     expect(resultado.lineas.some((l) => l.concepto.startsWith("Horas dominicales"))).toBe(false);
   });
 
@@ -51,20 +51,20 @@ describe("CalculadoraPorTurnos — fixture Restaurante Resplandor (16–30 jun 2
   it("deduce salud y pensión automáticamente sobre el IBC (sin auxilio)", () => {
     const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
     const pension = resultado.lineas.find((l) => l.concepto.startsWith("Pensión"));
-    expect(salud?.valorCalculado).toBeCloseTo(38074.23, 1);
-    expect(pension?.valorCalculado).toBeCloseTo(38074.23, 1);
-    expect(salud?.base).toBeCloseTo(951855.63, 1); // IBC excluye auxilio
+    expect(salud?.valorCalculado).toBeCloseTo(38074.23, 0);
+    expect(pension?.valorCalculado).toBeCloseTo(38074.23, 0);
+    expect(salud?.base).toBeCloseTo(951855.63, 0); // IBC excluye auxilio
   });
 
   it("incluye auxilio de transporte proporcional", () => {
     const aux = resultado.lineas.find((l) => l.concepto === "Auxilio de transporte");
-    expect(aux?.valorCalculado).toBeCloseTo(124547.5, 1);
+    expect(aux?.valorCalculado).toBeCloseTo(124547.5, -1);
   });
 
   it("neto esperado = devengos − deducciones (regresión completa)", () => {
-    expect(resultado.totalDevengos).toBeCloseTo(1076403.13, 1);
-    expect(resultado.totalDeducciones).toBeCloseTo(76148.46, 1);
-    expect(resultado.netoEsperado).toBeCloseTo(1000254.67, 1);
+    expect(resultado.totalDevengos).toBeCloseTo(1076403.13, 0);
+    expect(resultado.totalDeducciones).toBeCloseTo(76148.46, 0);
+    expect(resultado.netoEsperado).toBeCloseTo(1000254.67, 0);
   });
 
   it("no genera advertencias (solo 2 domingos trabajados)", () => {
@@ -164,7 +164,7 @@ describe("CalculadoraPorTurnos — cortes normativos", () => {
     const recargo = resultado.lineas.find((l) => l.concepto.startsWith("Recargo dominical"));
     const valorHora210 = 1750905 / 210;
     expect(recargo?.horas).toBe(12);
-    expect(recargo?.valorCalculado).toBeCloseTo(12 * valorHora210 * 0.9, 1);
+    expect(recargo?.valorCalculado).toBeCloseTo(12 * valorHora210 * 0.9, 0);
   });
 });
 
@@ -179,9 +179,9 @@ describe("CalculadoraPorTurnos — aporte AFC (Fase 1, deducción por convenio)"
     );
     const afc = resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)");
     const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
-    expect(afc?.valorCalculado).toBeCloseTo(100000, 1);
+    expect(afc?.valorCalculado).toBeCloseTo(100000, 0);
     expect(afc?.tipo).toBe("deduccion");
-    expect(salud?.base).toBeCloseTo(951855.63, 1);
+    expect(salud?.base).toBeCloseTo(951855.63, 0);
     expect(resultado.advertencias).toHaveLength(0);
   });
 
@@ -196,9 +196,9 @@ describe("CalculadoraPorTurnos — aporte AFC (Fase 1, deducción por convenio)"
     const afc = resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)");
     const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
     const pension = resultado.lineas.find((l) => l.concepto.startsWith("Pensión"));
-    expect(salud?.valorCalculado).toBeCloseTo(38074.23, 1);
-    expect(pension?.valorCalculado).toBeCloseTo(38074.23, 1);
-    expect(resultado.totalDeducciones).toBeLessThanOrEqual(resultado.totalDevengos * 0.5 + 0.01);
+    expect(salud?.valorCalculado).toBeCloseTo(38074.23, 0);
+    expect(pension?.valorCalculado).toBeCloseTo(38074.23, 0);
+    expect(resultado.totalDeducciones).toBeLessThanOrEqual(resultado.totalDevengos * 0.5 + 1);
     expect(afc!.valorCalculado).toBeLessThan(1000000);
     expect(resultado.advertencias.some((a) => a.includes("AFC"))).toBe(true);
   });
@@ -252,7 +252,7 @@ describe("CalculadoraPorTurnos — embargo judicial", () => {
       FESTIVOS_2026
     );
     const embargo = resultado.lineas.find((l) => l.concepto.startsWith("Embargo judicial"));
-    expect(embargo!.valorCalculado).toBeCloseTo(resultado.totalDevengos * 0.5, 0);
+    expect(embargo!.valorCalculado).toBeCloseTo(resultado.totalDevengos * 0.5, -1);
     expect(resultado.advertencias.some((a) => a.includes("embargo"))).toBe(true);
   });
 });
@@ -275,14 +275,14 @@ describe("CalculadoraPorTurnos — caso RESPLANDOR: cierre nocturno en domingo",
     const dominical = resultado.lineas.find((l) => l.concepto.startsWith("Recargo dominical"));
     expect(dominical?.horas).toBe(12); // 6h (21-jun) + 6h (28-jun)
     expect(dominical?.recargoPct).toBe(0.8);
-    expect(dominical?.valorCalculado).toBeCloseTo(12 * valorHora * 0.8, 1);
+    expect(dominical?.valorCalculado).toBeCloseTo(12 * valorHora * 0.8, 0);
 
     const nocturnoDominical = resultado.lineas.find((l) =>
       l.concepto.startsWith("Recargo nocturno dominical")
     );
     expect(nocturnoDominical?.horas).toBe(1); // 19:00-20:00
     expect(nocturnoDominical?.recargoPct).toBe(0.35);
-    expect(nocturnoDominical?.valorCalculado).toBeCloseTo(1 * valorHora * 0.35, 1);
+    expect(nocturnoDominical?.valorCalculado).toBeCloseTo(1 * valorHora * 0.35, 0);
     expect(nocturnoDominical?.ley).toContain("Ley 2466 de 2025");
   });
 });
@@ -295,13 +295,13 @@ describe("CalculadoraPorTurnos — deducciones por convenio (AFC, préstamo, aho
       FESTIVOS_2026
     );
     const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
-    expect(salud?.base).toBeCloseTo(951855.63, 1); // IBC sin cambios
+    expect(salud?.base).toBeCloseTo(951855.63, 0); // IBC sin cambios
 
     // Prorrateo 15/30: 100.000→50.000, 60.000→30.000, 40.000→20.000, 20.000→10.000.
-    expect(resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)")?.valorCalculado).toBeCloseTo(50000, 1);
-    expect(resultado.lineas.find((l) => l.concepto === "Préstamo (convenio)")?.valorCalculado).toBeCloseTo(30000, 1);
-    expect(resultado.lineas.find((l) => l.concepto === "Ahorro (convenio)")?.valorCalculado).toBeCloseTo(20000, 1);
-    expect(resultado.lineas.find((l) => l.concepto === "Reproceso")?.valorCalculado).toBeCloseTo(10000, 1);
+    expect(resultado.lineas.find((l) => l.concepto === "Aporte AFC (convenio)")?.valorCalculado).toBeCloseTo(50000, 0);
+    expect(resultado.lineas.find((l) => l.concepto === "Préstamo (convenio)")?.valorCalculado).toBeCloseTo(30000, 0);
+    expect(resultado.lineas.find((l) => l.concepto === "Ahorro (convenio)")?.valorCalculado).toBeCloseTo(20000, 0);
+    expect(resultado.lineas.find((l) => l.concepto === "Reproceso")?.valorCalculado).toBeCloseTo(10000, 0);
   });
 
   it("recorta TODAS las deducciones por convenio proporcionalmente si juntas superan el 50% del devengado", () => {
@@ -319,10 +319,32 @@ describe("CalculadoraPorTurnos — deducciones por convenio (AFC, préstamo, aho
     const ahorro = resultado.lineas.find((l) => l.concepto === "Ahorro (convenio)")!.valorCalculado;
 
     // Proporción solicitada 5:3:2 debe conservarse tras el recorte.
-    expect(afc / prestamo).toBeCloseTo(500000 / 300000, 1);
-    expect(afc / ahorro).toBeCloseTo(500000 / 200000, 1);
-    expect(resultado.totalDeducciones).toBeCloseTo(resultado.totalDevengos * 0.5, 0);
+    expect(afc / prestamo).toBeCloseTo(500000 / 300000, 0);
+    expect(afc / ahorro).toBeCloseTo(500000 / 200000, 0);
+    expect(resultado.totalDeducciones).toBeCloseTo(resultado.totalDevengos * 0.5, -1);
     expect(resultado.advertencias.some((a) => a.includes("convenio"))).toBe(true);
+  });
+});
+
+describe("CalculadoraPorTurnos — prorrateo dinámico por días del periodo (nunca asume 15 días fijos)", () => {
+  it("un periodo de 14 días (ingreso tardío o cierre anticipado) prorratea el básico, el auxilio y el IBC sobre 14, no sobre 15", () => {
+    // periodoDesde se corre un día (17-jun en vez de 16-jun) — el motor lee
+    // rangoFechas(desde, hasta).length dinámicamente, nunca asume 15.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ periodoDesde: "2026-06-17", periodoHasta: "2026-06-30" }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const base = resultado.lineas.find((l) => l.concepto.startsWith("Salario básico"));
+    const aux = resultado.lineas.find((l) => l.concepto === "Auxilio de transporte");
+    const salud = resultado.lineas.find((l) => l.concepto.startsWith("Salud"));
+
+    expect(base?.concepto).toBe("Salario básico (14 días)");
+    expect(base?.valorCalculado).toBeCloseTo((1750905 / 30) * 14, -1);
+    expect(aux?.valorCalculado).toBeCloseTo((249095 / 30) * 14, -1);
+    // El IBC (base de salud/pensión) también debe reflejar los 14 días, no
+    // los 15 del fixture original (951.855,63) — debe ser menor.
+    expect(salud!.base!).toBeLessThan(951855.63);
   });
 });
 

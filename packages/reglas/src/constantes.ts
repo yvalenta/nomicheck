@@ -74,5 +74,12 @@ export const TABLA_FONDO_SOLIDARIDAD: { desdeSmlmv: number; pct: number }[] = [
 
 // --- Redondeo monetario ---
 
-/** Decimales usados para redondear valores monetarios (pesos colombianos, sin centavos fraccionados en la práctica). */
-export const DECIMALES_REDONDEO = 2;
+// El peso colombiano no circula con fracciones (no hay centavos en la
+// práctica). Cada línea del resultado se redondea al peso entero ANTES de
+// sumar — si se redondeara solo al mostrar (con decimales internos aún
+// vivos en el total), un empleado que multiplica horas × valor unitario
+// impreso podía obtener un resultado distinto al total mostrado por
+// unos pocos pesos ("paradoja de la calculadora", detectada 2026-07 en
+// una liquidación real). Redondear cada línea primero garantiza que la
+// suma de lo impreso siempre cuadre exactamente con el total impreso.
+export const DECIMALES_REDONDEO = 0;
