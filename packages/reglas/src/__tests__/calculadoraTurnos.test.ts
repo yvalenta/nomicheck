@@ -285,6 +285,35 @@ describe("CalculadoraPorTurnos — caso RESPLANDOR: cierre nocturno en domingo",
     expect(nocturnoDominical?.valorCalculado).toBeCloseTo(1 * valorHora * 0.35, 0);
     expect(nocturnoDominical?.ley).toContain("Ley 2466 de 2025");
   });
+
+  it("la hora extra dominical nocturna usa el factor 75% (2.55), no el diurno 25% (2.05)", () => {
+    // Domingo 21-jun con turno especial 14:00-22:00 (8h): 6h ordinarias
+    // dominicales (5 diurnas + 1 nocturna 19:00-20:00) + 2h extra, TODAS
+    // nocturnas (20:00-22:00) — deben pagarse al factor 2.55 (100% + 75%
+    // extra nocturna + 80% recargo dominical), no al 2.05 diurno.
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [{ fecha: "2026-06-21", trabajo: true, horaInicio: "14:00", horaFin: "22:00" }],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const valorHora = 1750905 / 220;
+
+    const extraNocturna = resultado.lineas.find((l) =>
+      l.concepto.startsWith("Hora extra dominical/festiva nocturna")
+    );
+    expect(extraNocturna?.horas).toBe(2);
+    expect(extraNocturna?.recargoPct).toBeCloseTo(1.55, 4); // 0.8 + 0.75
+    expect(extraNocturna?.valorCalculado).toBeCloseTo(2 * valorHora * 2.55, 0);
+
+    // No debe existir una línea "diurna" en este caso (las 2h extra son
+    // 100% nocturnas) — antes se fusionaban aquí, subpagando la hora.
+    const extraDiurna = resultado.lineas.find((l) =>
+      l.concepto.startsWith("Hora extra dominical/festiva diurna")
+    );
+    expect(extraDiurna).toBeUndefined();
+  });
 });
 
 describe("CalculadoraPorTurnos — deducciones por convenio (AFC, préstamo, ahorro, reproceso)", () => {

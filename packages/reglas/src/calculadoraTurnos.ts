@@ -180,13 +180,15 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       let ordinariaDominicalNocturna = 0;
       let extraDiurna = 0;
       let extraNocturna = 0;
-      let extraDominical = 0;
+      let extraDominicalDiurna = 0;
+      let extraDominicalNocturna = 0;
 
       for (const dia of diasTramo) {
         if (dia.esDominicalFestivo) {
           ordinariaDominical += dia.ordinariaDiurna + dia.ordinariaNocturna;
           ordinariaDominicalNocturna += dia.ordinariaNocturna;
-          extraDominical += dia.extraDiurna + dia.extraNocturna;
+          extraDominicalDiurna += dia.extraDiurna;
+          extraDominicalNocturna += dia.extraNocturna;
         } else {
           ordinariaHabilNocturna += dia.ordinariaNocturna;
           extraDiurna += dia.extraDiurna;
@@ -253,13 +255,29 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         });
       }
 
-      if (extraDominical > 0) {
+      // Hora extra dominical: diurna y nocturna se pagan con factores
+      // distintos (100% + 25%/75% + recargo dominical vigente) — antes se
+      // fusionaban en una sola línea con el factor diurno (25%) incluso
+      // para las horas que caían de noche, subpagando esas horas.
+      if (extraDominicalDiurna > 0) {
         const pct = recargoDominical + extraDiurnaPct;
         lineas.push({
-          concepto: `Hora extra dominical/festiva${sufijo}`,
-          horas: redondearPeso(extraDominical),
+          concepto: `Hora extra dominical/festiva diurna${sufijo}`,
+          horas: redondearPeso(extraDominicalDiurna),
           recargoPct: pct,
-          valorCalculado: redondearPeso(extraDominical * valorHora * (1 + pct)),
+          valorCalculado: redondearPeso(extraDominicalDiurna * valorHora * (1 + pct)),
+          tipo: "devengo",
+          ley: "Ley 2466 de 2025; CST art. 168",
+        });
+      }
+
+      if (extraDominicalNocturna > 0) {
+        const pct = recargoDominical + extraNocturnaPct;
+        lineas.push({
+          concepto: `Hora extra dominical/festiva nocturna${sufijo}`,
+          horas: redondearPeso(extraDominicalNocturna),
+          recargoPct: pct,
+          valorCalculado: redondearPeso(extraDominicalNocturna * valorHora * (1 + pct)),
           tipo: "devengo",
           ley: "Ley 2466 de 2025; CST art. 168",
         });
