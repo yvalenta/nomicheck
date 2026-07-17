@@ -66,7 +66,7 @@ export default function App() {
   // un modo de cálculo aparte, ver DatosNominaServicios) — este helper solo
   // se usa en las dos rutas que jamás lo reciben (el wizard desvía
   // "servicios" directo a calcularServicios antes de llegar aquí).
-  function tipoContratoLaboral(): "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica" {
+  function tipoContratoLaboral(): "indefinido" | "fijo" | "obra_labor" | "tiempo_parcial" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica" {
     return datos1.tipoContrato === "servicios" ? "indefinido" : datos1.tipoContrato;
   }
 

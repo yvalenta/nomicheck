@@ -97,3 +97,86 @@ describe("CalculadoraServicios — prestación de servicios", () => {
     ).toThrow();
   });
 });
+
+describe("advertencia — posible aprendiz mal clasificado como indefinido", () => {
+  it("salario dentro de 50%-75% SMLMV en contrato indefinido: advierte", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      { modo: "salario-fijo", salarioBasicoMensual: 1_000_000, recibeAuxilioTransporte: false, conceptos: [], ...PERIODO },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("aprendiz SENA"))).toBe(true);
+  });
+
+  it("borde inclusivo: exactamente 50% y 75% SMLMV advierten", () => {
+    const smlmv = 1_750_905;
+    const min = CalculadoraSalarioFijo.calcular(
+      { modo: "salario-fijo", salarioBasicoMensual: smlmv * 0.5, recibeAuxilioTransporte: false, conceptos: [], ...PERIODO },
+      REGLAS_JUL_2026,
+      []
+    );
+    const max = CalculadoraSalarioFijo.calcular(
+      { modo: "salario-fijo", salarioBasicoMensual: smlmv * 0.75, recibeAuxilioTransporte: false, conceptos: [], ...PERIODO },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(min.advertencias.some((a) => a.includes("aprendiz SENA"))).toBe(true);
+    expect(max.advertencias.some((a) => a.includes("aprendiz SENA"))).toBe(true);
+  });
+
+  it("salario normal (2.000.000, fuera del rango): sin advertencia", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      { modo: "salario-fijo", salarioBasicoMensual: 2_000_000, recibeAuxilioTransporte: false, conceptos: [], ...PERIODO },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("aprendiz SENA"))).toBe(false);
+  });
+
+  it("mismo salario bajo, pero ya declarado como aprendiz SENA: sin advertencia (no aplica a sí mismo)", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      {
+        modo: "salario-fijo",
+        salarioBasicoMensual: 1_000_000,
+        recibeAuxilioTransporte: false,
+        tipoContrato: "aprendizaje_sena_practica",
+        conceptos: [],
+        ...PERIODO,
+      },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("aprendiz SENA"))).toBe(false);
+  });
+});
+
+describe("tipoContrato — término fijo / obra o labor / tiempo parcial", () => {
+  it("fijo liquida idéntico a indefinido (mismas líneas) y advierte sobre preaviso/indemnización", () => {
+    const indefinido = CalculadoraSalarioFijo.calcular(
+      { modo: "salario-fijo", salarioBasicoMensual: 2_000_000, recibeAuxilioTransporte: false, conceptos: [], ...PERIODO },
+      REGLAS_JUL_2026,
+      []
+    );
+    const fijo = CalculadoraSalarioFijo.calcular(
+      { modo: "salario-fijo", salarioBasicoMensual: 2_000_000, recibeAuxilioTransporte: false, tipoContrato: "fijo", conceptos: [], ...PERIODO },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(fijo.netoEsperado).toBe(indefinido.netoEsperado);
+    expect(fijo.lineas.map((l) => l.concepto)).toEqual(indefinido.lineas.map((l) => l.concepto));
+    expect(fijo.advertencias.some((a) => a.includes("preaviso"))).toBe(true);
+    expect(indefinido.advertencias.some((a) => a.includes("preaviso"))).toBe(false);
+  });
+
+  it("obra_labor y tiempo_parcial también advierten, sin cambiar el neto", () => {
+    for (const tipoContrato of ["obra_labor", "tiempo_parcial"] as const) {
+      const r = CalculadoraSalarioFijo.calcular(
+        { modo: "salario-fijo", salarioBasicoMensual: 2_000_000, recibeAuxilioTransporte: false, tipoContrato, conceptos: [], ...PERIODO },
+        REGLAS_JUL_2026,
+        []
+      );
+      expect(r.netoEsperado).toBeGreaterThan(0);
+      expect(r.advertencias.some((a) => a.includes("preaviso"))).toBe(true);
+    }
+  });
+});

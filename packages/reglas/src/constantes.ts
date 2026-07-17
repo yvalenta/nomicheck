@@ -102,6 +102,20 @@ export const PCT_IBC_INDEPENDIENTE = 0.4;
 /** Aporte a salud del independiente — paga el 100% (no hay empleador que asuma la mitad). Ley 100 de 1993, art. 204. */
 export const PCT_SALUD_INDEPENDIENTE = 0.125;
 
+// --- Patrón sospechoso de aprendizaje mal clasificado ---
+//
+// Ley 789 de 2002, art. 30: el aprendiz SENA en etapa práctica recibe entre
+// 50% y 75% de un SMLMV como auxilio de sostenimiento (etapa lectiva es
+// menor aún, pero varía por entidad). Un contrato "indefinido" declarado con
+// un salario dentro de ese rango es una señal — no una prueba — de que en
+// realidad se trata de un aprendiz mal registrado como empleado ordinario.
+
+/** Piso del rango sospechoso, en múltiplos de SMLMV. */
+export const PATRON_APRENDIZ_MIN_PCT_SMLMV = 0.5;
+
+/** Techo del rango sospechoso, en múltiplos de SMLMV. */
+export const PATRON_APRENDIZ_MAX_PCT_SMLMV = 0.75;
+
 /** Aporte a pensión del independiente — paga el 100%. Ley 100 de 1993, art. 20. */
 export const PCT_PENSION_INDEPENDIENTE = 0.16;
 

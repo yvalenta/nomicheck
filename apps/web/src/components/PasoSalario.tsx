@@ -18,6 +18,9 @@ export type Periodicidad = "semanal" | "quincenal" | "mensual" | "personalizado"
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
 export type TipoContrato =
   | "indefinido"
+  | "fijo"
+  | "obra_labor"
+  | "tiempo_parcial"
   | "aprendizaje_sena_lectiva"
   | "aprendizaje_sena_practica"
   | "servicios";
@@ -56,7 +59,10 @@ const PERIODICIDAD_LABEL: Record<Periodicidad, string> = {
 };
 
 const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
-  indefinido: "Contrato laboral ordinario (indefinido, fijo, obra)",
+  indefinido: "Término indefinido",
+  fijo: "Término fijo",
+  obra_labor: "Por obra o labor",
+  tiempo_parcial: "Tiempo parcial",
   aprendizaje_sena_lectiva: "Aprendizaje SENA — etapa lectiva",
   aprendizaje_sena_practica: "Aprendizaje SENA — etapa práctica",
   servicios: "Prestación de servicios (contratista independiente)",
@@ -73,8 +79,14 @@ function calcularHasta(desde: string, periodicidad: Periodicidad): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Estos cuatro tipos son contrato laboral ordinario con derecho pleno a
+// auxilio de transporte y deducciones de ley completas — solo cambia su
+// preaviso/indemnización al terminar (fuera del alcance de este verificador).
+const TIPOS_LABORALES_ORDINARIOS: TipoContrato[] = ["indefinido", "fijo", "obra_labor", "tiempo_parcial"];
+
 export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }: Props) {
   const listo = Number(datos.salario) > 0 && datos.desde && datos.hasta && datos.desde <= datos.hasta;
+  const esLaboralOrdinario = TIPOS_LABORALES_ORDINARIOS.includes(datos.tipoContrato);
 
   function set<K extends keyof DatosPaso1>(k: K, v: DatosPaso1[K]) {
     onCambio({ ...datos, [k]: v });
@@ -141,7 +153,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
             />
           </label>
 
-          {!superaTopeAuxilio && datos.tipoContrato === "indefinido" && (
+          {!superaTopeAuxilio && esLaboralOrdinario && (
             <label className="flex items-center gap-2.5 text-sm text-ink">
               <input
                 type="checkbox"
@@ -152,7 +164,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               <Bus size={16} className="text-muted" /> Recibo auxilio de transporte
             </label>
           )}
-          {superaTopeAuxilio && datos.tipoContrato === "indefinido" && (
+          {superaTopeAuxilio && esLaboralOrdinario && (
             <p className="text-xs text-muted flex items-center gap-2">
               <Bus size={16} className="text-muted shrink-0" />
               No aplica auxilio de transporte: tu salario supera{" "}
@@ -180,6 +192,15 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
                 {datos.tipoContrato === "aprendizaje_sena_lectiva"
                   ? " ni ningún aporte a salud/pensión en etapa lectiva (Ley 789 de 2002, art. 30)."
                   : ", y en etapa práctica solo se cotiza salud (sin pensión ni fondo de solidaridad)."}
+              </span>
+            )}
+            {(datos.tipoContrato === "fijo" ||
+              datos.tipoContrato === "obra_labor" ||
+              datos.tipoContrato === "tiempo_parcial") && (
+              <span className="text-xs text-muted font-normal">
+                Se liquida igual que un contrato indefinido en este periodo (recargos y deducciones
+                de ley no cambian por el tipo de término) — lo que puede ser distinto es el preaviso
+                o la indemnización si termina antes de tiempo, algo que este verificador no calcula.
               </span>
             )}
             {datos.tipoContrato === "servicios" && (

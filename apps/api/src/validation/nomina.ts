@@ -20,7 +20,9 @@ const novedadDia = z
     message: "Una novedad con trabajo=true requiere horaInicio y horaFin",
   });
 
-const tipoContrato = z.enum(["indefinido", "aprendizaje_sena_lectiva", "aprendizaje_sena_practica"]).optional();
+const tipoContrato = z
+  .enum(["indefinido", "fijo", "obra_labor", "tiempo_parcial", "aprendizaje_sena_lectiva", "aprendizaje_sena_practica"])
+  .optional();
 
 const datosNominaTurnos = z.object({
   modo: z.literal("turnos"),

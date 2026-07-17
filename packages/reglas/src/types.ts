@@ -6,8 +6,20 @@ export type ModoCalculo = "turnos" | "salario-fijo" | "servicios";
 // contrario. Aprendizaje SENA sigue siendo una relación con horario (turnos
 // aplican) — solo cambian deducciones/devengo base, por eso vive aquí y no
 // como un modo de cálculo distinto (a diferencia de "servicios", ver
-// DatosNominaServicios).
-export type TipoContrato = "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica";
+// DatosNominaServicios). "fijo"/"obra_labor"/"tiempo_parcial" liquidan
+// exactamente igual que "indefinido" período a período (CST: recargos,
+// extras y deducciones de ley no dependen del tipo de término) — la
+// diferencia real entre estos contratos está en preaviso/indemnización al
+// terminar, fuera del alcance de un verificador de nómina periódica; se
+// advierte explícitamente en vez de fingir una rama de cálculo que no
+// existe en la ley.
+export type TipoContrato =
+  | "indefinido"
+  | "fijo"
+  | "obra_labor"
+  | "tiempo_parcial"
+  | "aprendizaje_sena_lectiva"
+  | "aprendizaje_sena_practica";
 
 export interface ReglaLegal {
   clave: string;
