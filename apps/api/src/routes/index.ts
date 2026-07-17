@@ -8,6 +8,11 @@ import { extraer } from "../controllers/comprobanteController.js";
 import { registro, invitar } from "../controllers/authController.js";
 import { listar, crear, actualizar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
+  listar as listarContratistas,
+  crear as crearContratista,
+  actualizar as actualizarContratista,
+} from "../controllers/contratistasController.js";
+import {
   listar as listarPeriodos,
   crear as crearPeriodo,
   obtenerTurnos,
@@ -66,6 +71,10 @@ router.put("/empresa/empleados/:id", ...soloEmpresa, actualizar);
 router.post("/empresa/empleados/:id/invitar", ...soloEmpresa, invitar);
 router.post("/empresa/empleados/:id/retirar", ...soloEmpresa, retirar);
 router.post("/empresa/empleados/:id/liquidacion-final", ...soloEmpresa, liquidacionFinal);
+
+router.get("/empresa/contratistas", ...soloEmpresa, listarContratistas);
+router.post("/empresa/contratistas", ...soloEmpresa, crearContratista);
+router.put("/empresa/contratistas/:id", ...soloEmpresa, actualizarContratista);
 
 router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
 router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);

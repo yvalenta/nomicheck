@@ -64,6 +64,28 @@ export function liquidarFinalEmpleado(id: number): Promise<Recibo> {
   return autenticado(`/empresa/empleados/${id}/liquidacion-final`, { method: "POST" });
 }
 
+// Contratista de prestación de servicios (Ley 1819 de 2016, art. 244) — NO
+// es Empleado: sin contrato laboral, sin fechaIngreso/tipoNomina/auxilio.
+export interface Contratista {
+  id: number;
+  nombre: string;
+  documento: string;
+  honorariosMensuales: number;
+  activo: boolean;
+}
+
+export function listarContratistas(): Promise<Contratista[]> {
+  return autenticado("/empresa/contratistas");
+}
+
+export function crearContratista(datos: Omit<Contratista, "id" | "activo">): Promise<Contratista> {
+  return autenticado("/empresa/contratistas", { method: "POST", body: JSON.stringify(datos) });
+}
+
+export function actualizarContratista(id: number, datos: Partial<Contratista>): Promise<Contratista> {
+  return autenticado(`/empresa/contratistas/${id}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
 export interface Periodo {
   id: number;
   fechaInicio: string;
@@ -91,9 +113,11 @@ export interface LineaRecibo {
 
 export interface Recibo {
   id: number;
-  empleadoId: number;
+  empleadoId: number | null;
+  contratistaId: number | null;
   periodoId: number;
-  empleado: Empleado;
+  empleado: Empleado | null;
+  contratista: Contratista | null;
   lineas: LineaRecibo[];
   totalDevengado: number;
   totalDeducido: number;

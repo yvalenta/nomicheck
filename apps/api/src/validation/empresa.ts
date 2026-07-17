@@ -35,3 +35,13 @@ export const invitarSchema = z.object({
 export const retiroSchema = z.object({
   fechaRetiro: fecha,
 });
+
+export const contratistaSchema = z.object({
+  nombre: z.string().min(1),
+  documento: z.string().min(1),
+  honorariosMensuales: z.number().positive(),
+});
+
+export const contratistaUpdateSchema = contratistaSchema.partial().extend({
+  activo: z.boolean().optional(),
+});

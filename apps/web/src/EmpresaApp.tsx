@@ -6,8 +6,9 @@ import SegmentedControl from "./components/SegmentedControl.tsx";
 import AuthEmpresa from "./components/empresa/AuthEmpresa.tsx";
 import DashboardEmpresa from "./components/empresa/DashboardEmpresa.tsx";
 import PeriodosEmpresa from "./components/empresa/PeriodosEmpresa.tsx";
+import ContratistasEmpresa from "./components/empresa/ContratistasEmpresa.tsx";
 
-type Seccion = "colaboradores" | "periodos";
+type Seccion = "colaboradores" | "contratistas" | "periodos";
 
 export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -31,13 +32,16 @@ export default function EmpresaApp() {
               <SegmentedControl<Seccion>
                 opciones={[
                   { valor: "colaboradores", etiqueta: "Colaboradores" },
+                  { valor: "contratistas", etiqueta: "Contratistas" },
                   { valor: "periodos", etiqueta: "Periodos" },
                 ]}
                 activo={seccion}
                 onCambio={setSeccion}
               />
             </div>
-            {seccion === "colaboradores" ? <DashboardEmpresa /> : <PeriodosEmpresa />}
+            {seccion === "colaboradores" && <DashboardEmpresa />}
+            {seccion === "contratistas" && <ContratistasEmpresa />}
+            {seccion === "periodos" && <PeriodosEmpresa />}
           </div>
         )}
       </main>

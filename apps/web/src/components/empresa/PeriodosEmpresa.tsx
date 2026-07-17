@@ -280,7 +280,7 @@ function DetallePeriodo({
       ) : (
         <div className="flex flex-col gap-3">
           {recibos.map((r) => (
-            <PaycheckCard key={r.id} titulo={r.empleado.nombre}>
+            <PaycheckCard key={r.id} titulo={r.empleado?.nombre ?? r.contratista?.nombre ?? "—"}>
               <div className="flex flex-col">
                 {r.lineas.map((l, i) => (
                   <ValidationRow key={i} linea={l} />

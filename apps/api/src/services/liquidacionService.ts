@@ -2,6 +2,7 @@ import {
   calcularPrestacionesSociales,
   CalculadoraPorTurnos,
   CalculadoraSalarioFijo,
+  CalculadoraServicios,
   crearResolutorReglas,
   type DatosNominaTurnos,
   type LineaResultado,
@@ -29,8 +30,9 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
     throw new Error(`El periodo ya está en estado "${periodo.estado}"`);
   }
 
-  const [empleados, turnos, { reglas, festivos }] = await Promise.all([
+  const [empleados, contratistas, turnos, { reglas, festivos }] = await Promise.all([
     prisma.empleado.findMany({ where: { empresaId, activo: true } }),
+    prisma.contratista.findMany({ where: { empresaId, activo: true } }),
     prisma.turno.findMany({ where: { periodoId } }),
     obtenerReglasYFestivos(),
   ]);
@@ -110,18 +112,42 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
     };
   });
 
+  // Contratistas de servicios: NO son Empleado (SDD §07) — sin turnos, sin
+  // provisión de prestaciones, sin deducciones retenidas (CalculadoraServicios
+  // ya deja los aportes del independiente solo como advertencia).
+  const recibosContratistas = contratistas.map((contratista) => {
+    const resultado = CalculadoraServicios.calcular(
+      {
+        modo: "servicios",
+        honorariosMensuales: contratista.honorariosMensuales,
+        periodoDesde: periodo.fechaInicio,
+        periodoHasta: periodo.fechaFin,
+      },
+      reglas,
+      festivos
+    );
+    return {
+      contratistaId: contratista.id,
+      periodoId,
+      lineas: resultado.lineas as unknown as Prisma.InputJsonValue,
+      totalDevengado: resultado.totalDevengos,
+      totalDeducido: resultado.totalDeducciones,
+      neto: resultado.netoEsperado,
+    };
+  });
+
   await prisma.$transaction([
-    prisma.reciboPago.createMany({ data: recibos }),
+    prisma.reciboPago.createMany({ data: [...recibos, ...recibosContratistas] }),
     prisma.periodoNomina.update({ where: { id: periodoId }, data: { estado: "liquidado" } }),
   ]);
 
-  return prisma.reciboPago.findMany({ where: { periodoId }, include: { empleado: true } });
+  return prisma.reciboPago.findMany({ where: { periodoId }, include: { empleado: true, contratista: true } });
 }
 
 export function listarRecibos(empresaId: number, periodoId?: number) {
   return prisma.reciboPago.findMany({
     where: { periodo: { empresaId }, ...(periodoId ? { periodoId } : {}) },
-    include: { empleado: true },
+    include: { empleado: true, contratista: true },
     orderBy: { liquidadoEn: "desc" },
   });
 }

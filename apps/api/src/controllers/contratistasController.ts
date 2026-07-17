@@ -1,0 +1,31 @@
+import type { Request, Response } from "express";
+import { contratistaSchema, contratistaUpdateSchema } from "../validation/empresa.js";
+import { actualizarContratista, crearContratista, listarContratistas } from "../services/contratistasService.js";
+
+export async function listar(req: Request, res: Response) {
+  res.json(await listarContratistas(req.usuario!.empresaId!));
+}
+
+export async function crear(req: Request, res: Response) {
+  const parseo = contratistaSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+  const contratista = await crearContratista(req.usuario!.empresaId!, parseo.data);
+  res.status(201).json(contratista);
+}
+
+export async function actualizar(req: Request, res: Response) {
+  const parseo = contratistaUpdateSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+  try {
+    const contratista = await actualizarContratista(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
+    res.json(contratista);
+  } catch (err) {
+    res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });
+  }
+}

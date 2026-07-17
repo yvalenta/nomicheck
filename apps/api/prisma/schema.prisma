@@ -49,9 +49,10 @@ model Empresa {
   sector   String
   creadoEn DateTime @default(now())
 
-  usuarios  Usuario[]
-  empleados Empleado[]
-  periodos  PeriodoNomina[]
+  usuarios     Usuario[]
+  empleados    Empleado[]
+  contratistas Contratista[]
+  periodos     PeriodoNomina[]
 }
 
 model Empleado {
@@ -74,6 +75,25 @@ model Empleado {
   creadoEn          DateTime @default(now())
 
   turnos  Turno[]
+  recibos ReciboPago[]
+
+  @@unique([empresaId, documento])
+  @@index([empresaId])
+}
+
+// Contratista de prestación de servicios (Ley 1819 de 2016, art. 244) — NO
+// es Empleado: no tiene contrato laboral, así que no tiene fechaIngreso/
+// tipoNomina/auxilio ni genera prestaciones sociales (SDD §07).
+model Contratista {
+  id                  Int      @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa  @relation(fields: [empresaId], references: [id])
+  nombre              String
+  documento           String
+  honorariosMensuales Float
+  activo              Boolean  @default(true)
+  creadoEn            DateTime @default(now())
+
   recibos ReciboPago[]
 
   @@unique([empresaId, documento])
@@ -112,10 +132,14 @@ model Turno {
 }
 
 // Documento emitido (snapshot histórico) — no se recalcula al cambiar reglas.
+// Pertenece a exactamente uno de empleado/contratista (CHECK en el SQL de
+// la migración — un contratista de servicios no es Empleado, SDD §07).
 model ReciboPago {
   id              Int           @id @default(autoincrement())
-  empleadoId      Int
-  empleado        Empleado      @relation(fields: [empleadoId], references: [id])
+  empleadoId      Int?
+  empleado        Empleado?     @relation(fields: [empleadoId], references: [id])
+  contratistaId   Int?
+  contratista     Contratista?  @relation(fields: [contratistaId], references: [id])
   periodoId       Int
   periodo         PeriodoNomina @relation(fields: [periodoId], references: [id])
   lineas          Json // [{ concepto, tipo, formula, referenciaLegal, cantidad?, valor }]
@@ -127,6 +151,7 @@ model ReciboPago {
   reportes ReporteDiscrepancia[]
 
   @@unique([empleadoId, periodoId])
+  @@unique([contratistaId, periodoId])
 }
 
 model ReporteDiscrepancia {
