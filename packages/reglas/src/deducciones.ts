@@ -14,16 +14,25 @@ export function pctFondoSolidaridad(ibcEnSmlmv: number): number {
   return tramo?.pct ?? 0;
 }
 
+/** Cuánto de las deducciones de ley aplica: "completo" (default, indefinido),
+ * "solo_salud" (aprendiz SENA etapa práctica — no cotiza a pensión), o
+ * "ninguno" (aprendiz SENA etapa lectiva — el SENA gestiona la afiliación). */
+export type AlcanceDeduccionesLey = "completo" | "solo_salud" | "ninguno";
+
 // Deducciones obligatorias del empleado calculadas automáticamente sobre el
 // IBC (devengado salarial, excluye auxilio de transporte): salud 4%,
 // pensión 4% y fondo de solidaridad si IBC ≥ 4 SMLMV. Compartida por ambas
 // calculadoras — el usuario nunca declara estas deducciones (SDD §12).
-export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[] | ResolutorReglas, fecha: string): LineaResultado[] {
+export function deduccionesDeLey(
+  ibc: number,
+  reglas: ReglaLegal[] | ResolutorReglas,
+  fecha: string,
+  alcance: AlcanceDeduccionesLey = "completo"
+): LineaResultado[] {
+  if (alcance === "ninguno") return [];
+
   const r = comoResolutor(reglas);
   const pctSalud = r.en("aporte_salud_empleado", fecha);
-  const pctPension = r.en("aporte_pension_empleado", fecha);
-  const umbralSolidaridadSmlmv = r.en("fondo_solidaridad_umbral_smlmv", fecha);
-  const smlmv = r.en("smlmv", fecha);
 
   const lineas: LineaResultado[] = [
     {
@@ -34,15 +43,21 @@ export function deduccionesDeLey(ibc: number, reglas: ReglaLegal[] | ResolutorRe
       tipo: "deduccion",
       ley: "Ley 100 de 1993",
     },
-    {
-      concepto: "Pensión (aporte empleado)",
-      base: redondearPeso(ibc),
-      recargoPct: pctPension,
-      valorCalculado: redondearPeso(ibc * pctPension),
-      tipo: "deduccion",
-      ley: "Ley 100 de 1993",
-    },
   ];
+  if (alcance === "solo_salud") return lineas;
+
+  const pctPension = r.en("aporte_pension_empleado", fecha);
+  const umbralSolidaridadSmlmv = r.en("fondo_solidaridad_umbral_smlmv", fecha);
+  const smlmv = r.en("smlmv", fecha);
+
+  lineas.push({
+    concepto: "Pensión (aporte empleado)",
+    base: redondearPeso(ibc),
+    recargoPct: pctPension,
+    valorCalculado: redondearPeso(ibc * pctPension),
+    tipo: "deduccion",
+    ley: "Ley 100 de 1993",
+  });
 
   const ibcEnSmlmv = ibc / smlmv;
   if (ibcEnSmlmv >= umbralSolidaridadSmlmv) {
@@ -83,6 +98,7 @@ export interface DeduccionConvenio {
 export interface OpcionesDeducciones {
   deduccionesConvenio?: DeduccionConvenio[];
   descuentoJudicial?: DescuentoJudicial;
+  alcanceDeduccionesLey?: AlcanceDeduccionesLey;
 }
 
 // Límite legal de un embargo de salario. Dos regímenes independientes
@@ -136,7 +152,7 @@ export function aplicarDeducciones(
   factorPeriodo = 1
 ): ResultadoDeducciones {
   const r = comoResolutor(reglas);
-  const lineas = deduccionesDeLey(ibc, r, fecha);
+  const lineas = deduccionesDeLey(ibc, r, fecha, opciones.alcanceDeduccionesLey);
   const advertencias: string[] = [];
 
   const convenio = (opciones.deduccionesConvenio ?? []).filter((c) => c.valorMensual > 0);

@@ -223,12 +223,22 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     // la jornada ordinaria; los turnos solo generan recargos y extras).
     const diasPeriodo = Math.min(fechas.length, DIAS_MES_COMERCIAL);
     const salarioBase = (d.salarioBasicoMensual / DIAS_MES_COMERCIAL) * diasPeriodo;
+    // Aprendizaje SENA (Ley 789 de 2002, art. 30): sigue trabajando por
+    // turnos, pero el devengo base no es "salario" y las deducciones de
+    // ley cambian según la etapa (ver más abajo, junto al auxilio).
+    const esAprendiz = d.tipoContrato?.startsWith("aprendizaje_sena");
+    const alcanceDeduccionesLey =
+      d.tipoContrato === "aprendizaje_sena_lectiva"
+        ? "ninguno"
+        : d.tipoContrato === "aprendizaje_sena_practica"
+          ? "solo_salud"
+          : "completo";
     lineas.push({
-      concepto: `Salario básico (${diasPeriodo} días)`,
+      concepto: esAprendiz ? `Auxilio de sostenimiento (${diasPeriodo} días)` : `Salario básico (${diasPeriodo} días)`,
       base: redondearPeso(d.salarioBasicoMensual),
       valorCalculado: redondearPeso(salarioBase),
       tipo: "devengo",
-      ley: "Contrato de trabajo; CST art. 127",
+      ley: esAprendiz ? "Ley 789 de 2002, art. 30" : "Contrato de trabajo; CST art. 127",
     });
 
     for (const diasTramo of tramos.values()) {
@@ -357,7 +367,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     // NO hace base para salud/pensión.
     const ibc = lineas.reduce((s, l) => s + l.valorCalculado, 0);
 
-    if (d.recibeAuxilioTransporte) {
+    if (d.recibeAuxilioTransporte && !esAprendiz) {
       const auxilio = calcularAuxilioTransporte(
         d.salarioBasicoMensual,
         diasPeriodo,
@@ -400,7 +410,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
         ibc,
         r,
         d.periodoHasta,
-        { deduccionesConvenio, descuentoJudicial: embargoPeriodo },
+        { deduccionesConvenio, descuentoJudicial: embargoPeriodo, alcanceDeduccionesLey },
         diasPeriodo / DIAS_MES_COMERCIAL
       );
     lineas.push(...lineasDeduccion);

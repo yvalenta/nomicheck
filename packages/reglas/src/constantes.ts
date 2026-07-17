@@ -91,6 +91,20 @@ export const DIVISOR_VACACIONES = 720;
 /** Prima de servicios: tope de 180 días por semestre (jun/dic), aunque el semestre calendario tenga más. CST art. 306, mod. Ley 1788 de 2016. */
 export const DIAS_MAX_SEMESTRE_PRIMA = 180;
 
+// --- Prestación de servicios (contratista independiente) ---
+//
+// No son ReglaLegal versionada: son tasas del sistema de seguridad social
+// fijadas por ley, no ajustadas por decreto anual como el SMLMV.
+
+/** IBC del independiente: 40% del ingreso mensual (no el 100%). Ley 1819 de 2016, art. 244. */
+export const PCT_IBC_INDEPENDIENTE = 0.4;
+
+/** Aporte a salud del independiente — paga el 100% (no hay empleador que asuma la mitad). Ley 100 de 1993, art. 204. */
+export const PCT_SALUD_INDEPENDIENTE = 0.125;
+
+/** Aporte a pensión del independiente — paga el 100%. Ley 100 de 1993, art. 20. */
+export const PCT_PENSION_INDEPENDIENTE = 0.16;
+
 // --- Redondeo monetario ---
 
 // El peso colombiano no circula con fracciones (no hay centavos en la

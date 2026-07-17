@@ -1,6 +1,13 @@
 // Tipos compartidos entre web, api y el motor de cálculo
 
-export type ModoCalculo = "turnos" | "salario-fijo";
+export type ModoCalculo = "turnos" | "salario-fijo" | "servicios";
+
+// El motor asume tácitamente término indefinido salvo que se indique lo
+// contrario. Aprendizaje SENA sigue siendo una relación con horario (turnos
+// aplican) — solo cambian deducciones/devengo base, por eso vive aquí y no
+// como un modo de cálculo distinto (a diferencia de "servicios", ver
+// DatosNominaServicios).
+export type TipoContrato = "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica";
 
 export interface ReglaLegal {
   clave: string;
@@ -52,6 +59,8 @@ export interface DatosNominaTurnos {
   // cooperativa art. 156). Se prorratea por días del periodo y se limita al
   // tope legal de cada régimen — ver deducciones.ts, limiteEmbargo().
   descuentoJudicial?: DescuentoJudicial;
+  /** Default "indefinido" — ver TipoContrato. */
+  tipoContrato?: TipoContrato;
 }
 
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
@@ -70,6 +79,21 @@ export interface DatosNominaFija {
   periodoDesde: string;
   periodoHasta: string;
   conceptos: ConceptoNomina[];
+  /** Default "indefinido" — ver TipoContrato. */
+  tipoContrato?: TipoContrato;
+}
+
+// Entrada para prestación de servicios (contratista independiente) — NO es
+// contrato laboral (SDD §07): no hay auxilio de transporte, recargos ni
+// prestaciones sociales, y el IBC de seguridad social es 40% del ingreso
+// (no 100%). Por eso es un modo de cálculo propio, no una variante de
+// DatosNominaFija.
+export interface DatosNominaServicios {
+  modo: "servicios";
+  honorariosMensuales: number;
+  periodoDesde: string;
+  periodoHasta: string;
+  conceptos?: ConceptoNomina[];
 }
 
 export interface ConceptoNomina {
@@ -142,7 +166,7 @@ export interface ResultadoPrestaciones {
 // Interfaz Strategy — las dos calculadoras implementan esto
 export interface CalculadoraNomina {
   calcular(
-    datos: DatosNominaTurnos | DatosNominaFija,
+    datos: DatosNominaTurnos | DatosNominaFija | DatosNominaServicios,
     reglas: ReglaLegal[],
     festivos: Festivo[]
   ): ResultadoNomina;

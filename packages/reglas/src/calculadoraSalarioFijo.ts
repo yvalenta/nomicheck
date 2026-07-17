@@ -19,22 +19,35 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     const advertencias: string[] = [];
     const lineas: LineaResultado[] = [];
 
+    // Aprendizaje SENA (Ley 789 de 2002, art. 30): sigue siendo salario fijo
+    // con horario, pero el devengo base no es "salario" sino auxilio de
+    // sostenimiento, y las deducciones de ley cambian según la etapa.
+    const esAprendiz = d.tipoContrato?.startsWith("aprendizaje_sena");
+    const alcanceDeduccionesLey =
+      d.tipoContrato === "aprendizaje_sena_lectiva"
+        ? "ninguno"
+        : d.tipoContrato === "aprendizaje_sena_practica"
+          ? "solo_salud"
+          : "completo";
+
     // IBC: salario básico. Los devengos extralegales declarados no afectan
     // el IBC salvo que el usuario los marque salariales — v1 no ofrece esa
     // marca todavía, así que se excluyen siempre.
     const ibc = d.salarioBasicoMensual;
 
     lineas.push({
-      concepto: "Salario básico",
+      concepto: esAprendiz ? "Auxilio de sostenimiento" : "Salario básico",
       base: redondearPeso(d.salarioBasicoMensual),
       valorCalculado: redondearPeso(d.salarioBasicoMensual),
       tipo: "devengo",
-      ley: "Contrato de trabajo",
+      ley: esAprendiz ? "Ley 789 de 2002, art. 30" : "Contrato de trabajo",
     });
 
     // Auxilio de transporte: mismo helper que el modo turnos (antes este
-    // modo ignoraba recibeAuxilioTransporte por completo — asimetría).
-    if (d.recibeAuxilioTransporte) {
+    // modo ignoraba recibeAuxilioTransporte por completo — asimetría). Los
+    // aprendices SENA no tienen derecho (su auxilio de sostenimiento no es
+    // salario).
+    if (d.recibeAuxilioTransporte && !esAprendiz) {
       const diasPeriodo = Math.min(rangoFechas(d.periodoDesde, d.periodoHasta).length, DIAS_MES_COMERCIAL);
       const auxilio = calcularAuxilioTransporte(
         d.salarioBasicoMensual,
@@ -53,7 +66,8 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       d.salarioBasicoMensual,
       ibc,
       reglas,
-      d.periodoDesde
+      d.periodoDesde,
+      { alcanceDeduccionesLey }
     );
     lineas.push(...lineasDeduccionLey);
     advertencias.push(...advertenciasLey);
