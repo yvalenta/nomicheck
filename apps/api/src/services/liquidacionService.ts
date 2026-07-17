@@ -1,4 +1,5 @@
 import { CalculadoraPorTurnos, CalculadoraSalarioFijo, type DatosNominaTurnos } from "@pv/reglas";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
 import { obtenerPeriodo } from "./periodosService.js";
@@ -61,8 +62,9 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
       empleadoId: empleado.id,
       periodoId,
       // Prisma tipa `Json` como InputJsonValue; LineaResultado[] es JSON
-      // válido pero no estructuralmente compatible sin este round-trip.
-      lineas: JSON.parse(JSON.stringify(resultado.lineas)),
+      // plano (solo strings/números/undefined opcionales) — el cast evita
+      // el round-trip por JSON.parse(JSON.stringify()).
+      lineas: resultado.lineas as unknown as Prisma.InputJsonValue,
       totalDevengado: resultado.totalDevengos,
       totalDeducido: resultado.totalDeducciones,
       neto: resultado.netoEsperado,

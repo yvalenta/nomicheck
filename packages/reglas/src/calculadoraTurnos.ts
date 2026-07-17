@@ -9,6 +9,7 @@ import type {
 import { crearResolutorReglas, diaSemana, esDomingo, esFechaValida, rangoFechas, validarPeriodo } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
+import { ensamblarResultado } from "./ensamblarResultado.js";
 import { calcularAuxilioTransporte } from "./auxilio.js";
 import {
   DIAS_MES_COMERCIAL,
@@ -405,16 +406,15 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     lineas.push(...lineasDeduccion);
     advertencias.push(...advertenciasDeducciones);
 
-    return {
+    return ensamblarResultado({
       modo: "turnos",
       periodoDesde: d.periodoDesde,
       periodoHasta: d.periodoHasta,
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
-      totalDevengos,
-      totalDeducciones,
-      netoEsperado: redondearPeso(totalDevengos - totalDeducciones),
       advertencias,
-    };
+      // Las deducciones ya vienen totalizadas con topes aplicados.
+      totalDeducciones,
+    });
   },
 };

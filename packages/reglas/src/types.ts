@@ -51,7 +51,15 @@ export interface DatosNominaTurnos {
   // Embargo judicial mensual (ordinario CST art. 154-155, o alimentos/
   // cooperativa art. 156). Se prorratea por días del periodo y se limita al
   // tope legal de cada régimen — ver deducciones.ts, limiteEmbargo().
-  descuentoJudicial?: { tipo: "ordinario" | "alimentos_o_cooperativa"; valorMensual: number };
+  descuentoJudicial?: DescuentoJudicial;
+}
+
+export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
+
+export interface DescuentoJudicial {
+  tipo: TipoEmbargo;
+  /** Monto mensual ordenado por el juzgado/entidad. */
+  valorMensual: number;
 }
 
 // Entrada para el modo salario fijo

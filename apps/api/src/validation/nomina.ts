@@ -1,11 +1,5 @@
 import { z } from "zod";
-import { esFechaValida } from "@pv/reglas";
-
-const fecha = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)")
-  .refine(esFechaValida, "Fecha inexistente en el calendario");
-const horaHHmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:mm)");
+import { fecha, horaHHmm } from "./comunes.js";
 
 const horarioDia = z.object({
   horaInicio: horaHHmm,

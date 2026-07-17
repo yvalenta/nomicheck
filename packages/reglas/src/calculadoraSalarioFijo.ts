@@ -1,6 +1,7 @@
-import type { CalculadoraNomina, DatosNominaFija, LineaResultado } from "./types.js";
+import type { CalculadoraNomina, ConceptoNomina, DatosNominaFija, LineaResultado } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
+import { ensamblarResultado } from "./ensamblarResultado.js";
 import { calcularAuxilioTransporte } from "./auxilio.js";
 import { rangoFechas, validarPeriodo } from "./utils.js";
 import { DIAS_MES_COMERCIAL } from "./constantes.js";
@@ -60,8 +61,17 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     // Conceptos declarados por el usuario o extraídos del comprobante:
     // devengos extralegales y deducciones por convenio se suman tal cual,
     // sin recalcularlos.
+    // Mapa explícito en vez de startsWith("devengo"): si se agrega un tipo
+    // de concepto nuevo, el compilador obliga a clasificarlo aquí.
+    const clasificacion = {
+      "devengo-legal": "devengo",
+      "devengo-extralegal": "devengo",
+      "deduccion-legal": "deduccion",
+      "deduccion-convenio": "deduccion",
+    } satisfies Record<ConceptoNomina["tipo"], LineaResultado["tipo"]>;
+
     for (const c of d.conceptos) {
-      const tipo = c.tipo.startsWith("devengo") ? "devengo" : "deduccion";
+      const tipo = clasificacion[c.tipo];
       lineas.push({
         concepto: c.nombre,
         base: c.base !== undefined ? redondearPeso(c.base) : undefined,
@@ -77,23 +87,13 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       }
     }
 
-    const totalDevengos = redondearPeso(
-      lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
-    );
-    const totalDeducciones = redondearPeso(
-      lineas.filter((l) => l.tipo === "deduccion").reduce((s, l) => s + l.valorCalculado, 0)
-    );
-
-    return {
+    return ensamblarResultado({
       modo: "salario-fijo",
       periodoDesde: d.periodoDesde,
       periodoHasta: d.periodoHasta,
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
-      totalDevengos,
-      totalDeducciones,
-      netoEsperado: redondearPeso(totalDevengos - totalDeducciones),
       advertencias,
-    };
+    });
   },
 };

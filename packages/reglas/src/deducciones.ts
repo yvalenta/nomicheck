@@ -1,4 +1,4 @@
-import type { LineaResultado, ReglaLegal } from "./types.js";
+import type { DescuentoJudicial, LineaResultado, ReglaLegal, TipoEmbargo } from "./types.js";
 import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { TABLA_FONDO_SOLIDARIDAD } from "./constantes.js";
@@ -66,13 +66,8 @@ export interface ResultadoDeducciones {
   advertencias: string[];
 }
 
-export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
-
-export interface DescuentoJudicial {
-  tipo: TipoEmbargo;
-  /** Monto que ordena el juzgado/entidad para el periodo (ya prorrateado por el llamador). */
-  valorMensual: number;
-}
+// TipoEmbargo/DescuentoJudicial viven en types.ts (los usa también la
+// entrada del motor DatosNominaTurnos) — el barrel los exporta desde allá.
 
 // Deducciones por convenio: monto fijo autorizado por el trabajador, NO
 // afectan el IBC de salud/pensión (a diferencia del embargo, comparten el

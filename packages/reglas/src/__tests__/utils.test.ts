@@ -4,9 +4,7 @@ import {
   esDomingo,
   esFechaValida,
   crearResolutorReglas,
-  esLunes,
   finDePeriodoMensual,
-  horasEntre,
   rangoFechas,
   reglaEn,
 } from "../utils.js";
@@ -89,7 +87,6 @@ describe("calendario", () => {
   it("identifica correctamente domingos y lunes del periodo Resplandor", () => {
     const fechas = rangoFechas("2026-06-16", "2026-06-30");
     expect(fechas.filter(esDomingo)).toEqual(["2026-06-21", "2026-06-28"]);
-    expect(fechas.filter(esLunes)).toEqual(["2026-06-22", "2026-06-29"]);
   });
 
   it("diaSemana devuelve 0 para domingo y 1 para lunes", () => {
@@ -137,13 +134,3 @@ describe("finDePeriodoMensual", () => {
   });
 });
 
-describe("horasEntre", () => {
-  it("calcula horas dentro del mismo día", () => {
-    expect(horasEntre("10:00", "17:00")).toBe(7);
-    expect(horasEntre("10:00", "16:00")).toBe(6);
-  });
-
-  it("calcula horas cuando el turno cruza medianoche", () => {
-    expect(horasEntre("22:00", "02:00")).toBe(4);
-  });
-});

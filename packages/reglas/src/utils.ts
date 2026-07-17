@@ -105,33 +105,6 @@ export function esDomingo(fecha: string): boolean {
   return diaSemana(fecha) === 0;
 }
 
-export function esLunes(fecha: string): boolean {
-  return diaSemana(fecha) === 1;
-}
-
-// Horas entre dos strings HH:mm (puede cruzar medianoche)
-export function horasEntre(inicio: string, fin: string): number {
-  const [hi, mi] = inicio.split(":").map(Number);
-  const [hf, mf] = fin.split(":").map(Number);
-  let minutos = hf * 60 + mf - (hi * 60 + mi);
-  if (minutos < 0) minutos += 24 * 60;
-  return minutos / 60;
-}
-
-// Horas de un intervalo que caen en jornada nocturna (19:00–06:00)
-export function horasNocturnas(inicio: string, fin: string): number {
-  // Simplificación para v1: turno dentro del mismo día diurno no tiene nocturnas
-  const [hi] = inicio.split(":").map(Number);
-  const [hf] = fin.split(":").map(Number);
-  if (hi >= 6 && hf <= 19) return 0;
-  // Para turnos que sí cruzan las 19h o el amanecer, calcular tramo nocturno
-  const totalMin = horasEntre(inicio, fin) * 60;
-  const nocturnaMin =
-    Math.max(0, (hf <= 6 ? hf + 24 : hf) * 60 - 19 * 60) +
-    Math.max(0, 6 * 60 - hi * 60);
-  return Math.min(nocturnaMin, totalMin) / 60;
-}
-
 // Fecha fin de un periodo "mensual" a partir de la fecha de inicio: mismo
 // día del mes siguiente, menos 1 día. Si el mes siguiente no tiene ese día
 // (ej. iniciar el 31 y el mes siguiente tiene 30 o menos — o particularmente
