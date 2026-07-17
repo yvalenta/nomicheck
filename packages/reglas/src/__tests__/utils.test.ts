@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { diaSemana, esDomingo, esLunes, horasEntre, rangoFechas, reglaEn } from "../utils.js";
+import {
+  diaSemana,
+  esDomingo,
+  esLunes,
+  finDePeriodoMensual,
+  horasEntre,
+  rangoFechas,
+  reglaEn,
+} from "../utils.js";
 import { REGLAS_JUL_2026 } from "./fixtures.js";
 
 describe("reglaEn", () => {
@@ -42,6 +50,45 @@ describe("calendario", () => {
   it("diaSemana devuelve 0 para domingo y 1 para lunes", () => {
     expect(diaSemana("2026-06-21")).toBe(0);
     expect(diaSemana("2026-06-22")).toBe(1);
+  });
+
+  it("incluye el 29 de febrero en un año bisiesto y lo omite en uno normal", () => {
+    // 2028 es bisiesto (divisible por 4, no por 100) — 2026 no lo es. El
+    // motor de nómina depende de rangoFechas para todo (salario
+    // proporcional, festivos, recargos): si esto fallara, un periodo que
+    // cruce fin de febrero en año bisiesto cobraría o pagaría un día de más
+    // o de menos.
+    expect(rangoFechas("2028-02-27", "2028-03-01")).toEqual([
+      "2028-02-27",
+      "2028-02-28",
+      "2028-02-29",
+      "2028-03-01",
+    ]);
+    expect(rangoFechas("2026-02-27", "2026-03-01")).toEqual([
+      "2026-02-27",
+      "2026-02-28",
+      "2026-03-01",
+    ]);
+  });
+});
+
+describe("finDePeriodoMensual", () => {
+  it("un periodo mensual que inicia el 1 de febrero termina el último día real de febrero (28 o 29)", () => {
+    expect(finDePeriodoMensual("2028-02-01")).toBe("2028-02-29"); // bisiesto
+    expect(finDePeriodoMensual("2026-02-01")).toBe("2026-02-28"); // normal
+  });
+
+  it("un día del mes que no existe en el mes siguiente se ajusta al último día de ese mes (no desborda al subsiguiente)", () => {
+    // Antes de este fix, 31-ene terminaba dando 1 o 2 de MARZO (Date
+    // desbordaba el día 31 sobre un febrero más corto) en vez de fin de
+    // febrero — este caso además se agrava o se corrige según el año sea
+    // bisiesto, que es justamente el escenario a blindar.
+    expect(finDePeriodoMensual("2026-01-31")).toBe("2026-02-27");
+    expect(finDePeriodoMensual("2028-01-31")).toBe("2028-02-28");
+  });
+
+  it("un periodo mensual normal (día que existe en ambos meses) resta 1 día al mismo día del mes siguiente", () => {
+    expect(finDePeriodoMensual("2026-06-16")).toBe("2026-07-15");
   });
 });
 

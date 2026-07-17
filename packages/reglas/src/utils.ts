@@ -69,6 +69,27 @@ export function horasNocturnas(inicio: string, fin: string): number {
   return Math.min(nocturnaMin, totalMin) / 60;
 }
 
+// Fecha fin de un periodo "mensual" a partir de la fecha de inicio: mismo
+// día del mes siguiente, menos 1 día. Si el mes siguiente no tiene ese día
+// (ej. iniciar el 31 y el mes siguiente tiene 30 o menos — o particularmente
+// febrero, con 28 o 29 según sea año bisiesto), se usa el ÚLTIMO día del mes
+// siguiente en vez de dejar que `Date` desborde al mes subsiguiente
+// (bug real: sin este clamp, 31-ene terminaba dando 1 o 2 de MARZO en vez
+// de fin de febrero). El año bisiesto se resuelve solo (Date.UTC(año, mes, 0)
+// conoce el calendario real), por eso "iniciar el 1 de febrero" ya daba bien
+// 28/29 de febrero incluso sin este fix — el bug solo aparecía en los días
+// 29/30/31 de un mes cuando el mes siguiente es más corto.
+export function finDePeriodoMensual(desde: string): string {
+  const d = new Date(`${desde}T00:00:00Z`);
+  const anio = d.getUTCFullYear();
+  const mes = d.getUTCMonth();
+  const dia = d.getUTCDate();
+  const ultimoDiaMesSiguiente = new Date(Date.UTC(anio, mes + 2, 0)).getUTCDate();
+  const fin = new Date(Date.UTC(anio, mes + 1, Math.min(dia, ultimoDiaMesSiguiente)));
+  fin.setUTCDate(fin.getUTCDate() - 1);
+  return fin.toISOString().slice(0, 10);
+}
+
 export function formatCOP(valor: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",

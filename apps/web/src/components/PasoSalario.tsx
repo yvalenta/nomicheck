@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Wallet,
 } from "lucide-react";
+import { finDePeriodoMensual } from "@pv/reglas";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 
@@ -52,13 +53,10 @@ const PERIODICIDAD_LABEL: Record<Periodicidad, string> = {
 // usuario puede editarla libremente después (eso la pasa a "personalizado").
 function calcularHasta(desde: string, periodicidad: Periodicidad): string {
   if (!desde || periodicidad === "personalizado") return "";
+  if (periodicidad === "mensual") return finDePeriodoMensual(desde);
   const d = new Date(`${desde}T00:00:00Z`);
   if (periodicidad === "semanal") d.setUTCDate(d.getUTCDate() + 6);
-  else if (periodicidad === "quincenal") d.setUTCDate(d.getUTCDate() + 14);
-  else {
-    d.setUTCMonth(d.getUTCMonth() + 1);
-    d.setUTCDate(d.getUTCDate() - 1);
-  }
+  else d.setUTCDate(d.getUTCDate() + 14); // quincenal
   return d.toISOString().slice(0, 10);
 }
 
