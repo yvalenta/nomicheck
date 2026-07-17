@@ -22,6 +22,14 @@ describe("reglaEn", () => {
   it("lanza error si no hay regla vigente para la fecha", () => {
     expect(() => reglaEn(REGLAS_JUL_2026, "recargo_dominical", "2000-01-01")).toThrow();
   });
+
+  it("sigue devolviendo la regla vigente (90%) meses después del corte, sin necesidad de vigenteHasta nulo", () => {
+    // La regla del 90% tiene vigenteHasta: "2027-06-30" (no null) porque la
+    // Ley 2466 ya programó el siguiente escalón al 100% — reglaEn no
+    // necesita un valor "abierto" para que una regla siga vigente, solo que
+    // la fecha consultada caiga dentro de [vigenteDesde, vigenteHasta].
+    expect(reglaEn(REGLAS_JUL_2026, "recargo_dominical", "2026-12-31")).toBe(0.9);
+  });
 });
 
 describe("calendario", () => {
