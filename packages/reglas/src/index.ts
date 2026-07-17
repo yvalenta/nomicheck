@@ -6,5 +6,6 @@ export * from "./catalogoReglas.js";
 export * from "./deducciones.js";
 export * from "./auxilio.js";
 export * from "./ensamblarResultado.js";
+export * from "./prestaciones.js";
 export * from "./calculadoraTurnos.js";
 export * from "./calculadoraSalarioFijo.js";

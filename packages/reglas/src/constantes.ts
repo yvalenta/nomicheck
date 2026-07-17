@@ -72,6 +72,25 @@ export const TABLA_FONDO_SOLIDARIDAD: { desdeSmlmv: number; pct: number }[] = [
   { desdeSmlmv: 20, pct: 0.02 },
 ];
 
+// --- Prestaciones sociales (año comercial de 360 días, CST) ---
+//
+// El "año comercial" de 360 días (12 meses de 30) es una convención legal
+// fija: NO es el año calendario. Un año bisiesto (2028: 366 días reales) no
+// altera ninguna de estas fórmulas — verificado con test dedicado en
+// prestaciones.test.ts.
+
+/** Año comercial: 12 meses de 30 días, base de cesantías/intereses/vacaciones. CST art. 249, 235. */
+export const DIAS_ANO_COMERCIAL = 360;
+
+/** Intereses sobre cesantías: 12% anual sobre el valor de las cesantías causadas. Ley 52 de 1975, art. 1. */
+export const PCT_INTERES_CESANTIAS = 0.12;
+
+/** Vacaciones: 15 días hábiles por año de servicio ⇒ divisor 720 (2×360) sobre el salario. CST art. 186. */
+export const DIVISOR_VACACIONES = 720;
+
+/** Prima de servicios: tope de 180 días por semestre (jun/dic), aunque el semestre calendario tenga más. CST art. 306, mod. Ley 1788 de 2016. */
+export const DIAS_MAX_SEMESTRE_PRIMA = 180;
+
 // --- Redondeo monetario ---
 
 // El peso colombiano no circula con fracciones (no hay centavos en la

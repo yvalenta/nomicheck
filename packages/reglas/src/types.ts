@@ -99,8 +99,44 @@ export interface LineaResultado {
   base?: number;
   recargoPct?: number;
   valorCalculado: number;
-  tipo: "devengo" | "deduccion";
+  // "provision": pasivo del empleador (cesantías/intereses/prima/vacaciones
+  // provisionadas este periodo) — se lista en el recibo pero NO es dinero
+  // que el colaborador reciba hoy, por eso ensamblarResultado la excluye de
+  // totalDevengos/totalDeducciones/netoEsperado.
+  tipo: "devengo" | "deduccion" | "provision";
   ley?: string; // referencia legal (ej. "Ley 2466 de 2025, art. 2")
+}
+
+// --- Prestaciones sociales (cesantías, intereses, prima, vacaciones) ---
+// Cálculo independiente de las dos calculadoras Strategy: no es por periodo
+// de pago sino de provisión/liquidación sobre el tiempo servido.
+
+/** Devengo mensual real, usado cuando el salario varía (comisiones, horas extra habituales) — CST art. 253. */
+export interface DevengoMensual {
+  mes: string; // YYYY-MM
+  valor: number;
+}
+
+export interface DatosPrestaciones {
+  fechaIngreso: string; // YYYY-MM-DD
+  fechaCorte: string; // YYYY-MM-DD — fin del periodo a provisionar/liquidar
+  /** Salario fijo mensual. Ignorado si se pasa `devengosVariables`. */
+  salarioBase: number;
+  /** Últimos meses devengados si el salario varía — promedio de estos (o del tiempo servido si es menor a 12). */
+  devengosVariables?: DevengoMensual[];
+  /** Monto mensual vigente del auxilio de transporte. Solo afecta la base de cesantías (Ley 15 de 1959, art. 7) — NO prima ni vacaciones. */
+  auxilioTransporte?: number;
+  /** Fechas (YYYY-MM-DD) excluidas del conteo por suspensión disciplinaria o licencia no remunerada — interrumpen el contrato para efecto de estas 4 prestaciones. */
+  diasSuspension?: string[];
+}
+
+export interface ResultadoPrestaciones {
+  diasTrabajadosAcumulado: number;
+  cesantias: number;
+  interesesCesantias: number;
+  prima: number;
+  vacaciones: number;
+  advertencias: string[];
 }
 
 // Interfaz Strategy — las dos calculadoras implementan esto
