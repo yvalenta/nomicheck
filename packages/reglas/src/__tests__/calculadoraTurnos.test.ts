@@ -116,6 +116,44 @@ describe("CalculadoraPorTurnos — novedades", () => {
     expect(recargo?.horas).toBe(18); // 12 h de domingos + 6 h del festivo
   });
 
+  it("ausentismo no remunerado (Regla 2): el salario básico NUNCA se reduce en silencio — se agrega una línea de deducción explícita", () => {
+    const conAusencia = CalculadoraPorTurnos.calcular(
+      datosBase({
+        novedades: [
+          { fecha: "2026-06-17", trabajo: false, remunerada: false },
+          { fecha: "2026-06-18", trabajo: false, remunerada: false },
+        ],
+      }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    const sinAusencia = CalculadoraPorTurnos.calcular(datosBase(), REGLAS_JUL_2026, FESTIVOS_2026);
+
+    const salarioBase = conAusencia.lineas.find((l) => l.concepto.startsWith("Salario básico"));
+    // El salario básico sigue mostrando el pactado completo para los 15 días
+    // del periodo — idéntico al caso sin ausencias.
+    expect(salarioBase?.valorCalculado).toBe(
+      sinAusencia.lineas.find((l) => l.concepto.startsWith("Salario básico"))?.valorCalculado
+    );
+
+    const ajuste = conAusencia.lineas.find((l) => l.concepto.startsWith("Ajuste por ausentismo"));
+    expect(ajuste?.tipo).toBe("deduccion");
+    expect(ajuste?.concepto).toBe("Ajuste por ausentismo (2 días no remunerados)");
+    expect(ajuste?.valorCalculado).toBe(116727); // (1.750.905 / 30) × 2 días
+
+    // El neto SÍ refleja la ausencia — la resta es visible, no silenciosa.
+    expect(sinAusencia.netoEsperado - conAusencia.netoEsperado).toBe(116727);
+  });
+
+  it("una novedad trabajo=false SIN remunerada:false (descanso normal) no genera ningún ajuste de ausentismo", () => {
+    const resultado = CalculadoraPorTurnos.calcular(
+      datosBase({ novedades: [{ fecha: "2026-06-17", trabajo: false }] }),
+      REGLAS_JUL_2026,
+      FESTIVOS_2026
+    );
+    expect(resultado.lineas.some((l) => l.concepto.startsWith("Ajuste por ausentismo"))).toBe(false);
+  });
+
   it("lanza error si la novedad dice trabajo=true sin horas", () => {
     expect(() =>
       CalculadoraPorTurnos.calcular(

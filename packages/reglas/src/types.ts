@@ -31,9 +31,16 @@ export interface HorarioDia {
 
 export interface NovedadDia {
   fecha: string; // YYYY-MM-DD
-  trabajo: boolean; // false = ese día no trabajó (descanso, permiso)
+  trabajo: boolean; // false = ese día no trabajó (descanso, permiso, ausentismo)
   horaInicio?: string; // requeridas cuando trabajo=true
   horaFin?: string;
+  // Solo aplica cuando trabajo=false: descanso/permiso remunerado (default,
+  // ej. descanso dominical) vs ausentismo NO remunerado (incapacidad no
+  // reconocida, inasistencia injustificada, etc.). El motor NUNCA reduce en
+  // silencio el "Salario básico" del periodo — si hay días no remunerados,
+  // agrega una línea de deducción explícita ("Regla 2": transparencia en
+  // ausentismos, ver calculadoraTurnos.ts).
+  remunerada?: boolean;
 }
 
 export interface DatosNominaTurnos {

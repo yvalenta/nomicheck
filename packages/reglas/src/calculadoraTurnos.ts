@@ -241,6 +241,26 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       ley: esAprendiz ? "Ley 789 de 2002, art. 30" : "Contrato de trabajo; CST art. 127",
     });
 
+    // Transparencia en ausentismos: el salario básico de arriba SIEMPRE
+    // muestra el pactado completo para los días del periodo — nunca se
+    // reduce en silencio. Si hubo días no trabajados y explícitamente
+    // marcados como no remunerados, se resta con su propia línea visible.
+    const diasAusenciaNoRemunerada = d.novedades.filter(
+      (n) => !n.trabajo && n.remunerada === false && n.fecha >= d.periodoDesde && n.fecha <= d.periodoHasta
+    ).length;
+    const valorAusentismo = redondearPeso(
+      (d.salarioBasicoMensual / DIAS_MES_COMERCIAL) * diasAusenciaNoRemunerada
+    );
+    if (diasAusenciaNoRemunerada > 0) {
+      lineas.push({
+        concepto: `Ajuste por ausentismo (${diasAusenciaNoRemunerada} día${diasAusenciaNoRemunerada === 1 ? "" : "s"} no remunerado${diasAusenciaNoRemunerada === 1 ? "" : "s"})`,
+        base: redondearPeso(d.salarioBasicoMensual),
+        valorCalculado: valorAusentismo,
+        tipo: "deduccion",
+        ley: "CST art. 140 (a contrario) — el ausentismo no remunerado no genera derecho al salario de esos días",
+      });
+    }
+
     for (const diasTramo of tramos.values()) {
       const fechaRef = diasTramo[0].fecha;
       const divisor = r.en("divisor_hora_ordinaria", fechaRef);
@@ -364,8 +384,10 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     }
 
     // IBC = devengado salarial acumulado hasta aquí; el auxilio de transporte
-    // NO hace base para salud/pensión.
-    const ibc = lineas.reduce((s, l) => s + l.valorCalculado, 0);
+    // NO hace base para salud/pensión. Filtra por tipo "devengo" explícito
+    // (no solo lo acumulado hasta aquí): el ajuste por ausentismo de arriba
+    // ya es una línea "deduccion" en `lineas` y no debe sumarse aquí.
+    const ibc = lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0);
 
     if (d.recibeAuxilioTransporte && !esAprendiz) {
       const auxilio = calcularAuxilioTransporte(
@@ -423,8 +445,10 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
       advertencias,
-      // Las deducciones ya vienen totalizadas con topes aplicados.
-      totalDeducciones,
+      // Las deducciones ya vienen totalizadas con topes aplicados; se suma
+      // el ajuste por ausentismo (no pasa por aplicarDeducciones — no tiene
+      // tope legal, es simplemente el pago de los días no remunerados).
+      totalDeducciones: redondearPeso(totalDeducciones + valorAusentismo),
     });
   },
 };

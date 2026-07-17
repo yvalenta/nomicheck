@@ -12,6 +12,9 @@ const novedadDia = z
     trabajo: z.boolean(),
     horaInicio: horaHHmm.optional(),
     horaFin: horaHHmm.optional(),
+    // Solo aplica cuando trabajo=false — ver NovedadDia en @pv/reglas (Regla
+    // 2: transparencia en ausentismos, nunca reducir el salario en silencio).
+    remunerada: z.boolean().optional(),
   })
   .refine((n) => !n.trabajo || (n.horaInicio && n.horaFin), {
     message: "Una novedad con trabajo=true requiere horaInicio y horaFin",

@@ -3,6 +3,7 @@ import {
   Banknote,
   Bus,
   CalendarDays,
+  CalendarX,
   HandCoins,
   HeartPulse,
   Moon,
@@ -20,6 +21,7 @@ function iconoDe(concepto: string): LucideIcon {
   if (concepto.startsWith("Hora extra dominical")) return CalendarDays;
   if (concepto.startsWith("Hora extra")) return Sunrise;
   if (concepto.startsWith("Auxilio")) return Bus;
+  if (concepto.startsWith("Ajuste por ausentismo")) return CalendarX;
   if (concepto.startsWith("Salud")) return HeartPulse;
   if (concepto.startsWith("Pensión")) return PiggyBank;
   if (concepto.startsWith("Fondo")) return HandCoins;
