@@ -26,7 +26,14 @@ import {
   revertir,
   recibos,
 } from "../controllers/periodosController.js";
-import { misRecibos, reportar } from "../controllers/colaboradorController.js";
+import {
+  aceptar,
+  misEmpresas,
+  misInvitaciones,
+  misRecibos,
+  rechazar,
+  reportar,
+} from "../controllers/colaboradorController.js";
 import {
   listarReglas,
   crearRegla,
@@ -127,6 +134,13 @@ router.put("/empresa/discrepancias/:id", ...soloEmpresa, responderDiscrepancia);
 const soloColaborador = [requiereAuth, requiereRol("colaborador")];
 router.get("/colaborador/recibos", ...soloColaborador, misRecibos);
 router.post("/colaborador/recibos/:id/reportar", ...soloColaborador, reportar);
+// Invitaciones (notificaciones in-app) e historial de empresas de la cuenta —
+// operan sobre el Usuario, no sobre el empleado activo (un colaborador libre
+// entre empresas puede tener invitaciones pendientes sin empleado activo).
+router.get("/colaborador/invitaciones", ...soloColaborador, misInvitaciones);
+router.post("/colaborador/invitaciones/:id/aceptar", ...soloColaborador, aceptar);
+router.post("/colaborador/invitaciones/:id/rechazar", ...soloColaborador, rechazar);
+router.get("/colaborador/empresas", ...soloColaborador, misEmpresas);
 
 // Panel admin de reglas legales (Fase 8) — rol de plataforma, no de empresa.
 // No hay auto-registro público: el primer admin_plataforma se crea a mano

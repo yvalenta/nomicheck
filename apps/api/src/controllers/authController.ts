@@ -29,8 +29,8 @@ export async function invitar(req: Request, res: Response) {
   }
   const empleadoId = Number(req.params.id);
   try {
-    await invitarColaborador(empleadoId, parseo.data.email);
-    res.status(201).json({ ok: true });
+    const resultado = await invitarColaborador(empleadoId, parseo.data.email);
+    res.status(201).json(resultado);
   } catch (err) {
     if (err instanceof ErrorConflicto) {
       res.status(409).json({ error: err.message });

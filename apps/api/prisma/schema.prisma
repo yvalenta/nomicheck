@@ -31,11 +31,19 @@ model Festivo {
 model Usuario {
   id        String  @id @db.Uuid
   nombre    String
+  // Correo denormalizado desde Supabase Auth (allí viven las credenciales) —
+  // permite buscar la cuenta por correo al invitar sin paginar todo Auth.
+  email     String? @unique
   rol       String // admin_plataforma | admin_empresa | colaborador
+  // Empresa activa actual (puntero denormalizado). Null = sin empresa: recién
+  // registrado admin_plataforma, o colaborador libre entre empresas.
   empresaId Int?
   empresa   Empresa? @relation(fields: [empresaId], references: [id])
 
-  empleado          Empleado?           @relation("EmpleadoUsuario")
+  // Una cuenta se liga a varios Empleado a lo largo del tiempo (historial de
+  // empresas) — solo uno "activo aceptado" a la vez (índice único parcial en
+  // la migración). Ver invitacionAceptadaEn en Empleado.
+  empleados         Empleado[]          @relation("EmpleadoUsuario")
   reportes          ReporteDiscrepancia[]
   creadoEn          DateTime            @default(now())
 
@@ -59,8 +67,15 @@ model Empleado {
   id                Int      @id @default(autoincrement())
   empresaId         Int
   empresa           Empresa  @relation(fields: [empresaId], references: [id])
-  usuarioId         String?  @unique @db.Uuid
+  // FK a la cuenta que reclama este registro. NO es único: una cuenta puede
+  // aparecer en varios Empleado (distintas empresas / épocas). La unicidad
+  // "una empresa activa por cuenta" la impone un índice parcial en la migración.
+  usuarioId         String?  @db.Uuid
   usuario           Usuario? @relation("EmpleadoUsuario", fields: [usuarioId], references: [id])
+  // Null con usuarioId seteado = invitación PENDIENTE (cuenta existente aún sin
+  // aceptar). Con fecha = ACEPTADA (o vínculo directo de cuenta nueva). Doble
+  // uso como auditoría de cuándo se unió.
+  invitacionAceptadaEn DateTime?
   nombre            String
   documento         String
   salarioBase       Float

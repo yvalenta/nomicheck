@@ -34,6 +34,7 @@ export async function registrarEmpresa(datos: z.infer<typeof registroSchema>) {
       data: {
         id: authData.user.id,
         nombre: datos.nombre,
+        email: datos.email,
         rol: "admin_empresa",
         empresaId: empresa.id,
       },
@@ -47,15 +48,46 @@ export async function registrarEmpresa(datos: z.infer<typeof registroSchema>) {
   }
 }
 
-// Genera la invitación nativa de Supabase Auth ligada a un Empleado — el
-// colaborador define su propia contraseña al aceptar (SDD.md §08).
-export async function invitarColaborador(empleadoId: number, email: string) {
+export type ResultadoInvitacion =
+  // Cuenta nueva: se creó vía correo de Supabase y quedó unida (sin paso de aceptar).
+  | { estado: "correo_enviado" }
+  // Cuenta existente y libre: vínculo pendiente, le aparece como notificación in-app.
+  | { estado: "pendiente_en_app" };
+
+// Vincula un Empleado con una cuenta por correo (SDD.md §08). Tres caminos:
+//   - correo sin cuenta  → invitación nativa de Supabase + vínculo aceptado (unido).
+//   - cuenta existente libre → vínculo PENDIENTE (notificación in-app, la acepta el colaborador).
+//   - cuenta existente ya activa en otra empresa → se bloquea (409).
+export async function invitarColaborador(empleadoId: number, email: string): Promise<ResultadoInvitacion> {
   const empleado = await prisma.empleado.findUnique({ where: { id: empleadoId } });
   if (!empleado) throw new Error("Empleado no encontrado");
   if (empleado.usuarioId) throw new Error("Este empleado ya tiene una cuenta vinculada");
 
+  const cuenta = await prisma.usuario.findUnique({ where: { email } });
+
+  if (cuenta) {
+    // ¿Ya tiene una membresía activa aceptada en otra empresa? → bloquear.
+    const activa = await prisma.empleado.findFirst({
+      where: { usuarioId: cuenta.id, activo: true, invitacionAceptadaEn: { not: null } },
+    });
+    if (activa) {
+      throw new ErrorConflicto(
+        "Este correo ya pertenece a otra empresa activa en NomiCheck. La persona debe retirarse de ella antes de unirse a otra."
+      );
+    }
+    // Cuenta libre: vínculo pendiente, sin correo — le llega como notificación.
+    await prisma.empleado.update({
+      where: { id: empleadoId },
+      data: { usuarioId: cuenta.id, invitacionAceptadaEn: null },
+    });
+    return { estado: "pendiente_en_app" };
+  }
+
+  // Sin cuenta: invitación nativa de Supabase (define su contraseña por correo) y
+  // queda unido de una (aceptación implícita — decisión del usuario para cuentas nuevas).
   const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
   if (esCorreoDuplicado(error)) {
+    // Existe en Auth pero no en nuestra tabla (cuenta huérfana): tratamos como conflicto.
     throw new ErrorConflicto("Este correo ya tiene una cuenta en NomiCheck. Verifica que sea la persona correcta.");
   }
   if (error || !data.user) {
@@ -63,9 +95,12 @@ export async function invitarColaborador(empleadoId: number, email: string) {
   }
 
   await prisma.usuario.create({
-    data: { id: data.user.id, nombre: empleado.nombre, rol: "colaborador", empresaId: empleado.empresaId },
+    data: { id: data.user.id, nombre: empleado.nombre, email, rol: "colaborador", empresaId: empleado.empresaId },
   });
-  await prisma.empleado.update({ where: { id: empleadoId }, data: { usuarioId: data.user.id } });
+  await prisma.empleado.update({
+    where: { id: empleadoId },
+    data: { usuarioId: data.user.id, invitacionAceptadaEn: new Date() },
+  });
 
-  return data.user;
+  return { estado: "correo_enviado" };
 }

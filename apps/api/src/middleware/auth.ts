@@ -37,18 +37,25 @@ export async function requiereAuth(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  const perfil = await prisma.usuario.findUnique({ where: { id: data.user.id }, include: { empleado: true } });
+  const perfil = await prisma.usuario.findUnique({ where: { id: data.user.id } });
   if (!perfil) {
     res.status(403).json({ error: "El usuario no tiene un perfil en NomiCheck" });
     return;
   }
+
+  // usuarioId ya no es único (una cuenta puede tener varios Empleado: historial
+  // + invitaciones pendientes). El empleado "actual" es el activo y aceptado.
+  const empleadoActivo = await prisma.empleado.findFirst({
+    where: { usuarioId: perfil.id, activo: true, invitacionAceptadaEn: { not: null } },
+    select: { id: true },
+  });
 
   req.usuario = {
     id: perfil.id,
     nombre: perfil.nombre,
     rol: perfil.rol,
     empresaId: perfil.empresaId,
-    empleadoId: perfil.empleado?.id ?? null,
+    empleadoId: empleadoActivo?.id ?? null,
   };
   next();
 }

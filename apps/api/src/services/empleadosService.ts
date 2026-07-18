@@ -57,8 +57,20 @@ export async function retirarEmpleado(
   if (datos.fechaRetiro < empleado.fechaIngreso) {
     throw new Error("La fecha de retiro no puede ser anterior a la fecha de ingreso");
   }
-  return prisma.empleado.update({
-    where: { id: empleadoId },
-    data: { fechaRetiro: datos.fechaRetiro, activo: false },
+  return prisma.$transaction(async (tx) => {
+    const actualizado = await tx.empleado.update({
+      where: { id: empleadoId },
+      data: { fechaRetiro: datos.fechaRetiro, activo: false },
+    });
+    // Si este empleado era la membresía activa de una cuenta, la cuenta queda
+    // LIBRE (Usuario.empresaId = null) para poder ser invitada por otra empresa
+    // — el Empleado retirado permanece con su usuarioId como historial.
+    if (empleado.usuarioId) {
+      await tx.usuario.updateMany({
+        where: { id: empleado.usuarioId, empresaId },
+        data: { empresaId: null },
+      });
+    }
+    return actualizado;
   });
 }
