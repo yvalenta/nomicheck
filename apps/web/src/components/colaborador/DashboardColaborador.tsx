@@ -1,9 +1,15 @@
 import { Fragment, useEffect, useState } from "react";
-import { AlertCircle, Flag } from "lucide-react";
+import { AlertCircle, Building2, Check, Flag, Mail, X } from "lucide-react";
 import { formatCOP, type ResultadoNomina } from "@pv/reglas";
 import {
+  aceptarInvitacion,
+  listarInvitaciones,
+  listarMisEmpresas,
   listarMisRecibos,
+  rechazarInvitacion,
   reportarDiscrepancia,
+  type EmpresaHistorial,
+  type Invitacion,
   type ReciboPropio,
   type TipoDiscrepancia,
 } from "../../apiColaborador";
@@ -15,6 +21,12 @@ const TIPO_LABEL: Record<TipoDiscrepancia, string> = {
   pago_de_mas: "Me pagaron de más",
   pago_de_menos: "Me pagaron de menos",
   concepto_faltante: "Falta un concepto",
+};
+
+const ESTADO_EMPRESA: Record<EmpresaHistorial["estado"], { label: string; clase: string }> = {
+  activa: { label: "Activa", clase: "bg-emerald-50 text-mint-dark" },
+  pendiente: { label: "Invitación pendiente", clase: "bg-amber-50 text-amber-700" },
+  retirada: { label: "Retirada", clase: "bg-slate-100 text-muted" },
 };
 
 // El chat contador (Fase 4) opera sobre la forma ResultadoNomina del motor —
@@ -36,23 +48,77 @@ function comoResultadoNomina(r: ReciboPropio): ResultadoNomina {
 
 export default function DashboardColaborador() {
   const [recibos, setRecibos] = useState<ReciboPropio[]>([]);
+  const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]);
+  const [empresas, setEmpresas] = useState<EmpresaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reportando, setReportando] = useState<number | null>(null);
+  const [procesando, setProcesando] = useState<number | null>(null);
 
   function recargar() {
     listarMisRecibos()
       .then(setRecibos)
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
+    listarInvitaciones().then(setInvitaciones).catch(() => {});
+    listarMisEmpresas().then(setEmpresas).catch(() => {});
   }
 
   useEffect(recargar, []);
 
+  async function responderInvitacion(empleadoId: number, aceptar: boolean) {
+    setProcesando(empleadoId);
+    setError(null);
+    try {
+      if (aceptar) await aceptarInvitacion(empleadoId);
+      else await rechazarInvitacion(empleadoId);
+      recargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo procesar la invitación");
+    } finally {
+      setProcesando(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-bold text-ink px-1">Tus recibos de pago</h2>
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
+
+      {invitaciones.length > 0 && (
+        <PaycheckCard titulo="Invitaciones">
+          <div className="px-3 pb-3 pt-1 flex flex-col gap-2.5">
+            {invitaciones.map((inv) => (
+              <div key={inv.id} className="flex items-center gap-3 rounded-xl bg-amber-50 p-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Mail size={17} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink truncate">{inv.empresa.nombre}</p>
+                  <p className="text-xs text-muted truncate">te invitó a unirte como colaborador</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => responderInvitacion(inv.id, true)}
+                    disabled={procesando === inv.id}
+                    className="flex items-center gap-1 rounded-lg bg-mint text-white text-xs font-semibold px-2.5 py-1.5 hover:bg-mint-dark transition-colors disabled:opacity-40"
+                  >
+                    <Check size={14} /> Aceptar
+                  </button>
+                  <button
+                    onClick={() => responderInvitacion(inv.id, false)}
+                    disabled={procesando === inv.id}
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white text-muted text-xs font-medium px-2.5 py-1.5 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                  >
+                    <X size={14} /> Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </PaycheckCard>
+      )}
+
+      <h2 className="text-lg font-bold text-ink px-1">Tus recibos de pago</h2>
       {cargando && <p className="text-sm text-muted px-3 py-6 text-center">Cargando…</p>}
       {!cargando && recibos.length === 0 && (
         <p className="text-sm text-muted px-3 py-6 text-center">Aún no tienes recibos liquidados.</p>
@@ -106,6 +172,30 @@ export default function DashboardColaborador() {
         <ChatContador resultado={comoResultadoNomina(r)} />
         </Fragment>
       ))}
+
+      {empresas.length > 0 && (
+        <PaycheckCard titulo="Mis empresas">
+          <div className="px-3 pb-3 pt-1 flex flex-col gap-2">
+            {empresas.map((e) => (
+              <div key={e.empleadoId} className="flex items-center gap-3 rounded-xl bg-slate-50 p-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white text-muted flex items-center justify-center shrink-0">
+                  <Building2 size={15} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink truncate">{e.empresa}</p>
+                  <p className="text-xs text-muted">
+                    Desde {e.fechaIngreso}
+                    {e.fechaRetiro ? ` — hasta ${e.fechaRetiro}` : ""}
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold rounded-full px-2.5 py-1 shrink-0 ${ESTADO_EMPRESA[e.estado].clase}`}>
+                  {ESTADO_EMPRESA[e.estado].label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </PaycheckCard>
+      )}
     </div>
   );
 }

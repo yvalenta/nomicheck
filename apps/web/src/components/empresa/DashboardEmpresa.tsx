@@ -10,6 +10,7 @@ import {
   liquidarFinalEmpleado,
   listarEmpleados,
   retirarEmpleado,
+  type DatosEmpleado,
   type Empleado,
 } from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
@@ -62,7 +63,7 @@ export default function DashboardEmpresa() {
     window.setTimeout(() => setExito(null), 5000);
   }
 
-  async function agregar(datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">) {
+  async function agregar(datos: DatosEmpleado) {
     setError(null);
     try {
       await crearEmpleado(datos);
@@ -73,7 +74,7 @@ export default function DashboardEmpresa() {
     }
   }
 
-  async function editar(id: number, datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">) {
+  async function editar(id: number, datos: DatosEmpleado) {
     setError(null);
     try {
       await actualizarEmpleado(id, datos);
@@ -101,9 +102,14 @@ export default function DashboardEmpresa() {
   async function invitar(id: number, email: string) {
     setError(null);
     try {
-      await invitarEmpleado(id, email);
+      const { estado } = await invitarEmpleado(id, email);
       setAccion(null);
-      notificar("Invitación enviada.");
+      notificar(
+        estado === "correo_enviado"
+          ? "Invitación enviada por correo — la persona define su contraseña al aceptar."
+          : "Invitación enviada — le aparecerá como notificación en su cuenta de NomiCheck."
+      );
+      recargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo invitar");
     }
@@ -208,8 +214,9 @@ export default function DashboardEmpresa() {
                     {e.nombre}
                     {!e.activo && <span className="ml-2 text-xs text-muted">(retirado)</span>}
                   </p>
-                  <p className="text-xs text-muted">
-                    {e.documento} · {e.tipoNomina === "turnos" ? "Por turnos" : "Salario fijo"}
+                  <p className="text-xs text-muted flex items-center gap-1.5 flex-wrap">
+                    <span>{e.documento} · {e.tipoNomina === "turnos" ? "Por turnos" : "Salario fijo"}</span>
+                    <EstadoCuenta empleado={e} />
                   </p>
                 </div>
                 <p className="text-sm font-semibold text-ink tabular-nums shrink-0">
@@ -225,13 +232,15 @@ export default function DashboardEmpresa() {
                 >
                   <Pencil size={16} />
                 </button>
-                <button
-                  onClick={() => setAccion({ id: e.id, tipo: "invitar" })}
-                  title="Invitar a crear su cuenta"
-                  className="text-muted hover:text-mint-dark shrink-0"
-                >
-                  <Mail size={17} />
-                </button>
+                {!(e.usuarioId && e.invitacionAceptadaEn) && (
+                  <button
+                    onClick={() => setAccion({ id: e.id, tipo: "invitar" })}
+                    title={e.usuarioId ? "Reenviar / cambiar invitación" : "Invitar a crear su cuenta"}
+                    className="text-muted hover:text-mint-dark shrink-0"
+                  >
+                    <Mail size={17} />
+                  </button>
+                )}
                 <button
                   onClick={() => setAccion({ id: e.id, tipo: "eliminar" })}
                   title="Eliminar (solo si fue creado por error)"
@@ -298,6 +307,16 @@ export default function DashboardEmpresa() {
       </PaycheckCard>
     </div>
   );
+}
+
+// Estado de la cuenta del colaborador, derivado de usuarioId + invitacionAceptadaEn.
+function EstadoCuenta({ empleado }: { empleado: Empleado }) {
+  const { texto, clase } = !empleado.usuarioId
+    ? { texto: "Sin cuenta", clase: "bg-slate-100 text-muted" }
+    : empleado.invitacionAceptadaEn
+      ? { texto: "Cuenta activa", clase: "bg-emerald-50 text-mint-dark" }
+      : { texto: "Invitación pendiente", clase: "bg-amber-50 text-amber-700" };
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${clase}`}>{texto}</span>;
 }
 
 function Stat({ etiqueta, valor }: { etiqueta: string; valor: string }) {
@@ -395,7 +414,7 @@ function FormEmpleado({
   onGuardar,
 }: {
   inicial?: Empleado;
-  onGuardar: (d: Omit<Empleado, "id" | "activo" | "fechaRetiro">) => void;
+  onGuardar: (d: DatosEmpleado) => void;
 }) {
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
   const [documento, setDocumento] = useState(inicial?.documento ?? "");

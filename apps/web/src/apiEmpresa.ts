@@ -11,7 +11,14 @@ export interface Empleado {
   fechaRetiro: string | null;
   tipoContrato: "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica";
   activo: boolean;
+  // Estado de la cuenta del colaborador: usuarioId null = sin cuenta;
+  // con usuarioId y invitacionAceptadaEn null = invitación pendiente;
+  // con ambos = cuenta activa vinculada.
+  usuarioId: string | null;
+  invitacionAceptadaEn: string | null;
 }
+
+export type ResultadoInvitacion = { estado: "correo_enviado" | "pendiente_en_app" };
 
 async function autenticado(path: string, init: RequestInit = {}) {
   const { data } = await supabase.auth.getSession();
@@ -44,7 +51,14 @@ export function listarEmpleados(): Promise<Empleado[]> {
   return autenticado("/empresa/empleados");
 }
 
-export function crearEmpleado(datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">): Promise<Empleado> {
+// Campos que captura el formulario — el resto (id, activo, fechaRetiro y el
+// estado de cuenta usuarioId/invitacionAceptadaEn) lo gestiona el servidor.
+export type DatosEmpleado = Omit<
+  Empleado,
+  "id" | "activo" | "fechaRetiro" | "usuarioId" | "invitacionAceptadaEn"
+>;
+
+export function crearEmpleado(datos: DatosEmpleado): Promise<Empleado> {
   return autenticado("/empresa/empleados", { method: "POST", body: JSON.stringify(datos) });
 }
 
@@ -58,7 +72,7 @@ export function eliminarEmpleado(id: number): Promise<{ ok: true }> {
   return autenticado(`/empresa/empleados/${id}`, { method: "DELETE" });
 }
 
-export function invitarEmpleado(id: number, email: string) {
+export function invitarEmpleado(id: number, email: string): Promise<ResultadoInvitacion> {
   return autenticado(`/empresa/empleados/${id}/invitar`, { method: "POST", body: JSON.stringify({ email }) });
 }
 

@@ -380,12 +380,16 @@ la tabla de **perfil** de dominio, 1:1 con `auth.users` por `id` (mismo UUID):
 |---|---|---|
 | `id` | UUID PK | igual a `auth.users.id` (FK lógica, sin passwordHash propio) |
 | `nombre` | string | — |
+| `email` | string? unique | denormalizado desde Supabase Auth — permite buscar la cuenta por correo al invitar sin paginar Auth |
 | `rol` | string | enum: `admin_plataforma` · `admin_empresa` · `colaborador` — absorbe el `AdminUsuario` de v1 |
-| `empresaId` | FK? → `Empresa` | null para `admin_plataforma` |
+| `empresaId` | FK? → `Empresa` | **empresa activa actual** (puntero denormalizado): null para `admin_plataforma` y para un colaborador **libre entre empresas**. Se setea al aceptar/unirse y se limpia al retirarse |
 
-> La invitación de colaborador (Módulo D) usa el flujo nativo de invite de
-> Supabase Auth (envía el link, el usuario define su contraseña al aceptar)
-> en vez de un token propio.
+> La invitación de colaborador (Módulo D) tiene **dos caminos** según si el
+> correo ya tiene cuenta (ver §08): correo nuevo → invite nativo de Supabase
+> (define contraseña al aceptar); cuenta existente y libre → **notificación
+> in-app** que el colaborador acepta. Una cuenta se liga a varios `Empleado`
+> a lo largo del tiempo (**historial de empresas**), con a lo sumo **una
+> membresía activa aceptada** a la vez (índice único parcial).
 
 ### `Empresa`
 | Columna | Tipo | Notas |
@@ -398,7 +402,8 @@ la tabla de **perfil** de dominio, 1:1 con `auth.users` por `id` (mismo UUID):
 |---|---|---|
 | `id` | PK | — |
 | `empresaId` | FK → `Empresa` | — |
-| `usuarioId` | FK? → `Usuario` | null hasta que se le invita — el empleado existe en nómina sin cuenta |
+| `usuarioId` | FK? → `Usuario` | null hasta que se le invita. **No es único**: una cuenta puede aparecer en varios `Empleado` (distintas empresas/épocas = historial). La unicidad "una empresa activa por cuenta" la impone un índice único parcial en SQL (`WHERE usuarioId IS NOT NULL AND invitacionAceptadaEn IS NOT NULL AND activo = true`) |
+| `invitacionAceptadaEn` | datetime? | null con `usuarioId` seteado = **invitación pendiente** (cuenta existente sin aceptar); con fecha = **aceptada** (o vínculo directo de cuenta nueva). Doble uso como auditoría del ingreso |
 | `nombre` / `documento` | string | — |
 | `salarioBase` | decimal | mensual, COP |
 | `tipoNomina` | string | enum: `turnos` · `fijo` |
@@ -485,7 +490,12 @@ propio colaborador vía RLS, solo por servicio o `admin_plataforma`).
 - **Autenticación vía Supabase Auth**: login, verificación de email y recuperación de contraseña nativos — reemplaza sesiones/bcrypt propios. `apps/api` valida el JWT de Supabase en cada request (middleware que decodifica y adjunta `req.usuario`).
 - **Middleware de rol**: `requiereRol('admin_empresa')` etc. en cada ruta protegida, leyendo `Usuario.rol`; el flujo anónimo no pasa por auth.
 - **Doble capa de scoping** (§05): el service arma la query filtrada por `empresaId`/`empleadoId` (como antes) **y** las políticas RLS (§07) filtran a nivel de fila en Postgres — si el service tuviera un bug, RLS igual impide la fuga entre empresas.
-- **Invitación de colaborador**: la empresa dispara el invite nativo de Supabase Auth ligado al `Empleado`; el colaborador define su propia contraseña al aceptar — la empresa nunca fija contraseñas.
+- **Invitación de colaborador** (`invitarColaborador`, tres caminos según el correo):
+  - **Sin cuenta** → invite nativo de Supabase Auth ligado al `Empleado`; el colaborador define su contraseña al aceptar y queda unido (aceptación implícita). La empresa nunca fija contraseñas.
+  - **Cuenta existente y libre** (sin membresía activa aceptada) → se liga el `Empleado` con `invitacionAceptadaEn = null` (pendiente); le aparece como **notificación in-app** que acepta/rechaza desde su portal (`GET /colaborador/invitaciones`, `POST .../:id/aceptar|rechazar`). No se envía correo ni se crea otra cuenta.
+  - **Cuenta ya activa en otra empresa** → se **bloquea** con 409 (`ErrorConflicto`): la persona debe retirarse de su empresa actual antes de unirse a otra.
+- **Aceptar / rechazar**: aceptar setea `invitacionAceptadaEn` + `Usuario.empresaId` (en transacción, con backstop del índice único parcial); rechazar desliga el `Empleado` (`usuarioId = null`).
+- **Retiro = desvinculación con historial**: `retirarEmpleado` marca `activo=false`+`fechaRetiro` y, si era la membresía activa de una cuenta, limpia `Usuario.empresaId` → la cuenta queda libre para otra empresa; el `Empleado` retirado permanece con su `usuarioId` como historial (`GET /colaborador/empresas`).
 - **API key de Claude** solo en `apps/api` (`.env`, fuera de git) — nunca la de Supabase service-role en el navegador. **Rate limit** en `/api/comprobantes/extraer` y `/api/chat/explicar` (endpoints con costo).
 - Validación de entrada con **zod** en cada endpoint; los archivos subidos se limitan por tamaño y tipo MIME y nunca tocan disco (ni Storage: no se persisten, Módulo E).
 
@@ -611,6 +621,7 @@ Cada fase entrega algo usable de punta a punta.
 - [x] **Autocompletar turnos según horario habitual** (modo empresa): se extrajo `HorarioSemanalEditor.tsx` del wizard anónimo (`PasoSemana.tsx`, antes tenía el editor de "Tu semana habitual" inline) para reutilizarlo tal cual en `PeriodosEmpresa.tsx` — mismo componente, misma UX, en ambos lugares. Cada colaborador, al expandir su tarjeta de turnos, tiene su propio horario habitual (solo en el navegador, no se persiste — cada `Turno` guardado ya trae sus propias horas explícitas) y un botón "Autocompletar turnos del periodo según este horario": genera un `Turno` por cada día del periodo donde el horario dice "trabajo", saltando fechas que ya tienen turno capturado (no pisa ediciones manuales) y festivos (por defecto descanso, igual que el wizard — si de verdad se trabajó el festivo se agrega a mano). Verificado: refactor de `PasoSemana.tsx` confirmado en navegador real sin cambio de comportamiento (mismo horario habitual, misma derivación de "Días del periodo", toggle de un día de la semana propaga correctamente a los 15 días del periodo); `tsc` limpio en los 3 paquetes, 114/114 tests en `@pv/reglas`
   - **Fix**: los turnos generados por "Autocompletar" quedaban huérfanos si el usuario ajustaba el horario habitual *después* de generarlos — cambiar un día a "Descanso" no eliminaba el turno ya creado para ese día, ni actualizaba sus horas si cambiaban. Se agregó un set `autogenerados` (por colaborador, en memoria) que marca qué fechas fueron creadas por el botón de autocompletar; al cambiar el horario habitual (`setHorarioDe`), esos turnos se resincronizan automáticamente (se eliminan si el día pasa a descanso, se actualizan las horas si cambiaron) — los turnos editados o borrados a mano salen del set y ya no se tocan. `tsc` limpio, 114/114 tests en `@pv/reglas` (sin cambios de motor, fix acotado a `PeriodosEmpresa.tsx`)
 - [x] **Correo ya registrado — registro de empresa e invitación de colaborador**: antes, si el correo ya tenía una cuenta en Supabase Auth, `POST /auth/registro` y `POST /empresa/empleados/:id/invitar` devolvían el mensaje crudo de Supabase (en inglés) con un 422 genérico, indistinguible de cualquier otro fallo. Ahora `authService.ts` detecta explícitamente el código de error de Supabase (`email_exists` en `createUser`, `user_already_exists` en `inviteUserByEmail`) y lanza `ErrorConflicto` (misma clase reutilizada del guard de borrado en `empleadosService.ts`), que el controller mapea a **409** con mensaje en español y accionable: "Ya existe una cuenta con este correo. Inicia sesión en vez de registrarte." (registro) / "Este correo ya tiene una cuenta en NomiCheck. Verifica que sea la persona correcta." (invitar). `AuthEmpresa.tsx` agrega un botón "Ir a iniciar sesión" cuando el error de registro es este caso, que cambia al modo login sin perder el flujo. Verificado en el contenedor contra la DB real: registro duplicado del mismo correo → 409 con el mensaje esperado; invitar a un empleado con un correo que ya es admin de otra empresa → 409 (`ErrorConflicto`) sin crear registros huérfanos; `tsc` limpio en `@pv/api` y `@pv/web`
+- [x] **Membresía por empresa, invitación in-app e historial** (migración `20260718120000_membresia_empresa_historial`): una cuenta (`Usuario`) puede pertenecer a varias empresas a lo largo del tiempo. Se quitó el `@unique` de `Empleado.usuarioId` (relación 1:N) y se agregó `Empleado.invitacionAceptadaEn` (null+usuarioId = pendiente; con fecha = aceptada) + `Usuario.email` (denormalizado desde Auth, backfill puntual). Un **índice único parcial** garantiza a lo sumo una membresía activa aceptada por cuenta. `invitarColaborador` ahora bifurca en tres: correo nuevo → invite de Supabase (unido); cuenta existente **libre** → vínculo **pendiente** que le aparece como **notificación in-app** (`GET /colaborador/invitaciones`, `POST .../:id/aceptar|rechazar`); cuenta **activa en otra empresa** → **409** (bloqueo, decisión del usuario). `retirarEmpleado` limpia `Usuario.empresaId` dejando la cuenta libre y el `Empleado` como **historial** (`GET /colaborador/empresas`). El middleware `requiereAuth` resuelve el `empleadoId` como el `Empleado` activo **aceptado** (ya no depende del vínculo único). UI colaborador (`DashboardColaborador.tsx`): sección "Invitaciones" con aceptar/rechazar + sección "Mis empresas" con badges (activa/pendiente/retirada). UI empresa (`DashboardEmpresa.tsx`): badge de estado de cuenta por empleado (sin cuenta / invitación pendiente / cuenta activa) y mensaje de invitación diferenciado. Verificado con un script de servicios en el contenedor (12 checks: invitar libre→pendiente, aceptar→activa+empresaId, invitar ocupada→409, retiro→desvincula+historial, reinvitar tras retiro, backstop del índice único parcial) + 114/114 tests en `@pv/reglas` y `tsc` limpio en `@pv/api` y `@pv/web`. Nota: la aceptación in-app solo aplica a cuentas existentes; las cuentas nuevas mantienen el flujo de correo de Supabase
 
 ---
 
