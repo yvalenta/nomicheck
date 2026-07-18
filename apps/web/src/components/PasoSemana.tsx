@@ -8,6 +8,7 @@ import {
   type NovedadDia,
 } from "@pv/reglas";
 import PaycheckCard from "./PaycheckCard.tsx";
+import HorarioSemanalEditor from "./HorarioSemanalEditor.tsx";
 
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -71,16 +72,7 @@ export default function PasoSemana({
     setOverrides((prev) => ({ ...prev, [fecha]: { ...estadoDe(fecha), ...cambios } }));
   }
 
-  function setBase(idx: number, cambios: Partial<EstadoDia> & { descanso?: boolean }) {
-    const nuevo = [...horarioBase];
-    if (cambios.descanso !== undefined) {
-      nuevo[idx] = cambios.descanso ? null : { horaInicio: "10:00", horaFin: "17:00" };
-    } else if (nuevo[idx]) {
-      nuevo[idx] = {
-        horaInicio: cambios.horaInicio ?? nuevo[idx]!.horaInicio,
-        horaFin: cambios.horaFin ?? nuevo[idx]!.horaFin,
-      };
-    }
+  function setBase(nuevo: (HorarioDia | null)[]) {
     onCambioHorarioBase(nuevo);
     setOverrides({}); // el horario base cambió: los días vuelven a derivarse
   }
@@ -114,47 +106,12 @@ export default function PasoSemana({
 
   return (
     <div className="flex flex-col gap-4">
-      <PaycheckCard titulo="Tu semana habitual">
-        <div className="px-3 pb-3 pt-1 flex flex-col gap-2">
-          {DIAS_SEMANA.map((nombre, idx) => {
-            const h = horarioBase[idx];
-            return (
-              <div key={nombre} className="flex items-center gap-3">
-                <span className="w-9 text-sm font-semibold text-ink">{nombre}</span>
-                <label className="flex items-center gap-1.5 text-xs text-muted">
-                  <input
-                    type="checkbox"
-                    checked={h !== null}
-                    onChange={(e) => setBase(idx, { descanso: !e.target.checked })}
-                    className="w-4 h-4 accent-emerald-500"
-                  />
-                  {h ? "Trabajo" : "Descanso"}
-                </label>
-                <div className="flex items-center gap-1.5 ml-auto">
-                  <input
-                    type="time"
-                    disabled={!h}
-                    value={h?.horaInicio ?? ""}
-                    onChange={(e) => setBase(idx, { horaInicio: e.target.value })}
-                    className={timeCls}
-                  />
-                  <span className="text-xs text-muted">—</span>
-                  <input
-                    type="time"
-                    disabled={!h}
-                    value={h?.horaFin ?? ""}
-                    onChange={(e) => setBase(idx, { horaFin: e.target.value })}
-                    className={timeCls}
-                  />
-                </div>
-              </div>
-            );
-          })}
-          <p className="text-xs text-muted mt-1">
-            Este es tu horario normal. Abajo puedes ajustar días puntuales que fueron distintos.
-          </p>
-        </div>
-      </PaycheckCard>
+      <HorarioSemanalEditor
+        horarioBase={horarioBase}
+        onCambio={setBase}
+        titulo="Tu semana habitual"
+        ayuda="Este es tu horario normal. Abajo puedes ajustar días puntuales que fueron distintos."
+      />
 
       <PaycheckCard titulo={`Días del periodo (${fechas.length})`}>
         <div className="px-3 pb-3 pt-1 flex flex-col gap-1.5 max-h-80 overflow-y-auto">

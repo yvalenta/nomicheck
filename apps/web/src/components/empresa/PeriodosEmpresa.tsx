@@ -10,10 +10,12 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
   UserRound,
 } from "lucide-react";
-import { formatCOP, type ResultadoNomina } from "@pv/reglas";
+import { diaSemana, formatCOP, HORARIO_BASE_DEFAULT, rangoFechas, type Festivo, type HorarioDia, type ResultadoNomina } from "@pv/reglas";
+import { listarFestivos } from "../../api";
 import {
   crearPeriodo,
   editarPeriodo,
@@ -32,6 +34,7 @@ import {
 import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
 import ComprobanteNomina from "../ComprobanteNomina.tsx";
+import HorarioSemanalEditor from "../HorarioSemanalEditor.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -273,6 +276,7 @@ function DetallePeriodo({
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [recibos, setRecibos] = useState<Recibo[]>([]);
+  const [festivos, setFestivos] = useState<Festivo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
   const [liquidando, setLiquidando] = useState(false);
@@ -281,15 +285,52 @@ function DetallePeriodo({
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set());
   const [guardando, setGuardando] = useState(false);
   const [comprobanteAbierto, setComprobanteAbierto] = useState<number | null>(null);
+  // Horario habitual por colaborador — solo vive en el navegador, es un
+  // atajo para autocompletar turnos, no se persiste (cada Turno guardado ya
+  // trae sus propias horaInicio/horaFin explícitas, ver liquidacionService.ts).
+  const [horarios, setHorarios] = useState<Record<number, (HorarioDia | null)[]>>({});
 
   useEffect(() => {
     listarEmpleados().then(setEmpleados);
+    listarFestivos().then(setFestivos);
     if (periodo.estado === "borrador") {
       obtenerTurnos(periodo.id).then(setTurnos);
     } else {
       listarRecibos(periodo.id).then(setRecibos);
     }
   }, [periodo.id, periodo.estado]);
+
+  function horarioDe(empleadoId: number): (HorarioDia | null)[] {
+    return horarios[empleadoId] ?? HORARIO_BASE_DEFAULT;
+  }
+
+  function setHorarioDe(empleadoId: number, nuevo: (HorarioDia | null)[]) {
+    setHorarios((prev) => ({ ...prev, [empleadoId]: nuevo }));
+  }
+
+  // Genera turnos para los días del periodo donde el horario habitual dice
+  // "trabajo" — solo para fechas SIN turno ya capturado (no pisa ediciones
+  // manuales) y saltando festivos (igual que el wizard anónimo: por defecto
+  // son descanso; si de verdad se trabajó el festivo, se agrega a mano con
+  // "+ Agregar turno").
+  function autocompletar(empleadoId: number) {
+    const horario = horarioDe(empleadoId);
+    const existentes = new Set(turnos.filter((t) => t.empleadoId === empleadoId).map((t) => t.fecha));
+    const nuevos: Turno[] = [];
+    for (const fecha of rangoFechas(periodo.fechaInicio, periodo.fechaFin)) {
+      if (existentes.has(fecha)) continue;
+      if (festivos.some((f) => f.fecha === fecha)) continue;
+      const dia = horario[diaSemana(fecha)];
+      if (dia) nuevos.push({ empleadoId, fecha, horaInicio: dia.horaInicio, horaFin: dia.horaFin });
+    }
+    setTurnos((prev) => [...prev, ...nuevos]);
+    setAbiertos((prev) => new Set(prev).add(empleadoId));
+    notificar(
+      nuevos.length > 0
+        ? `${nuevos.length} turno${nuevos.length === 1 ? "" : "s"} generado${nuevos.length === 1 ? "" : "s"} según el horario habitual.`
+        : "No había días nuevos que completar según el horario habitual."
+    );
+  }
 
   const empleadosTurnos = empleados.filter((e) => e.tipoNomina === "turnos" && e.activo);
   const empleadosFijo = empleados.filter((e) => e.tipoNomina === "fijo" && e.activo);
@@ -478,6 +519,20 @@ function DetallePeriodo({
 
                   {abierto && (
                     <div className="px-1 pb-1 pt-1 flex flex-col gap-2">
+                      <div className="bg-slate-50 rounded-xl">
+                        <HorarioSemanalEditor
+                          horarioBase={horarioDe(empleado.id)}
+                          onCambio={(h) => setHorarioDe(empleado.id, h)}
+                        />
+                        <div className="px-3 pb-2.5 -mt-1">
+                          <button
+                            onClick={() => autocompletar(empleado.id)}
+                            className="flex items-center gap-1.5 text-xs font-medium text-mint-dark hover:underline"
+                          >
+                            <Sparkles size={13} /> Autocompletar turnos del periodo según este horario
+                          </button>
+                        </div>
+                      </div>
                       {turnosEmpleado.length === 0 && (
                         <p className="text-xs text-muted px-2 py-2">Sin turnos capturados todavía.</p>
                       )}
