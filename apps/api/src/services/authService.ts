@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../lib/supabaseAdmin.js";
 import { prisma } from "../lib/prisma.js";
 import { ErrorConflicto } from "./empleadosService.js";
 import type { registroSchema } from "../validation/empresa.js";
+import type { registroIndividualSchema } from "../validation/liquidacion.js";
 import type { z } from "zod";
 import type { AuthError } from "@supabase/supabase-js";
 
@@ -43,6 +44,34 @@ export async function registrarEmpresa(datos: z.infer<typeof registroSchema>) {
   } catch (err) {
     // Compensación: la creación en Postgres falló (p. ej. NIT duplicado) —
     // no dejamos un usuario de Auth sin perfil de dominio.
+    await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+    throw err;
+  }
+}
+
+// Registro de una cuenta individual (verificador anónimo → "guardar mi
+// liquidación"). Crea el usuario en Supabase Auth con email_confirm=true para
+// que el cliente pueda iniciar sesión de inmediato (sin correo de confirmación)
+// y el guardado diferido se dispare al toque. No crea Empresa.
+export async function registrarIndividual(datos: z.infer<typeof registroIndividualSchema>) {
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: datos.email,
+    password: datos.password,
+    email_confirm: true,
+  });
+  if (esCorreoDuplicado(authError)) {
+    throw new ErrorConflicto("Ya existe una cuenta con este correo. Inicia sesión en vez de registrarte.");
+  }
+  if (authError || !authData.user) {
+    throw new Error(authError?.message ?? "No se pudo crear el usuario");
+  }
+
+  try {
+    return await prisma.usuario.create({
+      data: { id: authData.user.id, nombre: datos.nombre, email: datos.email, rol: "individual", empresaId: null },
+    });
+  } catch (err) {
+    // Compensación: no dejamos un usuario de Auth sin perfil de dominio.
     await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
     throw err;
   }

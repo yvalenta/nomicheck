@@ -34,7 +34,7 @@ model Usuario {
   // Correo denormalizado desde Supabase Auth (allí viven las credenciales) —
   // permite buscar la cuenta por correo al invitar sin paginar todo Auth.
   email     String? @unique
-  rol       String // admin_plataforma | admin_empresa | colaborador
+  rol       String // admin_plataforma | admin_empresa | colaborador | individual
   // Empresa activa actual (puntero denormalizado). Null = sin empresa: recién
   // registrado admin_plataforma, o colaborador libre entre empresas.
   empresaId Int?
@@ -45,9 +45,29 @@ model Usuario {
   // la migración). Ver invitacionAceptadaEn en Empleado.
   empleados         Empleado[]          @relation("EmpleadoUsuario")
   reportes          ReporteDiscrepancia[]
+  liquidaciones     Liquidacion[]
   creadoEn          DateTime            @default(now())
 
   @@index([empresaId])
+}
+
+// Liquidación guardada por un usuario en su historial personal (flujo de
+// "delayed auth" del verificador anónimo, SDD §13). Es un SNAPSHOT del
+// ResultadoNomina calculado — no se recalcula al cambiar reglas, igual que
+// ReciboPago. No pertenece a una empresa: la guarda una cuenta individual
+// (o cualquier usuario autenticado) sobre su propio cálculo.
+model Liquidacion {
+  id           Int      @id @default(autoincrement())
+  usuarioId    String   @db.Uuid
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id])
+  resultado    Json // ResultadoNomina completo (snapshot)
+  netoEsperado Float // denormalizado desde resultado, para listar sin parsear el JSON
+  netoRecibido Float? // lo que el usuario dijo haber recibido, si lo ingresó
+  periodoDesde String? // YYYY-MM-DD, desde el snapshot
+  periodoHasta String? // YYYY-MM-DD, desde el snapshot
+  creadoEn     DateTime @default(now())
+
+  @@index([usuarioId])
 }
 
 model Empresa {

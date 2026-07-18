@@ -7,7 +7,8 @@ import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
-import { registro, invitar } from "../controllers/authController.js";
+import { registro, registroIndividual, invitar } from "../controllers/authController.js";
+import { crear as crearLiquidacion, listar as listarLiquidaciones } from "../controllers/liquidacionesController.js";
 import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
   listar as listarContratistas,
@@ -93,6 +94,13 @@ router.post("/chat/explicar", limitadorIA, explicar);
 
 // Auth y empresa.
 router.post("/auth/registro", registro);
+// Registro de cuenta individual (verificador anónimo → guardar historial).
+router.post("/auth/registro-individual", registroIndividual);
+
+// Historial personal de liquidaciones — cualquier usuario autenticado guarda
+// y lista SUS propias (scoping por req.usuario.id, no por rol).
+router.post("/liquidations", requiereAuth, crearLiquidacion);
+router.get("/liquidations", requiereAuth, listarLiquidaciones);
 
 const soloEmpresa = [requiereAuth, requiereRol("admin_empresa")];
 router.get("/empresa/empleados", ...soloEmpresa, listar);

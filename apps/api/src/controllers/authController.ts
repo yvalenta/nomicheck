@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { registroSchema, invitarSchema } from "../validation/empresa.js";
-import { registrarEmpresa, invitarColaborador } from "../services/authService.js";
+import { registroIndividualSchema } from "../validation/liquidacion.js";
+import { registrarEmpresa, registrarIndividual, invitarColaborador } from "../services/authService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
 
 export async function registro(req: Request, res: Response) {
@@ -12,6 +13,24 @@ export async function registro(req: Request, res: Response) {
   try {
     const { usuario, empresa } = await registrarEmpresa(parseo.data);
     res.status(201).json({ usuario, empresa });
+  } catch (err) {
+    if (err instanceof ErrorConflicto) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo registrar" });
+  }
+}
+
+export async function registroIndividual(req: Request, res: Response) {
+  const parseo = registroIndividualSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+  try {
+    const usuario = await registrarIndividual(parseo.data);
+    res.status(201).json({ usuario });
   } catch (err) {
     if (err instanceof ErrorConflicto) {
       res.status(409).json({ error: err.message });
