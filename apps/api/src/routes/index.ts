@@ -8,12 +8,14 @@ import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
 import { registro, invitar } from "../controllers/authController.js";
-import { listar, crear, actualizar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
+import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
   listar as listarContratistas,
   crear as crearContratista,
   actualizar as actualizarContratista,
+  eliminar as eliminarContratista,
 } from "../controllers/contratistasController.js";
+import { costos } from "../controllers/costosController.js";
 import {
   listar as listarPeriodos,
   crear as crearPeriodo,
@@ -87,6 +89,10 @@ const soloEmpresa = [requiereAuth, requiereRol("admin_empresa")];
 router.get("/empresa/empleados", ...soloEmpresa, listar);
 router.post("/empresa/empleados", ...soloEmpresa, crear);
 router.put("/empresa/empleados/:id", ...soloEmpresa, actualizar);
+// Borrado físico SOLO sin historial de nómina (caso "creado por error");
+// con historial responde 409 y el camino es /retirar — los registros de
+// nómina deben conservarse.
+router.delete("/empresa/empleados/:id", ...soloEmpresa, eliminar);
 router.post("/empresa/empleados/:id/invitar", ...soloEmpresa, invitar);
 router.post("/empresa/empleados/:id/retirar", ...soloEmpresa, retirar);
 router.post("/empresa/empleados/:id/liquidacion-final", ...soloEmpresa, liquidacionFinal);
@@ -94,6 +100,11 @@ router.post("/empresa/empleados/:id/liquidacion-final", ...soloEmpresa, liquidac
 router.get("/empresa/contratistas", ...soloEmpresa, listarContratistas);
 router.post("/empresa/contratistas", ...soloEmpresa, crearContratista);
 router.put("/empresa/contratistas/:id", ...soloEmpresa, actualizarContratista);
+router.delete("/empresa/contratistas/:id", ...soloEmpresa, eliminarContratista);
+
+// Panel de costo total empleador (SDD §13): salario + aportes patronales +
+// provisiones por empleado activo, con la exoneración Ley 1607 como toggle.
+router.get("/empresa/costos", ...soloEmpresa, costos);
 
 router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
 router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);

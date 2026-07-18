@@ -1,6 +1,13 @@
 import type { Request, Response } from "express";
 import { empleadoSchema, empleadoUpdateSchema, retiroSchema } from "../validation/empresa.js";
-import { actualizarEmpleado, crearEmpleado, listarEmpleados, retirarEmpleado } from "../services/empleadosService.js";
+import {
+  actualizarEmpleado,
+  crearEmpleado,
+  eliminarEmpleado,
+  ErrorConflicto,
+  listarEmpleados,
+  retirarEmpleado,
+} from "../services/empleadosService.js";
 import { liquidarFinal } from "../services/liquidacionFinalService.js";
 
 export async function listar(req: Request, res: Response) {
@@ -28,6 +35,19 @@ export async function actualizar(req: Request, res: Response) {
     const empleado = await actualizarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
     res.json(empleado);
   } catch (err) {
+    res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });
+  }
+}
+
+export async function eliminar(req: Request, res: Response) {
+  try {
+    await eliminarEmpleado(req.usuario!.empresaId!, Number(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof ErrorConflicto) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });
   }
 }

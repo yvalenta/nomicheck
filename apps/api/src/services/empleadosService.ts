@@ -22,6 +22,28 @@ export async function actualizarEmpleado(
   return prisma.empleado.update({ where: { id: empleadoId }, data: datos });
 }
 
+// El borrado físico solo procede si el empleado no tiene NINGÚN historial
+// de nómina (caso "creado por error"): los registros de nómina deben
+// conservarse legalmente, así que con historial el camino es "retirar"
+// (soft-retire). Los FK Restrict del schema son la red de seguridad final.
+export class ErrorConflicto extends Error {}
+
+export async function eliminarEmpleado(empresaId: number, empleadoId: number) {
+  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
+  if (!empleado) throw new Error("Empleado no encontrado");
+
+  const [recibos, turnos] = await Promise.all([
+    prisma.reciboPago.count({ where: { empleadoId } }),
+    prisma.turno.count({ where: { empleadoId } }),
+  ]);
+  if (recibos + turnos > 0) {
+    throw new ErrorConflicto(
+      "El empleado tiene historial de nómina (recibos o turnos registrados) y no puede eliminarse: los registros de nómina deben conservarse. Usa 'Retirar' para desactivarlo conservando el historial."
+    );
+  }
+  return prisma.empleado.delete({ where: { id: empleadoId } });
+}
+
 // Marca el retiro: el empleado deja de aparecer en periodos futuros
 // (liquidarPeriodo solo toma `activo: true`) pero queda disponible para
 // liquidacionFinalService.liquidarFinal — no se borra su historial.

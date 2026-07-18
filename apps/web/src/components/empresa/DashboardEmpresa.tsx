@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
-import { LogOut, Mail, Plus, UserRound } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { LogOut, Mail, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { supabase } from "../../lib/supabase";
 import {
   crearEmpleado,
+  actualizarEmpleado,
+  eliminarEmpleado,
   invitarEmpleado,
   liquidarFinalEmpleado,
   listarEmpleados,
@@ -11,15 +13,27 @@ import {
   type Empleado,
 } from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
+import SegmentedControl from "../SegmentedControl.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+
+type FiltroEstado = "activos" | "retirados" | "todos";
+
+// Acción inline abierta sobre una fila (reemplaza los window.prompt/alert
+// que había antes: todo se captura y confirma dentro de la propia fila).
+type AccionFila = { id: number; tipo: "invitar" | "retirar" | "eliminar" } | null;
 
 export default function DashboardEmpresa() {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [accion, setAccion] = useState<AccionFila>(null);
+  const [filtro, setFiltro] = useState<FiltroEstado>("activos");
+  const [busqueda, setBusqueda] = useState("");
 
   function recargar() {
     listarEmpleados()
@@ -29,6 +43,24 @@ export default function DashboardEmpresa() {
   }
 
   useEffect(recargar, []);
+
+  const visibles = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return empleados
+      .filter((e) =>
+        filtro === "activos" ? e.activo : filtro === "retirados" ? !e.activo : true
+      )
+      .filter((e) => !q || e.nombre.toLowerCase().includes(q) || e.documento.toLowerCase().includes(q));
+  }, [empleados, filtro, busqueda]);
+
+  const activos = empleados.filter((e) => e.activo);
+  const nominaMensual = activos.reduce((s, e) => s + e.salarioBase, 0);
+
+  function notificar(mensaje: string) {
+    setExito(mensaje);
+    setError(null);
+    window.setTimeout(() => setExito(null), 5000);
+  }
 
   async function agregar(datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">) {
     setError(null);
@@ -41,34 +73,61 @@ export default function DashboardEmpresa() {
     }
   }
 
-  async function invitar(id: number) {
-    const email = window.prompt("Correo del colaborador para invitarlo:");
-    if (!email) return;
+  async function editar(id: number, datos: Omit<Empleado, "id" | "activo" | "fechaRetiro">) {
+    setError(null);
     try {
-      await invitarEmpleado(id, email);
-      window.alert("Invitación enviada.");
+      await actualizarEmpleado(id, datos);
+      setEditandoId(null);
+      notificar("Cambios guardados.");
+      recargar();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "No se pudo invitar");
+      setError(e instanceof Error ? e.message : "Error al guardar los cambios");
     }
   }
 
-  async function retirar(id: number) {
-    const fechaRetiro = window.prompt("Fecha de retiro (YYYY-MM-DD):");
-    if (!fechaRetiro) return;
+  async function eliminar(id: number) {
+    setError(null);
     try {
-      await retirarEmpleado(id, fechaRetiro);
+      await eliminarEmpleado(id);
+      setAccion(null);
+      notificar("Empleado eliminado (no tenía historial de nómina).");
       recargar();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "No se pudo registrar el retiro");
+      setAccion(null);
+      setError(e instanceof Error ? e.message : "No se pudo eliminar");
+    }
+  }
+
+  async function invitar(id: number, email: string) {
+    setError(null);
+    try {
+      await invitarEmpleado(id, email);
+      setAccion(null);
+      notificar("Invitación enviada.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo invitar");
+    }
+  }
+
+  async function retirar(id: number, fechaRetiro: string) {
+    setError(null);
+    try {
+      await retirarEmpleado(id, fechaRetiro);
+      setAccion(null);
+      notificar("Retiro registrado — el historial se conserva y puedes liquidar sus prestaciones finales.");
+      recargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo registrar el retiro");
     }
   }
 
   async function liquidarFinal(id: number) {
+    setError(null);
     try {
       const recibo = await liquidarFinalEmpleado(id);
-      window.alert(`Liquidación final generada. Neto: ${formatCOP(recibo.neto)}`);
+      notificar(`Liquidación final generada. Neto: ${formatCOP(recibo.neto)}.`);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "No se pudo liquidar");
+      setError(e instanceof Error ? e.message : "No se pudo liquidar");
     }
   }
 
@@ -92,59 +151,148 @@ export default function DashboardEmpresa() {
         </div>
       </div>
 
+      {/* Resumen compacto */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Stat etiqueta="Colaboradores activos" valor={String(activos.length)} />
+        <Stat etiqueta="Nómina base mensual" valor={formatCOP(nominaMensual)} />
+        <Stat etiqueta="Retirados" valor={String(empleados.length - activos.length)} />
+      </div>
+
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
+      {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
 
       {mostrarForm && <FormEmpleado onGuardar={agregar} />}
 
+      {/* Filtros */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <SegmentedControl<FiltroEstado>
+          opciones={[
+            { valor: "activos", etiqueta: "Activos" },
+            { valor: "retirados", etiqueta: "Retirados" },
+            { valor: "todos", etiqueta: "Todos" },
+          ]}
+          activo={filtro}
+          onCambio={setFiltro}
+        />
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre o documento…"
+            className={`${inputCls} w-full pl-9`}
+          />
+        </div>
+      </div>
+
       <PaycheckCard>
         {cargando && <p className="text-sm text-muted px-3 py-6 text-center">Cargando…</p>}
-        {!cargando && empleados.length === 0 && (
-          <p className="text-sm text-muted px-3 py-6 text-center">Aún no tienes colaboradores.</p>
+        {!cargando && visibles.length === 0 && (
+          <p className="text-sm text-muted px-3 py-6 text-center">
+            {empleados.length === 0 ? "Aún no tienes colaboradores." : "Sin resultados para este filtro."}
+          </p>
         )}
         <div className="flex flex-col">
-          {empleados.map((e) => (
-            <div
-              key={e.id}
-              className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors duration-200"
-            >
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 text-mint-dark flex items-center justify-center shrink-0">
-                <UserRound size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{e.nombre}</p>
-                <p className="text-xs text-muted">
-                  {e.documento} · {e.tipoNomina === "turnos" ? "Por turnos" : "Salario fijo"}
+          {visibles.map((e) => (
+            <Fragment key={e.id}>
+              <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors duration-200">
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    e.activo ? "bg-emerald-50 text-mint-dark" : "bg-slate-100 text-muted"
+                  }`}
+                >
+                  <UserRound size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink truncate">
+                    {e.nombre}
+                    {!e.activo && <span className="ml-2 text-xs text-muted">(retirado)</span>}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {e.documento} · {e.tipoNomina === "turnos" ? "Por turnos" : "Salario fijo"}
+                  </p>
+                </div>
+                <p className="text-sm font-semibold text-ink tabular-nums shrink-0">
+                  {formatCOP(e.salarioBase)}
                 </p>
+                <button
+                  onClick={() => {
+                    setEditandoId(editandoId === e.id ? null : e.id);
+                    setAccion(null);
+                  }}
+                  title="Editar"
+                  className="text-muted hover:text-mint-dark shrink-0"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => setAccion({ id: e.id, tipo: "invitar" })}
+                  title="Invitar a crear su cuenta"
+                  className="text-muted hover:text-mint-dark shrink-0"
+                >
+                  <Mail size={17} />
+                </button>
+                <button
+                  onClick={() => setAccion({ id: e.id, tipo: "eliminar" })}
+                  title="Eliminar (solo si fue creado por error)"
+                  className="text-muted hover:text-coral shrink-0"
+                >
+                  <Trash2 size={16} />
+                </button>
+                {!e.fechaRetiro && (
+                  <button
+                    onClick={() => setAccion({ id: e.id, tipo: "retirar" })}
+                    title="Registrar retiro"
+                    className="text-xs text-muted hover:text-coral shrink-0 underline"
+                  >
+                    Retirar
+                  </button>
+                )}
+                {e.fechaRetiro && (
+                  <button
+                    onClick={() => liquidarFinal(e.id)}
+                    title="Liquidar prestaciones finales"
+                    className="text-xs text-mint-dark hover:underline shrink-0"
+                  >
+                    Liquidar final
+                  </button>
+                )}
               </div>
-              <p className="text-sm font-semibold text-ink tabular-nums shrink-0">
-                {formatCOP(e.salarioBase)}
-              </p>
-              <button
-                onClick={() => invitar(e.id)}
-                title="Invitar a crear su cuenta"
-                className="text-muted hover:text-mint-dark shrink-0"
-              >
-                <Mail size={17} />
-              </button>
-              {!e.fechaRetiro && (
-                <button
-                  onClick={() => retirar(e.id)}
-                  title="Registrar retiro"
-                  className="text-xs text-muted hover:text-coral shrink-0 underline"
-                >
-                  Retirar
-                </button>
+
+              {accion?.id === e.id && accion.tipo === "invitar" && (
+                <FormInvitar onEnviar={(email) => invitar(e.id, email)} onCancelar={() => setAccion(null)} />
               )}
-              {e.fechaRetiro && (
-                <button
-                  onClick={() => liquidarFinal(e.id)}
-                  title="Liquidar prestaciones finales"
-                  className="text-xs text-mint-dark hover:underline shrink-0"
-                >
-                  Liquidar final
-                </button>
+              {accion?.id === e.id && accion.tipo === "retirar" && (
+                <FormRetirar
+                  minimo={e.fechaIngreso}
+                  onConfirmar={(fecha) => retirar(e.id, fecha)}
+                  onCancelar={() => setAccion(null)}
+                />
               )}
-            </div>
+              {accion?.id === e.id && accion.tipo === "eliminar" && (
+                <div className="mx-3 mb-2 rounded-xl bg-red-50 p-3 flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-coral">
+                  <span className="flex-1">
+                    ¿Eliminar definitivamente a {e.nombre}? Solo es posible si fue creado por error (sin
+                    historial de nómina) — si tiene recibos, usa "Retirar".
+                  </span>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => eliminar(e.id)} className="rounded-lg bg-coral text-white text-xs px-3 py-1.5">
+                      Sí, eliminar
+                    </button>
+                    <button
+                      onClick={() => setAccion(null)}
+                      className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {editandoId === e.id && (
+                <FormEmpleado inicial={e} onGuardar={(datos) => editar(e.id, datos)} />
+              )}
+            </Fragment>
           ))}
         </div>
       </PaycheckCard>
@@ -152,17 +300,113 @@ export default function DashboardEmpresa() {
   );
 }
 
-function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "activo" | "fechaRetiro">) => void }) {
-  const [nombre, setNombre] = useState("");
-  const [documento, setDocumento] = useState("");
-  const [salarioBase, setSalarioBase] = useState("");
-  const [tipoNomina, setTipoNomina] = useState<Empleado["tipoNomina"]>("turnos");
-  const [auxilioTransporte, setAuxilioTransporte] = useState(true);
-  const [fechaIngreso, setFechaIngreso] = useState("");
-  const [tipoContrato, setTipoContrato] = useState<Empleado["tipoContrato"]>("indefinido");
+function Stat({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3">
+      <p className="text-xs text-muted">{etiqueta}</p>
+      <p className="text-base font-bold text-ink tabular-nums mt-0.5">{valor}</p>
+    </div>
+  );
+}
+
+function FormInvitar({ onEnviar, onCancelar }: { onEnviar: (email: string) => void; onCancelar: () => void }) {
+  const [email, setEmail] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (email.trim()) onEnviar(email.trim());
+      }}
+      className="mx-3 mb-2 rounded-xl bg-slate-50 p-3 flex flex-col sm:flex-row gap-2"
+    >
+      <input
+        required
+        type="email"
+        autoFocus
+        placeholder="Correo del colaborador"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className={`${inputCls} flex-1`}
+      />
+      <div className="flex gap-2 shrink-0">
+        <button type="submit" className="rounded-lg bg-mint text-white text-xs px-3 py-1.5">
+          Enviar invitación
+        </button>
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function FormRetirar({
+  minimo,
+  onConfirmar,
+  onCancelar,
+}: {
+  minimo: string;
+  onConfirmar: (fecha: string) => void;
+  onCancelar: () => void;
+}) {
+  const [fecha, setFecha] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (fecha) onConfirmar(fecha);
+      }}
+      className="mx-3 mb-2 rounded-xl bg-slate-50 p-3 flex flex-col sm:flex-row sm:items-center gap-2"
+    >
+      <span className="text-xs text-muted flex-1">
+        Fecha de retiro — el historial se conserva y podrás liquidar sus prestaciones finales.
+      </span>
+      <input
+        required
+        type="date"
+        autoFocus
+        min={minimo}
+        value={fecha}
+        onChange={(e) => setFecha(e.target.value)}
+        className={inputCls}
+      />
+      <div className="flex gap-2 shrink-0">
+        <button type="submit" className="rounded-lg bg-coral text-white text-xs px-3 py-1.5">
+          Confirmar retiro
+        </button>
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function FormEmpleado({
+  inicial,
+  onGuardar,
+}: {
+  inicial?: Empleado;
+  onGuardar: (d: Omit<Empleado, "id" | "activo" | "fechaRetiro">) => void;
+}) {
+  const [nombre, setNombre] = useState(inicial?.nombre ?? "");
+  const [documento, setDocumento] = useState(inicial?.documento ?? "");
+  const [salarioBase, setSalarioBase] = useState(inicial ? String(inicial.salarioBase) : "");
+  const [tipoNomina, setTipoNomina] = useState<Empleado["tipoNomina"]>(inicial?.tipoNomina ?? "turnos");
+  const [auxilioTransporte, setAuxilioTransporte] = useState(inicial?.auxilioTransporte ?? true);
+  const [fechaIngreso, setFechaIngreso] = useState(inicial?.fechaIngreso.slice(0, 10) ?? "");
+  const [tipoContrato, setTipoContrato] = useState<Empleado["tipoContrato"]>(inicial?.tipoContrato ?? "indefinido");
 
   return (
-    <PaycheckCard titulo="Nuevo colaborador">
+    <PaycheckCard titulo={inicial ? `Editar a ${inicial.nombre}` : "Nuevo colaborador"} className={inicial ? "mx-3 mb-2" : ""}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -223,7 +467,7 @@ function FormEmpleado({ onGuardar }: { onGuardar: (d: Omit<Empleado, "id" | "act
           type="submit"
           className="rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200"
         >
-          Guardar colaborador
+          {inicial ? "Guardar cambios" : "Guardar colaborador"}
         </button>
       </form>
     </PaycheckCard>

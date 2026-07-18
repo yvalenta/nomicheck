@@ -52,6 +52,12 @@ export function actualizarEmpleado(id: number, datos: Partial<Empleado>): Promis
   return autenticado(`/empresa/empleados/${id}`, { method: "PUT", body: JSON.stringify(datos) });
 }
 
+// Borrado físico SOLO si no hay historial de nómina (409 en caso contrario
+// — el camino legal es retirar y conservar los registros).
+export function eliminarEmpleado(id: number): Promise<{ ok: true }> {
+  return autenticado(`/empresa/empleados/${id}`, { method: "DELETE" });
+}
+
 export function invitarEmpleado(id: number, email: string) {
   return autenticado(`/empresa/empleados/${id}/invitar`, { method: "POST", body: JSON.stringify({ email }) });
 }
@@ -84,6 +90,49 @@ export function crearContratista(datos: Omit<Contratista, "id" | "activo">): Pro
 
 export function actualizarContratista(id: number, datos: Partial<Contratista>): Promise<Contratista> {
   return autenticado(`/empresa/contratistas/${id}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+export function eliminarContratista(id: number): Promise<{ ok: true }> {
+  return autenticado(`/empresa/contratistas/${id}`, { method: "DELETE" });
+}
+
+// --- Panel de costo total empleador (SDD §13) ---
+
+export interface LineaCosto {
+  concepto: string;
+  pct?: number;
+  valor: number;
+  ley: string;
+}
+
+export interface CostoEmpleado {
+  empleadoId: number;
+  nombre: string;
+  tipoContrato: string;
+  salarioBase: number;
+  costo: {
+    salarioMensual: number;
+    lineas: LineaCosto[];
+    costoTotalMensual: number;
+    factorSobreSalario: number;
+    advertencias: string[];
+  } | null;
+}
+
+export interface CostosEmpresa {
+  exonerado: boolean;
+  empleados: CostoEmpleado[];
+  contratistas: { contratistaId: number; nombre: string; honorariosMensuales: number }[];
+  totales: {
+    nominaBaseMensual: number;
+    costoTotalMensual: number;
+    honorariosMensuales: number;
+    factorPromedio: number;
+  };
+}
+
+export function obtenerCostos(exonerado: boolean): Promise<CostosEmpresa> {
+  return autenticado(`/empresa/costos?exonerado=${exonerado}`);
 }
 
 export interface Periodo {
