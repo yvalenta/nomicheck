@@ -116,6 +116,38 @@ export const PATRON_APRENDIZ_MIN_PCT_SMLMV = 0.5;
 /** Techo del rango sospechoso, en múltiplos de SMLMV. */
 export const PATRON_APRENDIZ_MAX_PCT_SMLMV = 0.75;
 
+// --- Costo patronal (aportes del EMPLEADOR, no del empleado) ---
+//
+// Tarifas estructurales del sistema — no cambian por decreto anual como el
+// SMLMV, por eso viven aquí y no como ReglaLegal versionada.
+
+/** Salud a cargo del empleador: 8.5% del IBC. Ley 100 de 1993, art. 204. Exonerable (Ley 1607 de 2012, art. 25) para salarios < 10 SMLMV en empresas contribuyentes de renta. */
+export const PCT_SALUD_EMPLEADOR = 0.085;
+
+/** Pensión a cargo del empleador: 12% del IBC. Ley 100 de 1993, art. 20. NO exonerable. */
+export const PCT_PENSION_EMPLEADOR = 0.12;
+
+/** Caja de compensación familiar: 4% de la nómina. Ley 21 de 1982. NO exonerable. */
+export const PCT_CAJA_COMPENSACION = 0.04;
+
+/** SENA: 2% de la nómina. Ley 21 de 1982. Exonerable junto con salud (Ley 1607 de 2012, art. 25). */
+export const PCT_SENA = 0.02;
+
+/** ICBF: 3% de la nómina. Ley 89 de 1988. Exonerable junto con salud (Ley 1607 de 2012, art. 25). */
+export const PCT_ICBF = 0.03;
+
+/** Umbral de exoneración parafiscal por trabajador: salarios < 10 SMLMV (Ley 1607 de 2012, art. 25). */
+export const EXONERACION_UMBRAL_SMLMV = 10;
+
+/** Tarifas de ARL por clase de riesgo (I a V). Decreto 1772 de 1994, art. 13 (valores iniciales de la tabla vigente). El empleador paga el 100%. */
+export const TARIFAS_ARL: Record<1 | 2 | 3 | 4 | 5, number> = {
+  1: 0.00522,
+  2: 0.01044,
+  3: 0.02436,
+  4: 0.0435,
+  5: 0.0696,
+};
+
 // --- Indemnización por terminación sin justa causa (CST art. 64, modificado por la Ley 50 de 1990, art. 6) ---
 //
 // El umbral de 10 SMLMV separa dos escalas de días de indemnización para
