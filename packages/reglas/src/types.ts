@@ -134,6 +134,12 @@ export interface ResultadoNomina {
   totalDeducciones: number;
   netoEsperado: number;
   advertencias: string[];
+  /** Salario mensual / 30 — dato de cabecera del comprobante. */
+  valorDia?: number;
+  /** Salario mensual / divisor vigente al cierre del periodo (220 ó 210, Ley 2101 de 2021). */
+  valorHoraOrdinaria?: number;
+  /** Días efectivamente laborados (con turno), no días calendario del periodo — solo modo turnos. */
+  diasLaborados?: number;
 }
 
 export interface LineaResultado {

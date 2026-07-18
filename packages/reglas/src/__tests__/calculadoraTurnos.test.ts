@@ -67,6 +67,15 @@ describe("CalculadoraPorTurnos — fixture Restaurante Resplandor (16–30 jun 2
     expect(resultado.netoEsperado).toBeCloseTo(1000254.67, 0);
   });
 
+  it("expone valor día, valor hora ordinaria (divisor 220 en jun-2026) y días laborados", () => {
+    expect(resultado.valorDia).toBe(Math.round(1750905 / 30));
+    expect(resultado.valorHoraOrdinaria).toBe(Math.round(1750905 / 220));
+    // 15 días calendario menos el lunes festivo 29-jun (descanso por defecto)
+    // y los lunes de descanso del horario base.
+    expect(resultado.diasLaborados).toBeGreaterThan(0);
+    expect(resultado.diasLaborados!).toBeLessThan(15);
+  });
+
   it("no genera advertencias (solo 2 domingos trabajados)", () => {
     expect(resultado.advertencias).toHaveLength(0);
   });

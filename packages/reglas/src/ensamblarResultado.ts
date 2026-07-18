@@ -13,6 +13,9 @@ export function ensamblarResultado(params: {
   advertencias: string[];
   /** Si el llamador ya totalizó deducciones (con topes aplicados), se respeta. */
   totalDeducciones?: number;
+  valorDia?: number;
+  valorHoraOrdinaria?: number;
+  diasLaborados?: number;
 }): ResultadoNomina {
   const totalDevengos = redondearPeso(
     params.lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
@@ -33,5 +36,8 @@ export function ensamblarResultado(params: {
     totalDeducciones,
     netoEsperado: redondearPeso(totalDevengos - totalDeducciones),
     advertencias: params.advertencias,
+    valorDia: params.valorDia,
+    valorHoraOrdinaria: params.valorHoraOrdinaria,
+    diasLaborados: params.diasLaborados,
   };
 }

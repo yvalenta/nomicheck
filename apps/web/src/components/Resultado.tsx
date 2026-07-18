@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, HelpCircle, RotateCcw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, HelpCircle, RotateCcw, XCircle } from "lucide-react";
 import { formatCOP, type ResultadoNomina } from "@pv/reglas";
 import PaycheckCard from "./PaycheckCard.tsx";
 import SegmentedControl from "./SegmentedControl.tsx";
 import ValidationRow from "./ValidationRow.tsx";
 import FinancialProgressBar from "./FinancialProgressBar.tsx";
 import ChatContador from "./ChatContador.tsx";
+import ComprobanteNomina from "./ComprobanteNomina.tsx";
 
 interface Props {
   resultado: ResultadoNomina;
@@ -19,6 +20,7 @@ const TOLERANCIA_PESOS = 1;
 
 export default function Resultado({ resultado, netoRecibido, onVolver }: Props) {
   const [vista, setVista] = useState<Vista>("resumen");
+  const [mostrarComprobante, setMostrarComprobante] = useState(false);
 
   const diferencia = netoRecibido !== undefined ? netoRecibido - resultado.netoEsperado : undefined;
   const coincide = diferencia !== undefined && Math.abs(diferencia) <= TOLERANCIA_PESOS;
@@ -121,6 +123,14 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
           </div>
         </div>
       </PaycheckCard>
+
+      <button
+        onClick={() => setMostrarComprobante((v) => !v)}
+        className="flex items-center justify-center gap-2 self-center text-sm font-medium text-mint-dark hover:underline"
+      >
+        <FileText size={15} /> {mostrarComprobante ? "Ocultar comprobante" : "Ver comprobante detallado"}
+      </button>
+      {mostrarComprobante && <ComprobanteNomina resultado={resultado} />}
 
       <ChatContador resultado={resultado} />
 

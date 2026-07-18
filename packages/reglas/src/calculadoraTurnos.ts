@@ -451,6 +451,14 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
       advertencias,
+      // Cabecera del comprobante: valor día/hora con el divisor vigente al
+      // CIERRE del periodo (si cruza el corte de la Ley 2101, las líneas por
+      // tramo ya muestran cada divisor — esto es solo el dato de referencia).
+      valorDia: redondearPeso(d.salarioBasicoMensual / DIAS_MES_COMERCIAL),
+      valorHoraOrdinaria: redondearPeso(
+        d.salarioBasicoMensual / r.en("divisor_hora_ordinaria", d.periodoHasta)
+      ),
+      diasLaborados: dias.length,
       // Las deducciones ya vienen totalizadas con topes aplicados; se suma
       // el ajuste por ausentismo (no pasa por aplicarDeducciones — no tiene
       // tope legal, es simplemente el pago de los días no remunerados).

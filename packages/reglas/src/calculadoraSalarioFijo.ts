@@ -4,7 +4,7 @@ import { aplicarDeducciones } from "./deducciones.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
 import { calcularAuxilioTransporte } from "./auxilio.js";
 import { advertenciaPatronAprendiz, advertenciaTerminoNoIndefinido } from "./advertenciasContrato.js";
-import { rangoFechas, validarPeriodo } from "./utils.js";
+import { rangoFechas, reglaEn, validarPeriodo } from "./utils.js";
 import { DIAS_MES_COMERCIAL } from "./constantes.js";
 
 export const CalculadoraSalarioFijo: CalculadoraNomina = {
@@ -119,6 +119,10 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
       advertencias,
+      valorDia: redondearPeso(d.salarioBasicoMensual / DIAS_MES_COMERCIAL),
+      valorHoraOrdinaria: redondearPeso(
+        d.salarioBasicoMensual / reglaEn(reglas, "divisor_hora_ordinaria", d.periodoHasta)
+      ),
     });
   },
 };
