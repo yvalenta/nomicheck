@@ -19,9 +19,11 @@ import { costos } from "../controllers/costosController.js";
 import {
   listar as listarPeriodos,
   crear as crearPeriodo,
+  editar as editarPeriodo,
   obtenerTurnos,
   guardarTurnos,
   liquidar,
+  revertir,
   recibos,
 } from "../controllers/periodosController.js";
 import { misRecibos, reportar } from "../controllers/colaboradorController.js";
@@ -108,9 +110,13 @@ router.get("/empresa/costos", ...soloEmpresa, costos);
 
 router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
 router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);
+// Editar fechas SOLO en borrador (uno liquidado se revierte primero) — la
+// nota de edición queda como rastro de auditoría, ver periodosService.ts.
+router.put("/empresa/periodos/:id", ...soloEmpresa, editarPeriodo);
 router.get("/empresa/periodos/:id/turnos", ...soloEmpresa, obtenerTurnos);
 router.put("/empresa/periodos/:id/turnos", ...soloEmpresa, guardarTurnos);
 router.post("/empresa/periodos/:id/liquidar", ...soloEmpresa, liquidar);
+router.post("/empresa/periodos/:id/revertir", ...soloEmpresa, revertir);
 router.get("/empresa/recibos", ...soloEmpresa, recibos);
 router.get("/empresa/discrepancias", ...soloEmpresa, listarDiscrepancias);
 router.put("/empresa/discrepancias/:id", ...soloEmpresa, responderDiscrepancia);

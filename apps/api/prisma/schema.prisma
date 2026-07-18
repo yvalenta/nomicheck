@@ -108,6 +108,10 @@ model PeriodoNomina {
   fechaFin    String // YYYY-MM-DD
   estado      String   @default("borrador") // borrador | liquidado | pagado
   creadoEn    DateTime @default(now())
+  // Rastro de auditoría de la última edición de fechas (solo se permite en
+  // borrador — un periodo liquidado se revierte primero). Null = nunca editado.
+  notaEdicion String?
+  editadoEn   DateTime?
 
   turnos  Turno[]
   recibos ReciboPago[]

@@ -1,12 +1,13 @@
 import type { Request, Response } from "express";
-import { periodoSchema, turnosSchema } from "../validation/periodo.js";
+import { editarPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
 import {
   crearPeriodo,
+  editarPeriodo,
   listarPeriodos,
   listarTurnos,
   reemplazarTurnos,
 } from "../services/periodosService.js";
-import { liquidarPeriodo, listarRecibos } from "../services/liquidacionService.js";
+import { liquidarPeriodo, listarRecibos, revertirABorrador } from "../services/liquidacionService.js";
 
 export async function listar(req: Request, res: Response) {
   res.json(await listarPeriodos(req.usuario!.empresaId!));
@@ -20,6 +21,20 @@ export async function crear(req: Request, res: Response) {
   }
   const periodo = await crearPeriodo(req.usuario!.empresaId!, parseo.data);
   res.status(201).json(periodo);
+}
+
+export async function editar(req: Request, res: Response) {
+  const parseo = editarPeriodoSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+  try {
+    const periodo = await editarPeriodo(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
+    res.json(periodo);
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo editar el periodo" });
+  }
 }
 
 export async function obtenerTurnos(req: Request, res: Response) {
@@ -46,6 +61,15 @@ export async function liquidar(req: Request, res: Response) {
     res.json(recibos);
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo liquidar" });
+  }
+}
+
+export async function revertir(req: Request, res: Response) {
+  try {
+    await revertirABorrador(req.usuario!.empresaId!, Number(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo revertir el periodo" });
   }
 }
 

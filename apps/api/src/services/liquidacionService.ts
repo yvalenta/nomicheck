@@ -151,3 +151,18 @@ export function listarRecibos(empresaId: number, periodoId?: number) {
     orderBy: { liquidadoEn: "desc" },
   });
 }
+
+export async function revertirABorrador(empresaId: number, periodoId: number) {
+  const periodo = await obtenerPeriodo(empresaId, periodoId);
+  if (periodo.estado !== "liquidado") {
+    throw new Error(`El periodo está en estado "${periodo.estado}" y no puede revertirse a borrador`);
+  }
+
+  // Esto fallará automáticamente por restricción de llave foránea de Prisma
+  // si existen ReporteDiscrepancia apuntando a los ReciboPago de este periodo,
+  // lo cual es correcto: no se debe borrar si el empleado ya reportó un problema.
+  await prisma.$transaction([
+    prisma.reciboPago.deleteMany({ where: { periodoId } }),
+    prisma.periodoNomina.update({ where: { id: periodoId }, data: { estado: "borrador" } }),
+  ]);
+}

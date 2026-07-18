@@ -5,6 +5,12 @@ export const periodoSchema = z
   .object({ fechaInicio: fecha, fechaFin: fecha })
   .refine((p) => p.fechaInicio <= p.fechaFin, { message: "fechaInicio debe ser anterior a fechaFin" });
 
+// Editar fechas de un periodo ya creado exige la nota (rastro de auditoría
+// de por qué se corrigió) — no es un campo opcional como en el alta.
+export const editarPeriodoSchema = z
+  .object({ fechaInicio: fecha, fechaFin: fecha, nota: z.string().min(1, "Escribe el motivo de la edición") })
+  .refine((p) => p.fechaInicio <= p.fechaFin, { message: "fechaInicio debe ser anterior a fechaFin" });
+
 export const turnoSchema = z.object({
   empleadoId: z.number().int().positive(),
   fecha,

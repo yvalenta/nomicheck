@@ -140,6 +140,8 @@ export interface Periodo {
   fechaInicio: string;
   fechaFin: string;
   estado: "borrador" | "liquidado" | "pagado";
+  notaEdicion: string | null;
+  editadoEn: string | null;
 }
 
 export interface Turno {
@@ -181,6 +183,14 @@ export function crearPeriodo(datos: { fechaInicio: string; fechaFin: string }): 
   return autenticado("/empresa/periodos", { method: "POST", body: JSON.stringify(datos) });
 }
 
+// Solo en borrador — un periodo liquidado se revierte primero (revertirPeriodo).
+export function editarPeriodo(
+  id: number,
+  datos: { fechaInicio: string; fechaFin: string; nota: string }
+): Promise<Periodo> {
+  return autenticado(`/empresa/periodos/${id}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
 export function obtenerTurnos(periodoId: number): Promise<Turno[]> {
   return autenticado(`/empresa/periodos/${periodoId}/turnos`);
 }
@@ -194,6 +204,10 @@ export function guardarTurnos(periodoId: number, turnos: Turno[]) {
 
 export function liquidarPeriodo(periodoId: number): Promise<Recibo[]> {
   return autenticado(`/empresa/periodos/${periodoId}/liquidar`, { method: "POST" });
+}
+
+export function revertirPeriodo(periodoId: number): Promise<{ ok: true }> {
+  return autenticado(`/empresa/periodos/${periodoId}/revertir`, { method: "POST" });
 }
 
 export function listarRecibos(periodoId?: number): Promise<Recibo[]> {
