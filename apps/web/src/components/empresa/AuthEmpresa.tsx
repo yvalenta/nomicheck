@@ -132,7 +132,21 @@ export default function AuthEmpresa() {
         {error && (
           <div className="rounded-xl p-3 bg-red-50 text-coral flex items-start gap-2 text-sm">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            <span>{error}</span>
+            <div className="flex flex-col gap-1.5">
+              <span>{error}</span>
+              {modo === "registro" && error.includes("Ya existe una cuenta") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModo("login");
+                    setError(null);
+                  }}
+                  className="self-start text-xs font-medium underline"
+                >
+                  Ir a iniciar sesión
+                </button>
+              )}
+            </div>
           </div>
         )}
 
