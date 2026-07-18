@@ -22,6 +22,7 @@ import PasoRevision from "./components/PasoRevision.tsx";
 import Resultado from "./components/Resultado.tsx";
 import SkeletonResultado from "./components/SkeletonResultado.tsx";
 import IndemnizacionCalculadora from "./components/IndemnizacionCalculadora.tsx";
+import AuthFlowManager from "./components/AuthFlowManager.tsx";
 
 type Paso = "salario" | "semana" | "subir" | "revision" | "calculando" | "resultado" | "indemnizacion";
 
@@ -252,6 +253,10 @@ export default function App() {
           ¿Eres empresa? Liquida y administra tu nómina
         </a>
       </footer>
+
+      {/* Orquestador de delayed auth: AuthModal + interceptor de pendingAction.
+          Siempre montado para reanudar el guardado tras un redirect OAuth. */}
+      <AuthFlowManager />
     </div>
   );
 }

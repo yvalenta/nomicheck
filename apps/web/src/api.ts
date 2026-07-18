@@ -102,6 +102,56 @@ export async function calcularIndemnizacion(datos: DatosIndemnizacion): Promise<
   return body as ResultadoIndemnizacion;
 }
 
+// --- Registro de cuenta individual (server-side) ---
+// El usuario se crea con email_confirm=true en el backend, así el cliente
+// puede iniciar sesión de inmediato (sin correo de confirmación) y el guardado
+// diferido se dispara al toque.
+export async function registrarIndividual(datos: {
+  email: string;
+  password: string;
+  nombre: string;
+}): Promise<void> {
+  const res = await fetch("/api/auth/registro-individual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? "No se pudo crear la cuenta");
+}
+
+// --- Guardar liquidación en el historial del usuario (delayed auth) ---
+// Requiere sesión de Supabase: manda el JWT en Authorization igual que los
+// clientes autenticados (apiEmpresa/apiColaborador).
+export interface LiquidacionGuardada {
+  id: number;
+  creadoEn: string;
+}
+
+export async function guardarLiquidacion(payload: {
+  resultado: ResultadoNomina;
+  netoRecibido?: number;
+}): Promise<LiquidacionGuardada> {
+  const { supabase } = await import("./lib/supabase");
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Necesitas iniciar sesión para guardar tu liquidación");
+
+  const res = await fetch("/api/liquidations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error ?? "No se pudo guardar la liquidación");
+  }
+  return body as LiquidacionGuardada;
+}
+
 export interface MensajeChat {
   rol: "usuario" | "asistente";
   texto: string;

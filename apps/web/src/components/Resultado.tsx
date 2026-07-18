@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, HelpCircle, RotateCcw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, HelpCircle, Loader2, RotateCcw, Save, XCircle } from "lucide-react";
 import { formatCOP, type ResultadoNomina } from "@pv/reglas";
 import PaycheckCard from "./PaycheckCard.tsx";
 import SegmentedControl from "./SegmentedControl.tsx";
@@ -7,6 +7,7 @@ import ValidationRow from "./ValidationRow.tsx";
 import FinancialProgressBar from "./FinancialProgressBar.tsx";
 import ChatContador from "./ChatContador.tsx";
 import ComprobanteNomina from "./ComprobanteNomina.tsx";
+import { useGuardarLiquidacion } from "../hooks/useGuardarLiquidacion.ts";
 
 interface Props {
   resultado: ResultadoNomina;
@@ -21,6 +22,7 @@ const TOLERANCIA_PESOS = 1;
 export default function Resultado({ resultado, netoRecibido, onVolver }: Props) {
   const [vista, setVista] = useState<Vista>("resumen");
   const [mostrarComprobante, setMostrarComprobante] = useState(false);
+  const { guardar, guardando, mensaje } = useGuardarLiquidacion();
 
   const diferencia = netoRecibido !== undefined ? netoRecibido - resultado.netoEsperado : undefined;
   const coincide = diferencia !== undefined && Math.abs(diferencia) <= TOLERANCIA_PESOS;
@@ -123,6 +125,16 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
           </div>
         </div>
       </PaycheckCard>
+
+      <button
+        onClick={() => guardar(resultado, netoRecibido)}
+        disabled={guardando}
+        className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+      >
+        {guardando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+        {guardando ? "Guardando…" : "Guardar liquidación"}
+      </button>
+      {mensaje && <p className="text-xs text-center text-muted -mt-2">{mensaje}</p>}
 
       <button
         onClick={() => setMostrarComprobante((v) => !v)}
