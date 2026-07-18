@@ -289,6 +289,11 @@ function DetallePeriodo({
   // atajo para autocompletar turnos, no se persiste (cada Turno guardado ya
   // trae sus propias horaInicio/horaFin explícitas, ver liquidacionService.ts).
   const [horarios, setHorarios] = useState<Record<number, (HorarioDia | null)[]>>({});
+  // Fechas cuyo turno fue generado por "Autocompletar" y el usuario no lo ha
+  // tocado a mano — al cambiar el horario habitual estos turnos se
+  // resincronizan (o se eliminan si el día ahora es descanso); los que el
+  // usuario edita manualmente salen de este set y ya no se vuelven a tocar.
+  const [autogenerados, setAutogenerados] = useState<Record<number, Set<string>>>({});
 
   useEffect(() => {
     listarEmpleados().then(setEmpleados);
@@ -306,6 +311,27 @@ function DetallePeriodo({
 
   function setHorarioDe(empleadoId: number, nuevo: (HorarioDia | null)[]) {
     setHorarios((prev) => ({ ...prev, [empleadoId]: nuevo }));
+
+    const generados = autogenerados[empleadoId];
+    if (!generados || generados.size === 0) return;
+
+    setTurnos((prev) =>
+      prev.flatMap((t) => {
+        if (t.empleadoId !== empleadoId || !generados.has(t.fecha)) return [t];
+        const dia = nuevo[diaSemana(t.fecha)];
+        // El día pasó a descanso: el turno generado ya no aplica.
+        if (!dia) return [];
+        // Sigue siendo día de trabajo: refleja el horario nuevo (por si las horas cambiaron).
+        return [{ ...t, horaInicio: dia.horaInicio, horaFin: dia.horaFin }];
+      })
+    );
+    setAutogenerados((prev) => {
+      const next = new Set(generados);
+      for (const fecha of generados) {
+        if (!nuevo[diaSemana(fecha)]) next.delete(fecha);
+      }
+      return { ...prev, [empleadoId]: next };
+    });
   }
 
   // Genera turnos para los días del periodo donde el horario habitual dice
@@ -324,6 +350,11 @@ function DetallePeriodo({
       if (dia) nuevos.push({ empleadoId, fecha, horaInicio: dia.horaInicio, horaFin: dia.horaFin });
     }
     setTurnos((prev) => [...prev, ...nuevos]);
+    setAutogenerados((prev) => {
+      const next = new Set(prev[empleadoId] ?? []);
+      for (const t of nuevos) next.add(t.fecha);
+      return { ...prev, [empleadoId]: next };
+    });
     setAbiertos((prev) => new Set(prev).add(empleadoId));
     notificar(
       nuevos.length > 0
@@ -364,11 +395,25 @@ function DetallePeriodo({
     setTurnos((prev) => [...prev, { empleadoId, fecha: ultimaFecha, horaInicio: "10:00", horaFin: "17:00" }]);
   }
 
+  // Editar/eliminar un turno a mano lo saca del set de "autogenerados": deja
+  // de resincronizarse cuando el usuario ajuste el horario habitual después.
+  function desmarcarAutogenerado(empleadoId: number, fecha: string) {
+    setAutogenerados((prev) => {
+      const generados = prev[empleadoId];
+      if (!generados || !generados.has(fecha)) return prev;
+      const next = new Set(generados);
+      next.delete(fecha);
+      return { ...prev, [empleadoId]: next };
+    });
+  }
+
   function actualizarTurno(turno: Turno, cambios: Partial<Turno>) {
+    desmarcarAutogenerado(turno.empleadoId, turno.fecha);
     setTurnos((prev) => prev.map((t) => (t === turno ? { ...t, ...cambios } : t)));
   }
 
   function quitarTurno(turno: Turno) {
+    desmarcarAutogenerado(turno.empleadoId, turno.fecha);
     setTurnos((prev) => prev.filter((t) => t !== turno));
   }
 
