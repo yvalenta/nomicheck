@@ -3,6 +3,11 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { calcular } from "../controllers/nominaController.js";
 import { calcular as calcularIndemnizacion } from "../controllers/indemnizacionController.js";
+import {
+  calcularCesantias,
+  calcularPrima,
+  calcularRecargos,
+} from "../controllers/calculadorasController.js";
 import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
@@ -86,6 +91,11 @@ router.post("/nomina/calcular", limitadorCalculo, calcular);
 // §14) — no es parte del recibo de nómina periódico, es otro modo de cálculo
 // con sus propios inputs (fecha de ingreso/retiro o vencimiento pactado).
 router.post("/indemnizacion/calcular", limitadorCalculo, calcularIndemnizacion);
+// Calculadoras anónimas por concepto (SDD §14): prima, cesantías (+intereses)
+// y recargos/horas extra — informativas, sin recibo ni deducciones.
+router.post("/prima/calcular", limitadorCalculo, calcularPrima);
+router.post("/cesantias/calcular", limitadorCalculo, calcularCesantias);
+router.post("/recargos/calcular", limitadorCalculo, calcularRecargos);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
