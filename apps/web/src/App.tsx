@@ -26,7 +26,9 @@ import CalculadorasHub from "./components/CalculadorasHub.tsx";
 import PrimaCalculadora from "./components/PrimaCalculadora.tsx";
 import CesantiasCalculadora from "./components/CesantiasCalculadora.tsx";
 import RecargosCalculadora from "./components/RecargosCalculadora.tsx";
+import MisLiquidaciones from "./components/MisLiquidaciones.tsx";
 import AuthFlowManager from "./components/AuthFlowManager.tsx";
+import { supabase } from "./lib/supabase.ts";
 
 type Paso =
   | "salario"
@@ -39,7 +41,8 @@ type Paso =
   | "indemnizacion"
   | "prima"
   | "cesantias"
-  | "recargos";
+  | "recargos"
+  | "misLiquidaciones";
 
 const PASO_LABEL: Record<Paso, string> = {
   salario: "Paso 1 de 3 · Salario y fechas",
@@ -53,6 +56,7 @@ const PASO_LABEL: Record<Paso, string> = {
   prima: "Prima de servicios",
   cesantias: "Cesantías e intereses",
   recargos: "Recargos y horas extra",
+  misLiquidaciones: "Mis liquidaciones",
 };
 
 export default function App() {
@@ -78,10 +82,14 @@ export default function App() {
   const [extraido, setExtraido] = useState<ComprobanteExtraido | null>(null);
   const [resultado, setResultado] = useState<ResultadoNomina | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [haySesion, setHaySesion] = useState(false);
 
   useEffect(() => {
     listarFestivos().then(setFestivos);
     obtenerParametros().then(setParametros);
+    supabase.auth.getSession().then(({ data }) => setHaySesion(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_evento, session) => setHaySesion(!!session));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   // "servicios" no es un TipoContrato del motor de turnos/salario-fijo (es
@@ -182,7 +190,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <HeaderProfile periodo={periodo} paso={PASO_LABEL[paso]} />
+      <HeaderProfile
+        periodo={periodo}
+        paso={PASO_LABEL[paso]}
+        mostrarMisLiquidaciones={haySesion && paso !== "misLiquidaciones"}
+        onVerMisLiquidaciones={() => setPaso("misLiquidaciones")}
+      />
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
         {paso === "salario" && (
@@ -226,6 +239,7 @@ export default function App() {
         {paso === "prima" && <PrimaCalculadora onAtras={() => setPaso("calculadoras")} />}
         {paso === "cesantias" && <CesantiasCalculadora onAtras={() => setPaso("calculadoras")} />}
         {paso === "recargos" && <RecargosCalculadora onAtras={() => setPaso("calculadoras")} />}
+        {paso === "misLiquidaciones" && <MisLiquidaciones onAtras={() => setPaso("salario")} />}
 
         {paso === "semana" && (
           <div className="flex flex-col gap-4">

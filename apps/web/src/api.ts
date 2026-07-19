@@ -226,6 +226,32 @@ export async function guardarLiquidacion(payload: {
   return body as LiquidacionGuardada;
 }
 
+export interface LiquidacionListada {
+  id: number;
+  resultado: ResultadoNomina;
+  netoEsperado: number;
+  netoRecibido: number | null;
+  periodoDesde: string | null;
+  periodoHasta: string | null;
+  creadoEn: string;
+}
+
+export async function listarMisLiquidaciones(): Promise<LiquidacionListada[]> {
+  const { supabase } = await import("./lib/supabase");
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Necesitas iniciar sesión para ver tu historial");
+
+  const res = await fetch("/api/liquidations", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error ?? "No se pudo cargar tu historial de liquidaciones");
+  }
+  return body as LiquidacionListada[];
+}
+
 export interface MensajeChat {
   rol: "usuario" | "asistente";
   texto: string;

@@ -1,8 +1,10 @@
-import { ShieldCheck } from "lucide-react";
+import { History, ShieldCheck } from "lucide-react";
 
 interface Props {
   periodo?: { desde: string; hasta: string };
   paso?: string;
+  mostrarMisLiquidaciones?: boolean;
+  onVerMisLiquidaciones?: () => void;
 }
 
 function formatFecha(iso: string): string {
@@ -11,7 +13,7 @@ function formatFecha(iso: string): string {
   return `${d} ${meses[m - 1]} ${y}`;
 }
 
-export default function HeaderProfile({ periodo, paso }: Props) {
+export default function HeaderProfile({ periodo, paso, mostrarMisLiquidaciones, onVerMisLiquidaciones }: Props) {
   return (
     <header className="bg-midnight bg-dots text-white">
       <div className="max-w-3xl mx-auto px-5 py-6 flex items-center justify-between">
@@ -24,17 +26,27 @@ export default function HeaderProfile({ periodo, paso }: Props) {
             <p className="text-xs text-slate-400 mt-1">Tu nómina, verificada</p>
           </div>
         </div>
-        <div className="text-right">
-          {periodo ? (
-            <>
-              <p className="text-xs text-slate-400">Periodo</p>
-              <p className="text-sm font-semibold">
-                {formatFecha(periodo.desde)} — {formatFecha(periodo.hasta)}
-              </p>
-            </>
-          ) : (
-            paso && <p className="text-xs text-slate-400">{paso}</p>
+        <div className="flex items-center gap-4">
+          {mostrarMisLiquidaciones && (
+            <button
+              onClick={onVerMisLiquidaciones}
+              className="flex items-center gap-1.5 text-xs font-medium text-mint hover:underline shrink-0"
+            >
+              <History size={14} /> Mis liquidaciones
+            </button>
           )}
+          <div className="text-right">
+            {periodo ? (
+              <>
+                <p className="text-xs text-slate-400">Periodo</p>
+                <p className="text-sm font-semibold">
+                  {formatFecha(periodo.desde)} — {formatFecha(periodo.hasta)}
+                </p>
+              </>
+            ) : (
+              paso && <p className="text-xs text-slate-400">{paso}</p>
+            )}
+          </div>
         </div>
       </div>
     </header>
