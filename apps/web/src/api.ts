@@ -102,6 +102,80 @@ export async function calcularIndemnizacion(datos: DatosIndemnizacion): Promise<
   return body as ResultadoIndemnizacion;
 }
 
+// --- Calculadoras anónimas por concepto (SDD §14) ---
+// Hermanas de la de indemnización: informativas, sin recibo ni deducciones.
+
+async function postCalculadora<T>(path: string, datos: unknown, errorDefault: string): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body.error ?? errorDefault);
+  }
+  return body as T;
+}
+
+export interface ResultadoPrima {
+  prima: number;
+  diasTrabajadosAcumulado: number;
+  explicacion: string;
+  ley: string;
+}
+
+export function calcularPrima(datos: {
+  salarioMensual: number;
+  fechaIngreso: string;
+  fechaCorte: string;
+}): Promise<ResultadoPrima> {
+  return postCalculadora("/api/prima/calcular", datos, "No se pudo calcular la prima");
+}
+
+export interface ResultadoCesantias {
+  cesantias: number;
+  interesesCesantias: number;
+  diasTrabajadosAcumulado: number;
+  auxilioIncluido: number;
+  advertencias: string[];
+  explicacion: string;
+  ley: string;
+}
+
+export function calcularCesantias(datos: {
+  salarioMensual: number;
+  recibeAuxilioTransporte: boolean;
+  fechaIngreso: string;
+  fechaCorte: string;
+}): Promise<ResultadoCesantias> {
+  return postCalculadora("/api/cesantias/calcular", datos, "No se pudieron calcular las cesantías");
+}
+
+export interface HorasRecargo {
+  nocturnas?: number;
+  dominicalesDiurnas?: number;
+  dominicalesNocturnas?: number;
+  extrasDiurnas?: number;
+  extrasNocturnas?: number;
+  extrasDominicalesDiurnas?: number;
+  extrasDominicalesNocturnas?: number;
+}
+
+export interface ResultadoRecargos {
+  valorHoraOrdinaria: number;
+  lineas: { concepto: string; horas?: number; recargoPct?: number; valorCalculado: number; ley?: string }[];
+  total: number;
+}
+
+export function calcularRecargos(datos: {
+  salarioMensual: number;
+  fechaReferencia: string;
+  horas: HorasRecargo;
+}): Promise<ResultadoRecargos> {
+  return postCalculadora("/api/recargos/calcular", datos, "No se pudieron calcular los recargos");
+}
+
 // --- Registro de cuenta individual (server-side) ---
 // El usuario se crea con email_confirm=true en el backend, así el cliente
 // puede iniciar sesión de inmediato (sin correo de confirmación) y el guardado

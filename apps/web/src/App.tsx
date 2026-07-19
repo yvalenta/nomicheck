@@ -22,9 +22,24 @@ import PasoRevision from "./components/PasoRevision.tsx";
 import Resultado from "./components/Resultado.tsx";
 import SkeletonResultado from "./components/SkeletonResultado.tsx";
 import IndemnizacionCalculadora from "./components/IndemnizacionCalculadora.tsx";
+import CalculadorasHub from "./components/CalculadorasHub.tsx";
+import PrimaCalculadora from "./components/PrimaCalculadora.tsx";
+import CesantiasCalculadora from "./components/CesantiasCalculadora.tsx";
+import RecargosCalculadora from "./components/RecargosCalculadora.tsx";
 import AuthFlowManager from "./components/AuthFlowManager.tsx";
 
-type Paso = "salario" | "semana" | "subir" | "revision" | "calculando" | "resultado" | "indemnizacion";
+type Paso =
+  | "salario"
+  | "semana"
+  | "subir"
+  | "revision"
+  | "calculando"
+  | "resultado"
+  | "calculadoras"
+  | "indemnizacion"
+  | "prima"
+  | "cesantias"
+  | "recargos";
 
 const PASO_LABEL: Record<Paso, string> = {
   salario: "Paso 1 de 3 · Salario y fechas",
@@ -33,7 +48,11 @@ const PASO_LABEL: Record<Paso, string> = {
   revision: "Revisa los datos",
   calculando: "Calculando…",
   resultado: "Resultado",
+  calculadoras: "Calculadoras",
   indemnizacion: "Indemnización por terminación",
+  prima: "Prima de servicios",
+  cesantias: "Cesantías e intereses",
+  recargos: "Recargos y horas extra",
 };
 
 export default function App() {
@@ -191,15 +210,22 @@ export default function App() {
               O sube tu comprobante y lo leemos por ti
             </button>
             <button
-              onClick={() => setPaso("indemnizacion")}
+              onClick={() => setPaso("calculadoras")}
               className="text-sm text-mint-dark hover:underline self-center"
             >
-              ¿Te despidieron o terminaron tu contrato antes de tiempo? Calcula tu indemnización
+              Calculadoras: prima, cesantías, recargos e indemnización
             </button>
           </div>
         )}
 
-        {paso === "indemnizacion" && <IndemnizacionCalculadora onAtras={() => setPaso("salario")} />}
+        {paso === "calculadoras" && (
+          <CalculadorasHub onIr={(p) => setPaso(p)} onAtras={() => setPaso("salario")} />
+        )}
+
+        {paso === "indemnizacion" && <IndemnizacionCalculadora onAtras={() => setPaso("calculadoras")} />}
+        {paso === "prima" && <PrimaCalculadora onAtras={() => setPaso("calculadoras")} />}
+        {paso === "cesantias" && <CesantiasCalculadora onAtras={() => setPaso("calculadoras")} />}
+        {paso === "recargos" && <RecargosCalculadora onAtras={() => setPaso("calculadoras")} />}
 
         {paso === "semana" && (
           <div className="flex flex-col gap-4">
