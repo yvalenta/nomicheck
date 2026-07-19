@@ -7,7 +7,11 @@ import type {
   NovedadDia,
 } from "./types.js";
 import { crearResolutorReglas, diaSemana, esDomingo, esFechaValida, rangoFechas, validarPeriodo } from "./utils.js";
-import { advertenciaPatronAprendiz, advertenciaTerminoNoIndefinido } from "./advertenciasContrato.js";
+import {
+  advertenciaIbcTiempoParcial,
+  advertenciaPatronAprendiz,
+  advertenciaTerminoNoIndefinido,
+} from "./advertenciasContrato.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
@@ -156,6 +160,8 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     if (advertenciaAprendiz) advertencias.push(advertenciaAprendiz);
     const advertenciaTermino = advertenciaTerminoNoIndefinido(d.tipoContrato);
     if (advertenciaTermino) advertencias.push(advertenciaTermino);
+    const advertenciaIbc = advertenciaIbcTiempoParcial(d.salarioBasicoMensual, d.tipoContrato, r, d.periodoDesde);
+    if (advertenciaIbc) advertencias.push(advertenciaIbc);
 
     const dias: DiaTrabajado[] = [];
     for (const fecha of fechas) {

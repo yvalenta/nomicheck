@@ -56,3 +56,33 @@ export function advertenciaTerminoNoIndefinido(tipoContrato: TipoContrato | unde
     `e indemnización si el contrato termina antes de tiempo — no lo calcula este verificador.`
   );
 }
+
+/**
+ * Tiempo parcial con salario por debajo de 1 SMLMV: antes de 2020 la ley
+ * exigía cotizar sobre un IBC mínimo de 1 SMLMV sin importar lo devengado
+ * (encareciendo el trabajo parcial). El Decreto 1174 de 2020 creó el Piso
+ * de Protección Social (BEPS) como régimen alternativo para estos casos —
+ * cotización reducida vía BEPS + afiliación subsidiada a salud, en vez de
+ * forzar el IBC al mínimo. Cuál régimen aplica depende de si el trabajador
+ * ya cotiza en el régimen contributivo por otra vía, algo que este
+ * verificador no conoce — por eso se advierte en vez de recalcular en
+ * silencio el IBC (que podría sobrecargar al trabajador si no aplica).
+ */
+export function advertenciaIbcTiempoParcial(
+  salarioBasicoMensual: number,
+  tipoContrato: TipoContrato | undefined,
+  reglas: ReglaLegal[] | ResolutorReglas,
+  fecha: string
+): string | undefined {
+  if (tipoContrato !== "tiempo_parcial") return undefined;
+  const r = comoResolutor(reglas);
+  const smlmv = r.en("smlmv", fecha);
+  if (salarioBasicoMensual >= smlmv) return undefined;
+  return (
+    `El salario declarado ($${salarioBasicoMensual.toLocaleString("es-CO")}) está por debajo de un SMLMV ` +
+    `($${smlmv.toLocaleString("es-CO")}). Este verificador calcula salud y pensión sobre el IBC real (el salario ` +
+    `devengado), pero dependiendo del caso el trabajador podría estar cubierto por el Piso de Protección Social ` +
+    `(Decreto 1174 de 2020, cotización reducida vía BEPS) en vez del régimen contributivo ordinario — verifica cuál ` +
+    `régimen le corresponde antes de descontar estas cifras.`
+  );
+}

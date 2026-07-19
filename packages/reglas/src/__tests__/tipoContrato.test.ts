@@ -179,4 +179,57 @@ describe("tipoContrato — término fijo / obra o labor / tiempo parcial", () =>
       expect(r.advertencias.some((a) => a.includes("preaviso"))).toBe(true);
     }
   });
+
+  it("tiempo_parcial bajo un SMLMV advierte sobre el Piso de Protección Social (Decreto 1174 de 2020)", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      {
+        modo: "salario-fijo",
+        salarioBasicoMensual: 900_000,
+        recibeAuxilioTransporte: false,
+        tipoContrato: "tiempo_parcial",
+        conceptos: [],
+        ...PERIODO,
+      },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("Piso de Protección Social"))).toBe(true);
+    // El IBC no se eleva en silencio: salud/pensión se calculan sobre el salario real.
+    const salud = r.lineas.find((l) => l.concepto === "Salud (aporte empleado)");
+    expect(salud?.valorCalculado).toBe(Math.round(900_000 * 0.04));
+  });
+
+  it("tiempo_parcial igual o sobre un SMLMV no advierte sobre el IBC", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      {
+        modo: "salario-fijo",
+        salarioBasicoMensual: 2_000_000,
+        recibeAuxilioTransporte: false,
+        tipoContrato: "tiempo_parcial",
+        conceptos: [],
+        ...PERIODO,
+      },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("Piso de Protección Social"))).toBe(false);
+  });
+
+  it("fijo/obra_labor/indefinido nunca advierten sobre el IBC de tiempo parcial, sin importar el salario", () => {
+    for (const tipoContrato of ["fijo", "obra_labor", "indefinido"] as const) {
+      const r = CalculadoraSalarioFijo.calcular(
+        {
+          modo: "salario-fijo",
+          salarioBasicoMensual: 500_000,
+          recibeAuxilioTransporte: false,
+          tipoContrato,
+          conceptos: [],
+          ...PERIODO,
+        },
+        REGLAS_JUL_2026,
+        []
+      );
+      expect(r.advertencias.some((a) => a.includes("Piso de Protección Social"))).toBe(false);
+    }
+  });
 });
