@@ -18,6 +18,11 @@ x-env: &app-env
   CORS_ORIGIN: http://localhost:5173
   PORT: 3001
   PNPM_STORE_DIR: /pnpm-store
+  # Sin TTY, "pnpm install" en el entrypoint queda colgado pidiendo
+  # confirmación interactiva si detecta que un volumen de node_modules no
+  # calza con el lockfile (ej. tras borrar/recrear el volumen). CI=true le
+  # dice a pnpm que no hay humano para responder y proceda solo.
+  CI: "true"
 
 x-app: &app
   build:

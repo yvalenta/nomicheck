@@ -13,8 +13,10 @@ import {
   type DatosEmpleado,
   type Empleado,
 } from "../../apiEmpresa";
+import { obtenerParametros, type ParametrosPublicos } from "../../api";
 import PaycheckCard from "../PaycheckCard.tsx";
 import SegmentedControl from "../SegmentedControl.tsx";
+import DateField from "../DateField.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -36,6 +38,8 @@ export default function DashboardEmpresa() {
   const [filtro, setFiltro] = useState<FiltroEstado>("activos");
   const [busqueda, setBusqueda] = useState("");
 
+  const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
+
   function recargar() {
     listarEmpleados()
       .then(setEmpleados)
@@ -43,7 +47,10 @@ export default function DashboardEmpresa() {
       .finally(() => setCargando(false));
   }
 
-  useEffect(recargar, []);
+  useEffect(() => {
+    recargar();
+    obtenerParametros().then(setParametros);
+  }, []);
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -167,7 +174,7 @@ export default function DashboardEmpresa() {
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
       {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
 
-      {mostrarForm && <FormEmpleado onGuardar={agregar} />}
+      {mostrarForm && <FormEmpleado smlmv={parametros?.smlmv} onGuardar={agregar} />}
 
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -299,7 +306,7 @@ export default function DashboardEmpresa() {
               )}
 
               {editandoId === e.id && (
-                <FormEmpleado inicial={e} onGuardar={(datos) => editar(e.id, datos)} />
+                <FormEmpleado smlmv={parametros?.smlmv} inicial={e} onGuardar={(datos) => editar(e.id, datos)} />
               )}
             </Fragment>
           ))}
@@ -384,15 +391,7 @@ function FormRetirar({
       <span className="text-xs text-muted flex-1">
         Fecha de retiro — el historial se conserva y podrás liquidar sus prestaciones finales.
       </span>
-      <input
-        required
-        type="date"
-        autoFocus
-        min={minimo}
-        value={fecha}
-        onChange={(e) => setFecha(e.target.value)}
-        className={inputCls}
-      />
+      <DateField required value={fecha} onChange={setFecha} minimo={minimo} placeholder="Fecha de retiro" />
       <div className="flex gap-2 shrink-0">
         <button type="submit" className="rounded-lg bg-coral text-white text-xs px-3 py-1.5">
           Confirmar retiro
@@ -411,9 +410,11 @@ function FormRetirar({
 
 function FormEmpleado({
   inicial,
+  smlmv,
   onGuardar,
 }: {
   inicial?: Empleado;
+  smlmv?: number;
   onGuardar: (d: DatosEmpleado) => void;
 }) {
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
@@ -437,19 +438,32 @@ function FormEmpleado({
           <input required placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputCls} />
           <input required placeholder="Documento" value={documento} onChange={(e) => setDocumento(e.target.value)} className={inputCls} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <input
-            required
-            type="number"
-            placeholder="Salario básico"
-            value={salarioBase}
-            onChange={(e) => setSalarioBase(e.target.value)}
-            className={inputCls}
-          />
-          <select value={tipoNomina} onChange={(e) => setTipoNomina(e.target.value as Empleado["tipoNomina"])} className={inputCls}>
-            <option value="turnos">Por turnos</option>
-            <option value="fijo">Salario fijo</option>
-          </select>
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              required
+              type="number"
+              placeholder="Salario básico"
+              value={salarioBase}
+              onChange={(e) => setSalarioBase(e.target.value)}
+              className={inputCls}
+            />
+            <select value={tipoNomina} onChange={(e) => setTipoNomina(e.target.value as Empleado["tipoNomina"])} className={inputCls}>
+              <option value="turnos">Por turnos</option>
+              <option value="fijo">Salario fijo</option>
+            </select>
+          </div>
+          {smlmv && (
+            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer self-start">
+              <input
+                type="checkbox"
+                checked={Number(salarioBase) === smlmv}
+                onChange={(e) => { if (e.target.checked) setSalarioBase(String(smlmv)); }}
+                className="w-3.5 h-3.5 accent-mint"
+              />
+              Autocompletar salario mínimo vigente ({formatCOP(smlmv)})
+            </label>
+          )}
         </div>
         <label className="flex flex-col gap-1 text-sm text-ink">
           Tipo de contrato
@@ -468,13 +482,7 @@ function FormEmpleado({
         </label>
         <label className="flex flex-col gap-1 text-sm text-ink">
           Fecha de ingreso (antigüedad para cesantías, prima y vacaciones)
-          <input
-            required
-            type="date"
-            value={fechaIngreso}
-            onChange={(e) => setFechaIngreso(e.target.value)}
-            className={inputCls}
-          />
+          <DateField required value={fechaIngreso} onChange={setFechaIngreso} placeholder="Fecha de ingreso" />
         </label>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
