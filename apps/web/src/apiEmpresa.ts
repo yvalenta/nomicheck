@@ -216,6 +216,19 @@ export function guardarTurnos(periodoId: number, turnos: Turno[]) {
   });
 }
 
+// Qué empleados quedan incluidos en el periodo — se autopuebla con los
+// activos al crear (crearPeriodo del backend), ajustable solo en borrador.
+export function obtenerEmpleadosIncluidos(periodoId: number): Promise<number[]> {
+  return autenticado(`/empresa/periodos/${periodoId}/empleados`);
+}
+
+export function guardarEmpleadosIncluidos(periodoId: number, empleadoIds: number[]): Promise<number[]> {
+  return autenticado(`/empresa/periodos/${periodoId}/empleados`, {
+    method: "PUT",
+    body: JSON.stringify(empleadoIds),
+  });
+}
+
 export function liquidarPeriodo(periodoId: number): Promise<Recibo[]> {
   return autenticado(`/empresa/periodos/${periodoId}/liquidar`, { method: "POST" });
 }

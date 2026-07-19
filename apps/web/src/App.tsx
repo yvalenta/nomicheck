@@ -252,6 +252,9 @@ export default function App() {
         <a href="/empresa" className="text-mint-dark hover:underline">
           ¿Eres empresa? Liquida y administra tu nómina
         </a>
+        <a href="/colaborador" className="text-mint-dark hover:underline">
+          ¿Tu empresa ya usa NomiCheck? Ingresa al portal del colaborador
+        </a>
       </footer>
 
       {/* Orquestador de delayed auth: AuthModal + interceptor de pendingAction.

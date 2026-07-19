@@ -71,6 +71,10 @@ export default function AuthColaborador() {
           Ingresar <ArrowRight size={18} />
         </button>
       </form>
+
+      <a href="/empresa" className="text-sm text-mint-dark hover:underline self-center">
+        ¿Eres empresa? Ingresa aquí
+      </a>
     </div>
   );
 }

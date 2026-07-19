@@ -14,16 +14,18 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { diaSemana, formatCOP, HORARIO_BASE_DEFAULT, rangoFechas, type Festivo, type HorarioDia, type ResultadoNomina } from "@pv/reglas";
+import { diaSemana, formatCOP, formatRangoFechas, HORARIO_BASE_DEFAULT, rangoFechas, type Festivo, type HorarioDia, type ResultadoNomina } from "@pv/reglas";
 import { listarFestivos } from "../../api";
 import {
   crearPeriodo,
   editarPeriodo,
+  guardarEmpleadosIncluidos,
   guardarTurnos,
   liquidarPeriodo,
   listarEmpleados,
   listarPeriodos,
   listarRecibos,
+  obtenerEmpleadosIncluidos,
   obtenerTurnos,
   revertirPeriodo,
   type Empleado,
@@ -139,7 +141,7 @@ export default function PeriodosEmpresa() {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-ink truncate">
-                  {p.fechaInicio} — {p.fechaFin}
+                  {formatRangoFechas(p.fechaInicio, p.fechaFin)}
                 </p>
                 {p.notaEdicion && (
                   <p className="text-xs text-muted truncate mt-0.5">✎ Editado — {p.notaEdicion}</p>
@@ -294,16 +296,37 @@ function DetallePeriodo({
   // resincronizan (o se eliminan si el día ahora es descanso); los que el
   // usuario edita manualmente salen de este set y ya no se vuelven a tocar.
   const [autogenerados, setAutogenerados] = useState<Record<number, Set<string>>>({});
+  // Qué empleados quedan incluidos en ESTE periodo — se autopuebla con los
+  // activos al crearlo (backend), ajustable acá mientras siga en borrador.
+  const [incluidos, setIncluidos] = useState<Set<number>>(new Set());
+  const [guardandoIncluidos, setGuardandoIncluidos] = useState(false);
 
   useEffect(() => {
     listarEmpleados().then(setEmpleados);
     listarFestivos().then(setFestivos);
     if (periodo.estado === "borrador") {
       obtenerTurnos(periodo.id).then(setTurnos);
+      obtenerEmpleadosIncluidos(periodo.id).then((ids) => setIncluidos(new Set(ids)));
     } else {
       listarRecibos(periodo.id).then(setRecibos);
     }
   }, [periodo.id, periodo.estado]);
+
+  async function alternarIncluido(empleadoId: number) {
+    const next = new Set(incluidos);
+    if (next.has(empleadoId)) next.delete(empleadoId);
+    else next.add(empleadoId);
+    setGuardandoIncluidos(true);
+    setError(null);
+    try {
+      const ids = await guardarEmpleadosIncluidos(periodo.id, [...next]);
+      setIncluidos(new Set(ids));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo actualizar la selección");
+    } finally {
+      setGuardandoIncluidos(false);
+    }
+  }
 
   function horarioDe(empleadoId: number): (HorarioDia | null)[] {
     return horarios[empleadoId] ?? HORARIO_BASE_DEFAULT;
@@ -363,8 +386,9 @@ function DetallePeriodo({
     );
   }
 
-  const empleadosTurnos = empleados.filter((e) => e.tipoNomina === "turnos" && e.activo);
-  const empleadosFijo = empleados.filter((e) => e.tipoNomina === "fijo" && e.activo);
+  const activos = empleados.filter((e) => e.activo);
+  const empleadosTurnos = activos.filter((e) => e.tipoNomina === "turnos" && incluidos.has(e.id));
+  const empleadosFijo = activos.filter((e) => e.tipoNomina === "fijo" && incluidos.has(e.id));
 
   const grupos = useMemo(() => {
     const porId = new Map<number, Turno[]>();
@@ -474,7 +498,7 @@ function DetallePeriodo({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base sm:text-lg font-bold text-ink">
-                {periodo.fechaInicio} — {periodo.fechaFin}
+                {formatRangoFechas(periodo.fechaInicio, periodo.fechaFin)}
               </h2>
               <span className={`text-xs font-semibold rounded-full px-2.5 py-1 shrink-0 ${ESTADO_CLASE[periodo.estado]}`}>
                 {ESTADO_ETIQUETA[periodo.estado]}
@@ -527,10 +551,36 @@ function DetallePeriodo({
 
       {periodo.estado === "borrador" ? (
         <>
+          <PaycheckCard titulo={`Colaboradores en este periodo (${incluidos.size} de ${activos.length})`}>
+            {activos.length === 0 ? (
+              <p className="text-sm text-muted px-3 py-6 text-center">No tienes colaboradores activos.</p>
+            ) : (
+              <div className="px-3 pb-3 pt-1 flex flex-col gap-1.5">
+                {activos.map((e) => (
+                  <label key={e.id} className="flex items-center gap-2.5 py-1 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={incluidos.has(e.id)}
+                      disabled={guardandoIncluidos}
+                      onChange={() => alternarIncluido(e.id)}
+                      className="w-4 h-4 accent-mint shrink-0"
+                    />
+                    <span className="text-ink">{e.nombre}</span>
+                    <span className="text-xs text-muted">
+                      {e.tipoNomina === "turnos" ? "Por turnos" : "Salario fijo"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </PaycheckCard>
+
           {empleadosTurnos.length === 0 && (
             <PaycheckCard>
               <p className="text-sm text-muted px-3 py-6 text-center">
-                No tienes colaboradores activos con nómina por turnos.
+                {activos.some((e) => e.tipoNomina === "turnos")
+                  ? "Ningún colaborador por turnos está incluido en este periodo todavía."
+                  : "No tienes colaboradores activos con nómina por turnos."}
               </p>
             </PaycheckCard>
           )}

@@ -165,6 +165,10 @@ export default function AuthEmpresa() {
       >
         {modo === "login" ? "¿Empresa nueva? Regístrate" : "¿Ya tienes cuenta? Ingresa"}
       </button>
+
+      <a href="/colaborador" className="text-sm text-muted hover:underline self-center">
+        ¿Eres colaborador de una empresa? Ingresa aquí
+      </a>
     </div>
   );
 }

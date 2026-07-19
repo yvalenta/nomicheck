@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { AlertCircle, Building2, Check, Flag, Mail, X } from "lucide-react";
-import { formatCOP, type ResultadoNomina } from "@pv/reglas";
+import { formatCOP, formatRangoFechas, type ResultadoNomina } from "@pv/reglas";
 import {
   aceptarInvitacion,
   listarInvitaciones,
@@ -126,7 +126,7 @@ export default function DashboardColaborador() {
 
       {recibos.map((r) => (
         <Fragment key={r.id}>
-        <PaycheckCard titulo={`${r.periodo.fechaInicio} — ${r.periodo.fechaFin}`}>
+        <PaycheckCard titulo={formatRangoFechas(r.periodo.fechaInicio, r.periodo.fechaFin)}>
           <div className="flex flex-col">
             {r.lineas.map((l, i) => (
               <ValidationRow key={i} linea={l} />

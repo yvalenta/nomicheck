@@ -1,5 +1,5 @@
 import { Printer } from "lucide-react";
-import { formatCOP, type LineaResultado, type ResultadoNomina } from "@pv/reglas";
+import { formatCOP, formatRangoFechas, type LineaResultado, type ResultadoNomina } from "@pv/reglas";
 
 interface Props {
   resultado: ResultadoNomina;
@@ -72,7 +72,7 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
       <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 mt-4 text-sm">
         <Dato etiqueta="Empresa" valor={vacio(empresa)} />
         <Dato etiqueta="Fecha de elaboración" valor={vacio(fechaElaboracion?.slice(0, 10))} />
-        <Dato etiqueta="Período" valor={`${resultado.periodoDesde} — ${resultado.periodoHasta}`} />
+        <Dato etiqueta="Período" valor={formatRangoFechas(resultado.periodoDesde, resultado.periodoHasta)} />
         <Dato etiqueta="Empleado" valor={vacio(empleado?.nombre)} />
         <Dato etiqueta="Identificación" valor={vacio(empleado?.documento)} />
         <Dato etiqueta="Salario básico mensual" valor={formatCOP(resultado.salarioBasicoMensual)} />
