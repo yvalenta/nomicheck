@@ -77,6 +77,19 @@ export async function registrarIndividual(datos: z.infer<typeof registroIndividu
   }
 }
 
+// Login con OAuth (Google): Supabase Auth crea el usuario directamente en el
+// redirect, sin pasar por registrarIndividual — no hay perfil Usuario
+// todavía. Se llama tras el primer login exitoso (idempotente: si el perfil
+// ya existe, para cualquier rol, se devuelve tal cual sin tocarlo).
+export async function asegurarPerfilIndividual(authUserId: string, email: string | undefined, nombreFallback: string) {
+  const existente = await prisma.usuario.findUnique({ where: { id: authUserId } });
+  if (existente) return existente;
+
+  return prisma.usuario.create({
+    data: { id: authUserId, nombre: nombreFallback, email: email ?? null, rol: "individual", empresaId: null },
+  });
+}
+
 export type ResultadoInvitacion =
   // Cuenta nueva: se creó vía correo de Supabase y quedó unida (sin paso de aceptar).
   | { estado: "correo_enviado" }

@@ -194,6 +194,22 @@ export async function registrarIndividual(datos: {
   if (!res.ok) throw new Error(body.error ?? "No se pudo crear la cuenta");
 }
 
+// Tras un login con OAuth (Google) Supabase Auth ya autenticó al usuario pero
+// nunca pasó por registrarIndividual — no existe el perfil Usuario todavía.
+// Idempotente: si ya existe (cualquier rol), el backend lo devuelve tal cual.
+export async function asegurarPerfilIndividual(): Promise<void> {
+  const { supabase } = await import("./lib/supabase");
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
+  const res = await fetch("/api/auth/perfil-individual", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? "No se pudo preparar tu cuenta");
+}
+
 // --- Guardar liquidación en el historial del usuario (delayed auth) ---
 // Requiere sesión de Supabase: manda el JWT en Authorization igual que los
 // clientes autenticados (apiEmpresa/apiColaborador).

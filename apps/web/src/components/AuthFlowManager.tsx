@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { guardarLiquidacion } from "../api";
+import { asegurarPerfilIndividual, guardarLiquidacion } from "../api";
 import { supabase } from "../lib/supabase";
 import {
   clearPendingAction,
@@ -33,6 +33,10 @@ export default function AuthFlowManager() {
     // Lo quitamos de inmediato para que un segundo evento no lo re-dispare.
     clearPendingAction();
     try {
+      // No-op si ya existe el perfil (registro por contraseña ya lo crea
+      // server-side) — necesario la primera vez que alguien entra con Google,
+      // donde Supabase Auth autentica sin pasar por registrarIndividual.
+      await asegurarPerfilIndividual();
       await guardarLiquidacion({ resultado: action.resultado, netoRecibido: action.netoRecibido });
       closeAuthModal();
       setToast({ tipo: "ok", texto: "¡Cuenta lista y liquidación guardada en tu historial!" });

@@ -12,7 +12,7 @@ import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
-import { registro, registroIndividual, invitar } from "../controllers/authController.js";
+import { registro, registroIndividual, invitar, perfilIndividual } from "../controllers/authController.js";
 import { crear as crearLiquidacion, listar as listarLiquidaciones } from "../controllers/liquidacionesController.js";
 import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
@@ -108,6 +108,9 @@ router.post("/chat/explicar", limitadorIA, explicar);
 router.post("/auth/registro", registro);
 // Registro de cuenta individual (verificador anónimo → guardar historial).
 router.post("/auth/registro-individual", registroIndividual);
+// Asegura el perfil Usuario tras un login con OAuth (Google) — Supabase Auth
+// crea la cuenta directo en el redirect, sin pasar por registro-individual.
+router.post("/auth/perfil-individual", perfilIndividual);
 
 // Historial personal de liquidaciones — cualquier usuario autenticado guarda
 // y lista SUS propias (scoping por req.usuario.id, no por rol).
