@@ -253,7 +253,7 @@ export default function DashboardEmpresa() {
                 >
                   <Pencil size={16} />
                 </button>
-                {!(e.usuarioId && e.invitacionAceptadaEn) && (
+                {e.activo && !(e.usuarioId && e.invitacionAceptadaEn) && (
                   <button
                     onClick={() => setAccion({ id: e.id, tipo: "invitar" })}
                     title={e.usuarioId ? "Reenviar / cambiar invitación" : "Invitar a crear su cuenta"}
@@ -331,7 +331,12 @@ export default function DashboardEmpresa() {
 }
 
 // Estado de la cuenta del colaborador, derivado de usuarioId + invitacionAceptadaEn.
+// Una invitación pendiente sobre un empleado ya retirado no tiene sentido
+// mostrarla como recordatorio (no hay nada que reenviar ni aceptar en la
+// práctica) — se oculta ese caso puntual; "Cuenta activa" sí se conserva
+// porque es historial real de la cuenta vinculada.
 function EstadoCuenta({ empleado }: { empleado: Empleado }) {
+  if (!empleado.activo && empleado.usuarioId && !empleado.invitacionAceptadaEn) return null;
   const { texto, clase } = !empleado.usuarioId
     ? { texto: "Sin cuenta", clase: "bg-slate-100 text-muted" }
     : empleado.invitacionAceptadaEn

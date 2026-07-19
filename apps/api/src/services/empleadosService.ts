@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { empleadoSchema, empleadoUpdateSchema, retiroSchema } from "../validation/empresa.js";
 import type { z } from "zod";
@@ -8,8 +9,19 @@ export function listarEmpleados(empresaId: number) {
   return prisma.empleado.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } });
 }
 
-export function crearEmpleado(empresaId: number, datos: z.infer<typeof empleadoSchema>) {
-  return prisma.empleado.create({ data: { ...datos, empresaId } });
+export async function crearEmpleado(empresaId: number, datos: z.infer<typeof empleadoSchema>) {
+  try {
+    return await prisma.empleado.create({ data: { ...datos, empresaId } });
+  } catch (err) {
+    // @@unique([empresaId, documento]) — incluye retirados: el documento de
+    // un empleado retirado sigue reservado (su historial de nómina sigue
+    // ligado a él), así que reintentar con el mismo documento debe fallar
+    // como conflicto explícito, no como un 500 sin manejar.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new ErrorConflicto(`Ya existe un colaborador con el documento "${datos.documento}" en tu empresa.`);
+    }
+    throw err;
+  }
 }
 
 export async function actualizarEmpleado(

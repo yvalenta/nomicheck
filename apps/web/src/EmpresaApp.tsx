@@ -9,16 +9,24 @@ import PeriodosEmpresa from "./components/empresa/PeriodosEmpresa.tsx";
 import ContratistasEmpresa from "./components/empresa/ContratistasEmpresa.tsx";
 import DiscrepanciasEmpresa from "./components/empresa/DiscrepanciasEmpresa.tsx";
 import CostosEmpresa from "./components/empresa/CostosEmpresa.tsx";
+import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
 
 type Seccion = "colaboradores" | "contratistas" | "periodos" | "discrepancias" | "costos";
 
 export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [seccion, setSeccion] = useState<Seccion>("colaboradores");
+  const [recuperando, setRecuperando] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      // El enlace de "olvidé mi contraseña" ya trae una sesión válida — hay
+      // que interceptarla para pedir la contraseña nueva en vez de mostrar
+      // el dashboard directo.
+      if (event === "PASSWORD_RECOVERY") setRecuperando(true);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -27,8 +35,9 @@ export default function EmpresaApp() {
       <HeaderProfile paso={session ? "Panel de empresa" : "Acceso empresa"} />
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
         {session === undefined && <p className="text-sm text-muted text-center">Cargando…</p>}
-        {session === null && <AuthEmpresa />}
-        {session && (
+        {recuperando && <ResetPasswordForm onListo={() => setRecuperando(false)} />}
+        {!recuperando && session === null && <AuthEmpresa />}
+        {!recuperando && session && (
           <div className="flex flex-col gap-5">
             <div className="flex justify-center">
               <SegmentedControl<Seccion>
@@ -51,9 +60,12 @@ export default function EmpresaApp() {
           </div>
         )}
       </main>
-      <footer className="text-center text-xs text-muted py-4 px-6">
-        NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
-        certificada.
+      <footer className="text-center text-xs text-muted py-4 px-6 flex flex-col gap-1.5">
+        <span>
+          NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
+          certificada.
+        </span>
+        <span className="mt-2 font-medium text-slate-400">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
     </div>
   );

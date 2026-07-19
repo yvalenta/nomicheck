@@ -8,7 +8,7 @@ const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 export default function AuthEmpresa() {
-  const [modo, setModo] = useState<"login" | "registro">("login");
+  const [modo, setModo] = useState<"login" | "registro" | "olvide">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
@@ -17,6 +17,24 @@ export default function AuthEmpresa() {
   const [sector, setSector] = useState("");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enlaceEnviado, setEnlaceEnviado] = useState(false);
+
+  async function enviarEnlaceRecuperacion(e: React.FormEvent) {
+    e.preventDefault();
+    setCargando(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/empresa",
+      });
+      if (error) throw error;
+      setEnlaceEnviado(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo enviar el enlace");
+    } finally {
+      setCargando(false);
+    }
+  }
 
   async function conGoogle() {
     setError(null);
@@ -50,6 +68,53 @@ export default function AuthEmpresa() {
     } finally {
       setCargando(false);
     }
+  }
+
+  if (modo === "olvide") {
+    return (
+      <div className="flex flex-col gap-4 max-w-md mx-auto">
+        <div className="text-center px-4">
+          <Building2 size={32} className="text-mint-dark mx-auto mb-2" />
+          <h2 className="text-xl font-bold text-ink">Recupera tu contraseña</h2>
+          <p className="text-sm text-muted mt-1">Te enviamos un enlace para elegir una nueva.</p>
+        </div>
+        {enlaceEnviado ? (
+          <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3.5 text-center">
+            Revisa tu correo ({email}) y sigue el enlace para continuar.
+          </p>
+        ) : (
+          <form onSubmit={enviarEnlaceRecuperacion} className="flex flex-col gap-3">
+            <input
+              required
+              type="email"
+              placeholder="Correo"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputCls}
+            />
+            {error && (
+              <div className="rounded-xl p-3 bg-red-50 text-coral flex items-start gap-2 text-sm">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={cargando}
+              className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+            >
+              Enviar enlace <ArrowRight size={18} />
+            </button>
+          </form>
+        )}
+        <button
+          onClick={() => { setModo("login"); setError(null); setEnlaceEnviado(false); }}
+          className="text-sm text-mint-dark hover:underline self-center"
+        >
+          Volver a iniciar sesión
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -158,6 +223,15 @@ export default function AuthEmpresa() {
           {modo === "login" ? "Ingresar" : "Crear cuenta"} <ArrowRight size={18} />
         </button>
       </form>
+
+      {modo === "login" && (
+        <button
+          onClick={() => { setModo("olvide"); setError(null); }}
+          className="text-xs text-muted hover:underline self-center -mt-2"
+        >
+          ¿Olvidaste tu contraseña?
+        </button>
+      )}
 
       <button
         onClick={() => setModo(modo === "login" ? "registro" : "login")}

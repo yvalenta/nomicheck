@@ -21,8 +21,16 @@ export async function crear(req: Request, res: Response) {
     res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
     return;
   }
-  const empleado = await crearEmpleado(req.usuario!.empresaId!, parseo.data);
-  res.status(201).json(empleado);
+  try {
+    const empleado = await crearEmpleado(req.usuario!.empresaId!, parseo.data);
+    res.status(201).json(empleado);
+  } catch (err) {
+    if (err instanceof ErrorConflicto) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo crear el colaborador" });
+  }
 }
 
 export async function actualizar(req: Request, res: Response) {
