@@ -12,6 +12,7 @@ import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
 import { calcularAuxilioTransporte } from "./auxilio.js";
+import { lineasRecargos, type HorasRecargo } from "./recargos.js";
 import {
   DIAS_MES_COMERCIAL,
   HORA_FIN_JORNADA_NOCTURNA,
@@ -280,113 +281,36 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       const ultimaFecha = diasTramo[diasTramo.length - 1].fecha;
       const sufijo = multiTramo ? ` (${primeraFecha}–${ultimaFecha})` : "";
 
-      let ordinariaHabilNocturna = 0;
-      let ordinariaDominical = 0;
-      let ordinariaDominicalNocturna = 0;
-      let extraDiurna = 0;
-      let extraNocturna = 0;
-      let extraDominicalDiurna = 0;
-      let extraDominicalNocturna = 0;
-
+      const horas: HorasRecargo = {
+        nocturnas: 0,
+        dominicalesDiurnas: 0,
+        dominicalesNocturnas: 0,
+        extrasDiurnas: 0,
+        extrasNocturnas: 0,
+        extrasDominicalesDiurnas: 0,
+        extrasDominicalesNocturnas: 0,
+      };
       for (const dia of diasTramo) {
         if (dia.esDominicalFestivo) {
-          ordinariaDominical += dia.ordinariaDiurna + dia.ordinariaNocturna;
-          ordinariaDominicalNocturna += dia.ordinariaNocturna;
-          extraDominicalDiurna += dia.extraDiurna;
-          extraDominicalNocturna += dia.extraNocturna;
+          horas.dominicalesDiurnas! += dia.ordinariaDiurna;
+          horas.dominicalesNocturnas! += dia.ordinariaNocturna;
+          horas.extrasDominicalesDiurnas! += dia.extraDiurna;
+          horas.extrasDominicalesNocturnas! += dia.extraNocturna;
         } else {
-          ordinariaHabilNocturna += dia.ordinariaNocturna;
-          extraDiurna += dia.extraDiurna;
-          extraNocturna += dia.extraNocturna;
+          horas.nocturnas! += dia.ordinariaNocturna;
+          horas.extrasDiurnas! += dia.extraDiurna;
+          horas.extrasNocturnas! += dia.extraNocturna;
         }
       }
 
-      // Recargos: solo el porcentaje adicional — la hora base ya está cubierta
-      // por el salario proporcional.
-      if (ordinariaHabilNocturna > 0) {
-        lineas.push({
-          concepto: `Recargo nocturno${sufijo}`,
-          horas: redondearHoras(ordinariaHabilNocturna),
-          recargoPct: recargoNocturno,
-          valorCalculado: redondearPeso(ordinariaHabilNocturna * valorHora * recargoNocturno),
-          tipo: "devengo",
-          ley: "Ley 2466 de 2025, art. 3",
-        });
-      }
-
-      if (ordinariaDominical > 0) {
-        lineas.push({
-          concepto: `Recargo dominical/festivo${sufijo}`,
-          horas: redondearHoras(ordinariaDominical),
-          recargoPct: recargoDominical,
-          valorCalculado: redondearPeso(ordinariaDominical * valorHora * recargoDominical),
-          tipo: "devengo",
-          ley: "Ley 2466 de 2025, art. 2",
-        });
-      }
-
-      if (ordinariaDominicalNocturna > 0) {
-        lineas.push({
-          concepto: `Recargo nocturno dominical/festivo${sufijo}`,
-          horas: redondearHoras(ordinariaDominicalNocturna),
-          recargoPct: recargoNocturno,
-          valorCalculado: redondearPeso(ordinariaDominicalNocturna * valorHora * recargoNocturno),
-          tipo: "devengo",
-          ley: "Ley 2466 de 2025, art. 3",
-        });
-      }
-
-      // Horas extra: fuera de la jornada ordinaria, NO están cubiertas por el
-      // salario base — se pagan completas (hora + recargo).
-      if (extraDiurna > 0) {
-        lineas.push({
-          concepto: `Hora extra diurna${sufijo}`,
-          horas: redondearHoras(extraDiurna),
-          recargoPct: extraDiurnaPct,
-          valorCalculado: redondearPeso(extraDiurna * valorHora * (1 + extraDiurnaPct)),
-          tipo: "devengo",
-          ley: "CST art. 168",
-        });
-      }
-
-      if (extraNocturna > 0) {
-        lineas.push({
-          concepto: `Hora extra nocturna${sufijo}`,
-          horas: redondearHoras(extraNocturna),
-          recargoPct: extraNocturnaPct,
-          valorCalculado: redondearPeso(extraNocturna * valorHora * (1 + extraNocturnaPct)),
-          tipo: "devengo",
-          ley: "CST art. 168",
-        });
-      }
-
-      // Hora extra dominical: diurna y nocturna se pagan con factores
-      // distintos (100% + 25%/75% + recargo dominical vigente) — antes se
-      // fusionaban en una sola línea con el factor diurno (25%) incluso
-      // para las horas que caían de noche, subpagando esas horas.
-      if (extraDominicalDiurna > 0) {
-        const pct = recargoDominical + extraDiurnaPct;
-        lineas.push({
-          concepto: `Hora extra dominical/festiva diurna${sufijo}`,
-          horas: redondearHoras(extraDominicalDiurna),
-          recargoPct: pct,
-          valorCalculado: redondearPeso(extraDominicalDiurna * valorHora * (1 + pct)),
-          tipo: "devengo",
-          ley: "Ley 2466 de 2025; CST art. 168",
-        });
-      }
-
-      if (extraDominicalNocturna > 0) {
-        const pct = recargoDominical + extraNocturnaPct;
-        lineas.push({
-          concepto: `Hora extra dominical/festiva nocturna${sufijo}`,
-          horas: redondearHoras(extraDominicalNocturna),
-          recargoPct: pct,
-          valorCalculado: redondearPeso(extraDominicalNocturna * valorHora * (1 + pct)),
-          tipo: "devengo",
-          ley: "Ley 2466 de 2025; CST art. 168",
-        });
-      }
+      lineas.push(
+        ...lineasRecargos(
+          valorHora,
+          horas,
+          { recargoNocturno, recargoDominical, extraDiurnaPct, extraNocturnaPct },
+          sufijo
+        )
+      );
     }
 
     // IBC = devengado salarial acumulado hasta aquí; el auxilio de transporte

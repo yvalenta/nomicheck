@@ -11,4 +11,5 @@ export * from "./calculadoraTurnos.js";
 export * from "./calculadoraSalarioFijo.js";
 export * from "./calculadoraServicios.js";
 export * from "./indemnizacion.js";
+export * from "./recargos.js";
 export * from "./costoEmpleador.js";
