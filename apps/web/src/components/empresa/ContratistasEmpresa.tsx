@@ -8,7 +8,10 @@ import {
   listarContratistas,
   type Contratista,
 } from "../../apiEmpresa";
+import { obtenerParametros, type ParametrosPublicos } from "../../api";
 import PaycheckCard from "../PaycheckCard.tsx";
+import EmptyState from "../EmptyState.tsx";
+import Skeleton from "../Skeleton.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -21,6 +24,7 @@ export default function ContratistasEmpresa() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [confirmandoId, setConfirmandoId] = useState<number | null>(null);
+  const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
 
   function recargar() {
     listarContratistas()
@@ -29,7 +33,10 @@ export default function ContratistasEmpresa() {
       .finally(() => setCargando(false));
   }
 
-  useEffect(recargar, []);
+  useEffect(() => {
+    recargar();
+    obtenerParametros().then(setParametros);
+  }, []);
 
   function notificar(mensaje: string) {
     setExito(mensaje);
@@ -92,12 +99,12 @@ export default function ContratistasEmpresa() {
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
       {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
 
-      {mostrarForm && <FormContratista onGuardar={agregar} />}
+      {mostrarForm && <FormContratista smlmv={parametros?.smlmv} onGuardar={agregar} />}
 
       <PaycheckCard>
-        {cargando && <p className="text-sm text-muted px-3 py-6 text-center">Cargando…</p>}
+        {cargando && <Skeleton filas={2} />}
         {!cargando && contratistas.length === 0 && (
-          <p className="text-sm text-muted px-3 py-6 text-center">Aún no tienes contratistas.</p>
+          <EmptyState icon={Briefcase} titulo="Aún no tienes contratistas" />
         )}
         <div className="flex flex-col">
           {contratistas.map((c) => (
@@ -152,7 +159,7 @@ export default function ContratistasEmpresa() {
               )}
 
               {editandoId === c.id && (
-                <FormContratista inicial={c} onGuardar={(datos) => editar(c.id, datos)} />
+                <FormContratista smlmv={parametros?.smlmv} inicial={c} onGuardar={(datos) => editar(c.id, datos)} />
               )}
             </Fragment>
           ))}
@@ -164,9 +171,11 @@ export default function ContratistasEmpresa() {
 
 function FormContratista({
   inicial,
+  smlmv,
   onGuardar,
 }: {
   inicial?: Contratista;
+  smlmv?: number;
   onGuardar: (d: Omit<Contratista, "id" | "activo">) => void;
 }) {
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
@@ -188,14 +197,27 @@ function FormContratista({
           <input required placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputCls} />
           <input required placeholder="Documento" value={documento} onChange={(e) => setDocumento(e.target.value)} className={inputCls} />
         </div>
-        <input
-          required
-          type="number"
-          placeholder="Honorarios mensuales"
-          value={honorariosMensuales}
-          onChange={(e) => setHonorariosMensuales(e.target.value)}
-          className={inputCls}
-        />
+        <div className="flex flex-col gap-2">
+          <input
+            required
+            type="number"
+            placeholder="Honorarios mensuales"
+            value={honorariosMensuales}
+            onChange={(e) => setHonorariosMensuales(e.target.value)}
+            className={inputCls}
+          />
+          {smlmv && (
+            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer self-start">
+              <input
+                type="checkbox"
+                checked={Number(honorariosMensuales) === smlmv}
+                onChange={(e) => { if (e.target.checked) setHonorariosMensuales(String(smlmv)); }}
+                className="w-3.5 h-3.5 accent-mint"
+              />
+              Autocompletar salario mínimo vigente ({formatCOP(smlmv)})
+            </label>
+          )}
+        </div>
         <button
           type="submit"
           className="rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200"

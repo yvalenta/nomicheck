@@ -38,6 +38,7 @@ import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
 import ComprobanteNomina from "../ComprobanteNomina.tsx";
 import DateField from "../DateField.tsx";
+import EmptyState from "../EmptyState.tsx";
 import HorarioSemanalEditor from "../HorarioSemanalEditor.tsx";
 
 const inputCls =
@@ -555,7 +556,7 @@ function DetallePeriodo({
         <>
           <PaycheckCard titulo={`Colaboradores en este periodo (${incluidos.size} de ${activos.length})`}>
             {activos.length === 0 ? (
-              <p className="text-sm text-muted px-3 py-6 text-center">No tienes colaboradores activos.</p>
+              <EmptyState icon={UserRound} titulo="No tienes colaboradores activos" />
             ) : (
               <div className="px-3 pb-3 pt-1 flex flex-col gap-1.5">
                 {activos.map((e) => (

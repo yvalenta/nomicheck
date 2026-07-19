@@ -17,9 +17,21 @@ import { obtenerParametros, type ParametrosPublicos } from "../../api";
 import PaycheckCard from "../PaycheckCard.tsx";
 import SegmentedControl from "../SegmentedControl.tsx";
 import DateField from "../DateField.tsx";
+import EmptyState from "../EmptyState.tsx";
+import Skeleton from "../Skeleton.tsx";
+import Combobox from "../Combobox.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+
+const TIPO_CONTRATO_OPCIONES: { value: Empleado["tipoContrato"]; label: string }[] = [
+  { value: "indefinido", label: "Término indefinido" },
+  { value: "fijo", label: "Término fijo" },
+  { value: "obra_labor", label: "Por obra o labor" },
+  { value: "tiempo_parcial", label: "Tiempo parcial" },
+  { value: "aprendizaje_sena_lectiva", label: "Aprendizaje SENA — etapa lectiva" },
+  { value: "aprendizaje_sena_practica", label: "Aprendizaje SENA — etapa práctica" },
+];
 
 type FiltroEstado = "activos" | "retirados" | "todos";
 
@@ -199,11 +211,13 @@ export default function DashboardEmpresa() {
       </div>
 
       <PaycheckCard>
-        {cargando && <p className="text-sm text-muted px-3 py-6 text-center">Cargando…</p>}
+        {cargando && <Skeleton filas={3} />}
         {!cargando && visibles.length === 0 && (
-          <p className="text-sm text-muted px-3 py-6 text-center">
-            {empleados.length === 0 ? "Aún no tienes colaboradores." : "Sin resultados para este filtro."}
-          </p>
+          <EmptyState
+            icon={UserRound}
+            titulo={empleados.length === 0 ? "Aún no tienes colaboradores" : "Sin resultados para este filtro"}
+            descripcion={empleados.length === 0 ? "Agrega tu primer colaborador con el botón de arriba." : undefined}
+          />
         )}
         <div className="flex flex-col">
           {visibles.map((e) => (
@@ -467,18 +481,12 @@ function FormEmpleado({
         </div>
         <label className="flex flex-col gap-1 text-sm text-ink">
           Tipo de contrato
-          <select
+          <Combobox
             value={tipoContrato}
-            onChange={(e) => setTipoContrato(e.target.value as Empleado["tipoContrato"])}
-            className={inputCls}
-          >
-            <option value="indefinido">Término indefinido</option>
-            <option value="fijo">Término fijo</option>
-            <option value="obra_labor">Por obra o labor</option>
-            <option value="tiempo_parcial">Tiempo parcial</option>
-            <option value="aprendizaje_sena_lectiva">Aprendizaje SENA — etapa lectiva</option>
-            <option value="aprendizaje_sena_practica">Aprendizaje SENA — etapa práctica</option>
-          </select>
+            onChange={(v) => setTipoContrato(v as Empleado["tipoContrato"])}
+            opciones={TIPO_CONTRATO_OPCIONES}
+            buscarPlaceholder="Buscar tipo de contrato…"
+          />
         </label>
         <label className="flex flex-col gap-1 text-sm text-ink">
           Fecha de ingreso (antigüedad para cesantías, prima y vacaciones)
