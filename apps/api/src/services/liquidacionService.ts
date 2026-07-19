@@ -111,6 +111,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
       // plano (solo strings/números/undefined opcionales) — el cast evita
       // el round-trip por JSON.parse(JSON.stringify()).
       lineas: [...resultado.lineas, ...lineasProvision] as unknown as Prisma.InputJsonValue,
+      advertencias: resultado.advertencias as unknown as Prisma.InputJsonValue,
       totalDevengado: resultado.totalDevengos,
       totalDeducido: resultado.totalDeducciones,
       neto: resultado.netoEsperado,
@@ -135,6 +136,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
       contratistaId: contratista.id,
       periodoId,
       lineas: resultado.lineas as unknown as Prisma.InputJsonValue,
+      advertencias: resultado.advertencias as unknown as Prisma.InputJsonValue,
       totalDevengado: resultado.totalDevengos,
       totalDeducido: resultado.totalDeducciones,
       neto: resultado.netoEsperado,

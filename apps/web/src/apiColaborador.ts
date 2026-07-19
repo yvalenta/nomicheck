@@ -33,6 +33,7 @@ export interface ReciboPropio {
   periodoId: number;
   periodo: { fechaInicio: string; fechaFin: string };
   lineas: LineaRecibo[];
+  advertencias: string[];
   totalDevengado: number;
   totalDeducido: number;
   neto: number;

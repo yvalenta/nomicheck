@@ -190,6 +190,7 @@ export interface Recibo {
   empleado: Empleado | null;
   contratista: Contratista | null;
   lineas: LineaRecibo[];
+  advertencias: string[];
   totalDevengado: number;
   totalDeducido: number;
   neto: number;

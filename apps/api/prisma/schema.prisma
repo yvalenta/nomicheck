@@ -199,6 +199,10 @@ model ReciboPago {
   periodoId       Int
   periodo         PeriodoNomina @relation(fields: [periodoId], references: [id])
   lineas          Json // [{ concepto, tipo, formula, referenciaLegal, cantidad?, valor }]
+  // string[] — advertencias del ResultadoNomina del motor en el momento de
+  // liquidar (ej. preaviso/indemnización para término no indefinido, IBC de
+  // tiempo parcial). Antes se descartaban al persistir el recibo.
+  advertencias    Json          @default("[]")
   totalDevengado  Float
   totalDeducido   Float
   neto            Float

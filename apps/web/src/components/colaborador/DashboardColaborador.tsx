@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { AlertCircle, Building2, Check, Flag, Mail, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Building2, Check, Flag, Mail, X } from "lucide-react";
 import { formatCOP, formatRangoFechas, type ResultadoNomina } from "@pv/reglas";
 import {
   aceptarInvitacion,
@@ -42,7 +42,7 @@ function comoResultadoNomina(r: ReciboPropio): ResultadoNomina {
     totalDevengos: r.totalDevengado,
     totalDeducciones: r.totalDeducido,
     netoEsperado: r.neto,
-    advertencias: [],
+    advertencias: r.advertencias,
   };
 }
 
@@ -136,6 +136,17 @@ export default function DashboardColaborador() {
             <span>Neto</span>
             <span className="tabular-nums">{formatCOP(r.neto)}</span>
           </div>
+
+          {r.advertencias.length > 0 && (
+            <div className="mx-3 mb-3 flex flex-col gap-2">
+              {r.advertencias.map((a, i) => (
+                <div key={i} className="rounded-xl p-3 bg-amber-50 text-amber-700 flex items-start gap-2 text-xs">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  <span>{a}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {r.reportes.length > 0 && (
             <div className="mx-3 mb-3 flex flex-col gap-2">
