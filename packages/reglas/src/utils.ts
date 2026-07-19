@@ -142,3 +142,26 @@ export function formatCOP(valor: number): string {
     maximumFractionDigits: 0,
   }).format(valor);
 }
+
+const MESES_LARGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+// "2026-06-01" → "1 junio 2026". Parseo manual (no Date) para evitar
+// ambigüedad de timezone en fechas YYYY-MM-DD (mismo motivo que diaSemana).
+export function formatFechaLegible(fecha: string): string {
+  const [y, m, d] = fecha.split("-").map(Number);
+  return `${d} ${MESES_LARGOS[m - 1]} ${y}`;
+}
+
+// "2026-06-01", "2026-06-15" → "1 — 15 junio 2026" (mismo mes/año) o
+// "28 junio — 5 julio 2026" (cruza mes) — evita repetir el año/mes cuando
+// coinciden, más legible en listas y encabezados de periodo.
+export function formatRangoFechas(desde: string, hasta: string): string {
+  const [yd, md, dd] = desde.split("-").map(Number);
+  const [yh, mh, dh] = hasta.split("-").map(Number);
+  if (yd === yh && md === mh) return `${dd} — ${dh} ${MESES_LARGOS[md - 1]} ${yd}`;
+  if (yd === yh) return `${dd} ${MESES_LARGOS[md - 1]} — ${dh} ${MESES_LARGOS[mh - 1]} ${yd}`;
+  return `${formatFechaLegible(desde)} — ${formatFechaLegible(hasta)}`;
+}

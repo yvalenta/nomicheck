@@ -5,6 +5,8 @@ import {
   esFechaValida,
   crearResolutorReglas,
   finDePeriodoMensual,
+  formatFechaLegible,
+  formatRangoFechas,
   rangoFechas,
   reglaEn,
 } from "../utils.js";
@@ -131,6 +133,25 @@ describe("finDePeriodoMensual", () => {
 
   it("un periodo mensual normal (día que existe en ambos meses) resta 1 día al mismo día del mes siguiente", () => {
     expect(finDePeriodoMensual("2026-06-16")).toBe("2026-07-15");
+  });
+});
+
+describe("formatFechaLegible", () => {
+  it("formatea con nombre de mes completo", () => {
+    expect(formatFechaLegible("2026-06-01")).toBe("1 junio 2026");
+    expect(formatFechaLegible("2026-12-31")).toBe("31 diciembre 2026");
+  });
+});
+
+describe("formatRangoFechas", () => {
+  it("mismo mes y año: no repite el mes", () => {
+    expect(formatRangoFechas("2026-06-01", "2026-06-15")).toBe("1 — 15 junio 2026");
+  });
+  it("cruza de mes, mismo año: no repite el año", () => {
+    expect(formatRangoFechas("2026-06-28", "2026-07-05")).toBe("28 junio — 5 julio 2026");
+  });
+  it("cruza de año: fecha completa en ambos extremos", () => {
+    expect(formatRangoFechas("2026-12-28", "2027-01-05")).toBe("28 diciembre 2026 — 5 enero 2027");
   });
 });
 
