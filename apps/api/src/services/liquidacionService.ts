@@ -31,7 +31,12 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
   }
 
   const [empleados, contratistas, turnos, { reglas, festivos }] = await Promise.all([
-    prisma.empleado.findMany({ where: { empresaId, activo: true } }),
+    // Solo los empleados seleccionados para ESTE periodo (PeriodoNominaEmpleado,
+    // autopoblada con los activos al crear el periodo, ajustable en borrador) —
+    // y siguen requiriendo estar activos por si se retiraron después.
+    prisma.empleado.findMany({
+      where: { empresaId, activo: true, periodosIncluido: { some: { periodoId } } },
+    }),
     prisma.contratista.findMany({ where: { empresaId, activo: true } }),
     prisma.turno.findMany({ where: { periodoId } }),
     obtenerReglasYFestivos(),

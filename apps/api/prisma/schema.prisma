@@ -111,6 +111,7 @@ model Empleado {
 
   turnos  Turno[]
   recibos ReciboPago[]
+  periodosIncluido PeriodoNominaEmpleado[]
 
   @@unique([empresaId, documento])
   @@index([empresaId])
@@ -150,8 +151,23 @@ model PeriodoNomina {
 
   turnos  Turno[]
   recibos ReciboPago[]
+  empleadosIncluidos PeriodoNominaEmpleado[]
 
   @@index([empresaId])
+}
+
+// Qué empleados quedan incluidos en un periodo — se autopuebla con los
+// activos al crear el periodo (mismo comportamiento implícito de antes de
+// esta tabla) y la empresa puede des/marcar mientras el periodo esté en
+// "borrador" (editarEmpleadosPeriodo). liquidarPeriodo liquida SOLO estos.
+model PeriodoNominaEmpleado {
+  periodoId  Int
+  periodo    PeriodoNomina @relation(fields: [periodoId], references: [id])
+  empleadoId Int
+  empleado   Empleado      @relation(fields: [empleadoId], references: [id])
+
+  @@id([periodoId, empleadoId])
+  @@index([empleadoId])
 }
 
 // Insumo de la calculadora por turnos — el motor deriva diurno/nocturno/

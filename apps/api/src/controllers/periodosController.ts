@@ -1,8 +1,10 @@
 import type { Request, Response } from "express";
-import { editarPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
+import { editarPeriodoSchema, empleadosPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
 import {
   crearPeriodo,
+  editarEmpleadosPeriodo,
   editarPeriodo,
+  listarEmpleadosIncluidos,
   listarPeriodos,
   listarTurnos,
   reemplazarTurnos,
@@ -34,6 +36,25 @@ export async function editar(req: Request, res: Response) {
     res.json(periodo);
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo editar el periodo" });
+  }
+}
+
+export async function empleadosIncluidos(req: Request, res: Response) {
+  const filas = await listarEmpleadosIncluidos(Number(req.params.id));
+  res.json(filas.map((f) => f.empleadoId));
+}
+
+export async function guardarEmpleadosIncluidos(req: Request, res: Response) {
+  const parseo = empleadosPeriodoSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+  try {
+    const filas = await editarEmpleadosPeriodo(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
+    res.json(filas.map((f) => f.empleadoId));
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo guardar" });
   }
 }
 

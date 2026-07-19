@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import type { editarPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
+import type { editarPeriodoSchema, empleadosPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
 import type { z } from "zod";
 
 export function listarPeriodos(empresaId: number) {
@@ -9,8 +9,50 @@ export function listarPeriodos(empresaId: number) {
   });
 }
 
-export function crearPeriodo(empresaId: number, datos: z.infer<typeof periodoSchema>) {
-  return prisma.periodoNomina.create({ data: { ...datos, empresaId } });
+// Se autopuebla con los empleados activos de la empresa al momento de crear
+// el periodo — mismo comportamiento implícito que tenía liquidarPeriodo antes
+// de existir esta selección explícita. La empresa ajusta la lista después
+// (editarEmpleadosPeriodo) mientras el periodo siga en borrador.
+export async function crearPeriodo(empresaId: number, datos: z.infer<typeof periodoSchema>) {
+  const activos = await prisma.empleado.findMany({ where: { empresaId, activo: true }, select: { id: true } });
+  return prisma.periodoNomina.create({
+    data: {
+      ...datos,
+      empresaId,
+      empleadosIncluidos: { create: activos.map((e) => ({ empleadoId: e.id })) },
+    },
+  });
+}
+
+export function listarEmpleadosIncluidos(periodoId: number) {
+  return prisma.periodoNominaEmpleado.findMany({ where: { periodoId }, select: { empleadoId: true } });
+}
+
+// Reemplaza qué empleados quedan incluidos en el periodo — SOLO en borrador
+// (mismo criterio que editar fechas/turnos: un periodo liquidado ya generó
+// recibos, cambiar quién participa después rompería esa foto). Valida que
+// todos pertenezcan a la empresa, igual que reemplazarTurnos.
+export async function editarEmpleadosPeriodo(
+  empresaId: number,
+  periodoId: number,
+  empleadoIds: z.infer<typeof empleadosPeriodoSchema>
+) {
+  const periodo = await obtenerPeriodo(empresaId, periodoId);
+  if (periodo.estado !== "borrador") {
+    throw new Error(`El periodo está en estado "${periodo.estado}" — solo se ajustan colaboradores en borrador`);
+  }
+
+  const ids = [...new Set(empleadoIds)];
+  const validos = await prisma.empleado.count({ where: { id: { in: ids }, empresaId } });
+  if (validos !== ids.length) {
+    throw new Error("Uno o más empleados no pertenecen a esta empresa");
+  }
+
+  await prisma.$transaction([
+    prisma.periodoNominaEmpleado.deleteMany({ where: { periodoId } }),
+    prisma.periodoNominaEmpleado.createMany({ data: ids.map((empleadoId) => ({ periodoId, empleadoId })) }),
+  ]);
+  return listarEmpleadosIncluidos(periodoId);
 }
 
 export async function obtenerPeriodo(empresaId: number, periodoId: number) {

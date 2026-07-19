@@ -21,6 +21,8 @@ import {
   listar as listarPeriodos,
   crear as crearPeriodo,
   editar as editarPeriodo,
+  empleadosIncluidos,
+  guardarEmpleadosIncluidos,
   obtenerTurnos,
   guardarTurnos,
   liquidar,
@@ -130,6 +132,10 @@ router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);
 router.put("/empresa/periodos/:id", ...soloEmpresa, editarPeriodo);
 router.get("/empresa/periodos/:id/turnos", ...soloEmpresa, obtenerTurnos);
 router.put("/empresa/periodos/:id/turnos", ...soloEmpresa, guardarTurnos);
+// Qué empleados quedan incluidos en el periodo (autopoblado al crear, solo
+// editable en borrador) — ver editarEmpleadosPeriodo en periodosService.ts.
+router.get("/empresa/periodos/:id/empleados", ...soloEmpresa, empleadosIncluidos);
+router.put("/empresa/periodos/:id/empleados", ...soloEmpresa, guardarEmpleadosIncluidos);
 router.post("/empresa/periodos/:id/liquidar", ...soloEmpresa, liquidar);
 router.post("/empresa/periodos/:id/revertir", ...soloEmpresa, revertir);
 router.get("/empresa/recibos", ...soloEmpresa, recibos);

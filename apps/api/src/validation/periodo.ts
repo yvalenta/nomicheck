@@ -21,3 +21,7 @@ export const turnoSchema = z.object({
 // El PUT reemplaza todos los turnos del periodo de una vez (la grilla se
 // edita completa en la SPA, más simple que diffear altas/bajas).
 export const turnosSchema = z.array(turnoSchema);
+
+// El PUT reemplaza qué empleados quedan incluidos en el periodo, mismo
+// patrón de "reemplazo completo" que turnosSchema.
+export const empleadosPeriodoSchema = z.array(z.number().int().positive());
