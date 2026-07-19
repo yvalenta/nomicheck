@@ -9,7 +9,13 @@ export interface Empleado {
   auxilioTransporte: boolean;
   fechaIngreso: string;
   fechaRetiro: string | null;
-  tipoContrato: "indefinido" | "aprendizaje_sena_lectiva" | "aprendizaje_sena_practica";
+  tipoContrato:
+    | "indefinido"
+    | "fijo"
+    | "obra_labor"
+    | "tiempo_parcial"
+    | "aprendizaje_sena_lectiva"
+    | "aprendizaje_sena_practica";
   activo: boolean;
   // Estado de la cuenta del colaborador: usuarioId null = sin cuenta;
   // con usuarioId y invitacionAceptadaEn null = invitación pendiente;

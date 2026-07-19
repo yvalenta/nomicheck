@@ -458,7 +458,10 @@ function FormEmpleado({
             onChange={(e) => setTipoContrato(e.target.value as Empleado["tipoContrato"])}
             className={inputCls}
           >
-            <option value="indefinido">Término indefinido (u otro contrato laboral ordinario)</option>
+            <option value="indefinido">Término indefinido</option>
+            <option value="fijo">Término fijo</option>
+            <option value="obra_labor">Por obra o labor</option>
+            <option value="tiempo_parcial">Tiempo parcial</option>
             <option value="aprendizaje_sena_lectiva">Aprendizaje SENA — etapa lectiva</option>
             <option value="aprendizaje_sena_practica">Aprendizaje SENA — etapa práctica</option>
           </select>

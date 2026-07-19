@@ -409,20 +409,18 @@ la tabla de **perfil** de dominio, 1:1 con `auth.users` por `id` (mismo UUID):
 | `tipoNomina` | string | enum: `turnos` · `fijo` |
 | `auxilioTransporte` | boolean | si aplica (salario ≤ 2 SMLMV) |
 | `activo` | boolean | retiro sin borrar historial |
-| `tipoContrato` | string? | **Futuro (out of scope MVP)** — ver nota abajo |
+| `tipoContrato` | string | enum: `indefinido` (default) · `fijo` · `obra_labor` · `tiempo_parcial` · `aprendizaje_sena_lectiva` · `aprendizaje_sena_practica` — ver nota abajo |
 
-> **Nota — `tipoContrato` (pendiente):** el tipo de contrato laboral es una dimensión **ortogonal** a `tipoNomina` (`turnos`/`fijo`) y afecta los cálculos de formas que el motor actual no maneja. Queda documentado aquí para que ninguna fase futura lo asuma como "igual al estándar" sin revisarlo:
+> **Nota — `tipoContrato`:** el tipo de contrato laboral es una dimensión **ortogonal** a `tipoNomina` (`turnos`/`fijo`). Los 6 valores están soportados tanto en el verificador anónimo como en el modo empresa (formulario de empleado, validación zod y motor):
 >
 > | Tipo de contrato | Impacto en el cálculo | Estado |
 > |---|---|---|
-> | **Término indefinido** | Reglas estándar — es lo que el motor implementa hoy | ✅ cubierto implícitamente |
-> | **Término fijo** | Devengos/deducciones idénticos al indefinido; prima y liquidación se prorratean si el plazo < 12 meses (aplica en §14 prestaciones sociales, fuera del MVP) | ⚠️ sin impacto en MVP (prestaciones out of scope) |
-> | **Obra o labor** | Ídem término fijo en la práctica; prestaciones proporcionales al tiempo de vinculación | ⚠️ sin impacto en MVP |
-> | **Aprendizaje SENA** | El "salario" es un **auxilio de sostenimiento** (no salarial), Ley 789 de 2002 art. 30: en la etapa **lectiva** no hay ningún aporte a seguridad social; en la **práctica** solo aporte de salud (sin pensión ni fondo de solidaridad). No genera auxilio de transporte ni prestaciones sociales | ✅ implementado — `tipoContrato: "aprendizaje_sena_lectiva" \| "aprendizaje_sena_practica"` en `DatosNominaTurnos`/`DatosNominaFija` y `Empleado.tipoContrato`; `deduccionesDeLey()` acepta `alcance: "completo"\|"solo_salud"\|"ninguno"` |
-> | **Prestación de servicios** | Técnicamente no es contrato laboral: el contratista cotiza como **independiente** sobre el 40 % del ingreso bruto (Ley 1819 de 2016, art. 244, no el 100 %); no hay auxilio de transporte, no hay recargos nocturnos/dominicales, no hay prestaciones | ✅ implementado como tercera Strategy `CalculadoraServicios` (`modo: "servicios"`, `DatosNominaServicios`) — los aportes del independiente se muestran solo como advertencia (referencia informativa), nunca como deducción, porque quien contrata no los retiene. Disponible en `/nomina/calcular`; **no** modelado aún en `Empleado` del modo empresa (no es contrato laboral, ver nota debajo) |
-> | **Tiempo parcial** | El IBC mínimo para cotizar es 1 SMLMV sin importar lo ganado (tope inferior de cotización) — si el salario parcial < SMLMV, la base de aportes se eleva al mínimo | 🚫 no implementado |
->
-> **Implicación para el MVP:** el motor asume tácitamente contrato a término indefinido u obra/fijo ordinario. Los casos de aprendizaje SENA, prestación de servicios y tiempo parcial por debajo del mínimo producirían resultados incorrectos si se ingresan hoy. La solución definitiva es agregar `tipoContrato` al schema y una rama en `aplicarDeducciones()` / `calculadoraTurnos.ts`; mientras tanto, el wizard debería al menos advertir al usuario si el salario declarado es exactamente el 50 % del SMLMV (posible aprendiz). Tarea registrada en §14.
+> | **Término indefinido** | Reglas estándar | ✅ implementado |
+> | **Término fijo** | Devengos/deducciones idénticos al indefinido período a período; la diferencia real (preaviso, indemnización por terminación anticipada) se cubre con `advertenciaTerminoNoIndefinido()` en el recibo y con la calculadora de indemnización aparte (§14) | ✅ implementado |
+> | **Obra o labor** | Ídem término fijo | ✅ implementado |
+> | **Tiempo parcial** | Liquida igual que indefinido + advertencia. **Pendiente real**: el IBC mínimo para cotizar es 1 SMLMV — si el salario parcial < SMLMV la base de aportes debería elevarse al mínimo; el motor hoy no eleva esa base | ⚠️ advertencia sí, ajuste de IBC no |
+> | **Aprendizaje SENA** | El "salario" es un **auxilio de sostenimiento** (no salarial), Ley 789 de 2002 art. 30: etapa **lectiva** sin aportes; etapa **práctica** solo salud. Sin auxilio de transporte ni prestaciones sociales | ✅ implementado — `deduccionesDeLey()` acepta `alcance: "completo"\|"solo_salud"\|"ninguno"` |
+> | **Prestación de servicios** | No es contrato laboral: el contratista cotiza como independiente sobre el 40 % (Ley 1819 de 2016, art. 244); sin auxilio, recargos ni prestaciones | ✅ implementado como Strategy `CalculadoraServicios`; en modo empresa se modela como `Contratista`, no como `Empleado` |
 
 ### `PeriodoNomina`
 | Columna | Tipo | Notas |

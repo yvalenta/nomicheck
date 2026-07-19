@@ -103,7 +103,8 @@ model Empleado {
   auxilioTransporte Boolean @default(false)
   fechaIngreso      String // YYYY-MM-DD — base de antigüedad para prestaciones sociales
   fechaRetiro       String? // YYYY-MM-DD — si está seteada, el empleado puede liquidarse (prestacionesService)
-  // indefinido (default) | aprendizaje_sena_lectiva | aprendizaje_sena_practica — ver TipoContrato en @pv/reglas.
+  // indefinido (default) | fijo | obra_labor | tiempo_parcial | aprendizaje_sena_lectiva |
+  // aprendizaje_sena_practica — ver TipoContrato en @pv/reglas.
   // "servicios" NO se modela aquí: no es contrato laboral (SDD §07).
   tipoContrato      String  @default("indefinido")
   activo            Boolean @default(true)
