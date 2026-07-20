@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Plus, Trash2 } from "lucide-react";
-import type { ConceptoNomina } from "@pv/reglas";
-import type { ComprobanteExtraido } from "../api";
+import { formatCOP, type ConceptoNomina } from "@pv/reglas";
+import type { ComprobanteExtraido, ParametrosPublicos } from "../api";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
 
 interface Props {
   extraido: ComprobanteExtraido;
+  parametros: ParametrosPublicos | null;
   onAtras: () => void;
   onConfirmar: (datos: {
     salario: string;
@@ -27,7 +28,7 @@ const TIPOS: { valor: ConceptoNomina["tipo"]; etiqueta: string }[] = [
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
-export default function PasoRevision({ extraido, onAtras, onConfirmar }: Props) {
+export default function PasoRevision({ extraido, parametros, onAtras, onConfirmar }: Props) {
   const [salario, setSalario] = useState(String(extraido.salarioBasicoMensual ?? ""));
   const [desde, setDesde] = useState(extraido.periodoDesde ?? "");
   const [hasta, setHasta] = useState(extraido.periodoHasta ?? "");
@@ -73,6 +74,17 @@ export default function PasoRevision({ extraido, onAtras, onConfirmar }: Props) 
               className={inputCls}
             />
           </label>
+          {parametros && (
+            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer self-start -mt-1.5">
+              <input
+                type="checkbox"
+                checked={Number(salario) === parametros.smlmv}
+                onChange={(e) => { if (e.target.checked) setSalario(String(parametros.smlmv)); }}
+                className="w-3.5 h-3.5 accent-mint"
+              />
+              Autocompletar salario mínimo vigente ({formatCOP(parametros.smlmv)})
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               Periodo desde

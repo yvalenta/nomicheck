@@ -235,10 +235,10 @@ export default function App() {
           <CalculadorasHub onIr={(p) => setPaso(p)} onAtras={() => setPaso("salario")} />
         )}
 
-        {paso === "indemnizacion" && <IndemnizacionCalculadora onAtras={() => setPaso("calculadoras")} />}
-        {paso === "prima" && <PrimaCalculadora onAtras={() => setPaso("calculadoras")} />}
-        {paso === "cesantias" && <CesantiasCalculadora onAtras={() => setPaso("calculadoras")} />}
-        {paso === "recargos" && <RecargosCalculadora onAtras={() => setPaso("calculadoras")} />}
+        {paso === "indemnizacion" && <IndemnizacionCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
+        {paso === "prima" && <PrimaCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
+        {paso === "cesantias" && <CesantiasCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
+        {paso === "recargos" && <RecargosCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
         {paso === "misLiquidaciones" && <MisLiquidaciones onAtras={() => setPaso("salario")} />}
 
         {paso === "semana" && (
@@ -269,7 +269,7 @@ export default function App() {
         {paso === "revision" && extraido && (
           <div className="flex flex-col gap-4">
             {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
-            <PasoRevision extraido={extraido} onAtras={() => setPaso("subir")} onConfirmar={calcularDesdeComprobante} />
+            <PasoRevision extraido={extraido} parametros={parametros} onAtras={() => setPaso("subir")} onConfirmar={calcularDesdeComprobante} />
           </div>
         )}
 

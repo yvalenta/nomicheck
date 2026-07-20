@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, Gavel, Scale } from "lucide-react";
-import { calcularIndemnizacion, type ResultadoIndemnizacion } from "../api.ts";
+import { formatCOP } from "@pv/reglas";
+import { calcularIndemnizacion, type ParametrosPublicos, type ResultadoIndemnizacion } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
 
@@ -17,10 +18,11 @@ const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 interface Props {
+  parametros: ParametrosPublicos | null;
   onAtras: () => void;
 }
 
-export default function IndemnizacionCalculadora({ onAtras }: Props) {
+export default function IndemnizacionCalculadora({ parametros, onAtras }: Props) {
   const [tipoContrato, setTipoContrato] = useState<TipoContrato>("indefinido");
   const [salarioMensual, setSalarioMensual] = useState("");
   const [fechaIngreso, setFechaIngreso] = useState("");
@@ -109,6 +111,18 @@ export default function IndemnizacionCalculadora({ onAtras }: Props) {
                 placeholder="Ej: 1.750.905"
               />
             </label>
+
+            {parametros && (
+              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer self-start -mt-2">
+                <input
+                  type="checkbox"
+                  checked={Number(salarioMensual) === parametros.smlmv}
+                  onChange={(e) => { if (e.target.checked) setSalarioMensual(String(parametros.smlmv)); }}
+                  className="w-3.5 h-3.5 accent-mint"
+                />
+                Autocompletar salario mínimo vigente ({formatCOP(parametros.smlmv)})
+              </label>
+            )}
 
             {conTermino ? (
               <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">

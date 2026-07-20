@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, MoonStar } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
-import { calcularRecargos, type HorasRecargo, type ResultadoRecargos } from "../api.ts";
+import { calcularRecargos, type HorasRecargo, type ParametrosPublicos, type ResultadoRecargos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
 
@@ -31,10 +31,11 @@ const CAMPOS: { grupo: string; campos: { clave: keyof HorasRecargo; label: strin
 ];
 
 interface Props {
+  parametros: ParametrosPublicos | null;
   onAtras: () => void;
 }
 
-export default function RecargosCalculadora({ onAtras }: Props) {
+export default function RecargosCalculadora({ parametros, onAtras }: Props) {
   const [salarioMensual, setSalarioMensual] = useState("");
   const [fechaReferencia, setFechaReferencia] = useState(new Date().toISOString().slice(0, 10));
   const [horas, setHoras] = useState<Record<keyof HorasRecargo, string>>({
@@ -111,6 +112,17 @@ export default function RecargosCalculadora({ onAtras }: Props) {
                 <DateField required value={fechaReferencia} onChange={setFechaReferencia} placeholder="Fecha de referencia" />
               </label>
             </div>
+            {parametros && (
+              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer self-start">
+                <input
+                  type="checkbox"
+                  checked={Number(salarioMensual) === parametros.smlmv}
+                  onChange={(e) => { if (e.target.checked) setSalarioMensual(String(parametros.smlmv)); }}
+                  className="w-3.5 h-3.5 accent-mint"
+                />
+                Autocompletar salario mínimo vigente ({formatCOP(parametros.smlmv)})
+              </label>
+            )}
           </div>
         </PaycheckCard>
 

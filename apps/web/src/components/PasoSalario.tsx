@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Wallet,
 } from "lucide-react";
-import { finDePeriodoMensual } from "@pv/reglas";
+import { finDePeriodoMensual, formatCOP } from "@pv/reglas";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
@@ -153,6 +153,18 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               placeholder="Ej: 1.750.905"
             />
           </label>
+
+          {parametros && (
+            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer self-start -mt-2">
+              <input
+                type="checkbox"
+                checked={Number(datos.salario) === parametros.smlmv}
+                onChange={(e) => { if (e.target.checked) set("salario", String(parametros.smlmv)); }}
+                className="w-3.5 h-3.5 accent-mint"
+              />
+              Autocompletar salario mínimo vigente ({formatCOP(parametros.smlmv)})
+            </label>
+          )}
 
           {!superaTopeAuxilio && esLaboralOrdinario && (
             <label className="flex items-center gap-2.5 text-sm text-ink">
