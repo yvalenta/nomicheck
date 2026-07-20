@@ -38,7 +38,7 @@ export default function AdminPlataforma() {
       </main>
       <footer className="text-center text-xs text-muted py-4 px-6 flex flex-col gap-1.5">
         <span>NomiCheck — panel administrativo de reglas legales y festivos.</span>
-        <span className="mt-2 font-medium text-slate-400">© {new Date().getFullYear()} Ynt-labs</span>
+        <span className="font-display text-[9px] font-medium uppercase tracking-[0.2em] text-base-content/25">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
     </div>
   );

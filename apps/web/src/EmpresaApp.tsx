@@ -84,7 +84,7 @@ export default function EmpresaApp() {
           NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
           certificada.
         </span>
-        <span className="mt-2 font-medium text-slate-400">© {new Date().getFullYear()} Ynt-labs</span>
+        <span className="font-display text-[9px] font-medium uppercase tracking-[0.2em] text-base-content/25">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
     </div>
   );
