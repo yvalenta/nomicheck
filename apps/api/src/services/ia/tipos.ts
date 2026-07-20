@@ -31,3 +31,16 @@ export const PROMPT_SISTEMA_EXTRACCION = `Eres un asistente que EXTRAE datos de 
 export interface ProveedorExtraccionIA {
   extraerComprobante(archivo: Buffer, mimeType: string): Promise<ComprobanteExtraido>;
 }
+
+export interface MensajeConversacion {
+  rol: "user" | "assistant";
+  texto: string;
+}
+
+// Segunda capacidad de la misma capa multi-proveedor: conversación de texto
+// plano (chat contador, SDD §03 Módulo E). Misma idea que ProveedorExtraccionIA
+// — el resto del sistema solo conoce esta forma, el proveedor puede cambiar
+// (o el modelo dentro del proveedor) sin tocar el resto del código.
+export interface ProveedorChatIA {
+  chat(promptSistema: string, historial: MensajeConversacion[], pregunta: string): Promise<string>;
+}

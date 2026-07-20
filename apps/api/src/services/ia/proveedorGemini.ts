@@ -2,6 +2,8 @@ import {
   comprobanteExtraidoSchema,
   PROMPT_SISTEMA_EXTRACCION,
   type ComprobanteExtraido,
+  type MensajeConversacion,
+  type ProveedorChatIA,
   type ProveedorExtraccionIA,
 } from "./tipos.js";
 
@@ -44,7 +46,7 @@ const RESPONSE_SCHEMA = {
   required: ["conceptos"],
 };
 
-export class ProveedorGemini implements ProveedorExtraccionIA {
+export class ProveedorGemini implements ProveedorExtraccionIA, ProveedorChatIA {
   constructor(
     private readonly apiKey: string,
     private readonly modelo = "gemini-flash-latest"
@@ -97,5 +99,36 @@ export class ProveedorGemini implements ProveedorExtraccionIA {
       throw new Error("La extracción de Gemini no cumple el formato esperado");
     }
     return parseo.data;
+  }
+
+  async chat(promptSistema: string, historial: MensajeConversacion[], pregunta: string): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelo}:generateContent`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-goog-api-key": this.apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: promptSistema }] },
+        contents: [
+          ...historial.map((m) => ({
+            role: m.rol === "user" ? "user" : "model",
+            parts: [{ text: m.texto }],
+          })),
+          { role: "user", parts: [{ text: pregunta }] },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const detalle = await res.text();
+      throw new Error(`Gemini respondió ${res.status}: ${detalle}`);
+    }
+
+    const body = await res.json();
+    const texto: string | undefined = body?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!texto) {
+      throw new Error("Gemini no devolvió una respuesta de texto");
+    }
+    return texto;
   }
 }

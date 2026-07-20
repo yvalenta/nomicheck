@@ -249,19 +249,25 @@ El único hallazgo real de la revisión fue un **bug de cálculo** (hora extra d
 | **RLS (Row Level Security)** | Autorización a nivel de fila | Políticas Postgres que aplican el scoping por empresa/colaborador directo en la base, como defensa adicional a la del service |
 | Prisma | ORM | Sobre la connection string de Supabase Postgres; `schema.prisma` sigue siendo la fuente del modelo de datos y migraciones |
 | `packages/reglas` | Motor de cálculo | TS puro: sin HTTP, sin ORM, sin dependencias de UI; testeable con fixtures reales |
-| **Capa de IA multi-proveedor** | Extracción de comprobantes | `ProveedorExtraccionIA` (Strategy) + adaptadores intercambiables — **Gemini** activo (`IA_PROVEEDOR=gemini`), Claude disponible; API keys solo en servidor |
+| **Capa de IA multi-proveedor** | Extracción de comprobantes + chat contador | `ProveedorExtraccionIA` + `ProveedorChatIA` (Strategy) + adaptadores intercambiables — **Gemini** activo (`IA_PROVEEDOR=gemini`), Claude disponible; API keys solo en servidor |
 | Vitest | Tests | Motor de reglas con los 2 comprobantes reales como regresión |
 
 ### Capa de IA multi-proveedor (`apps/api/src/services/ia/`)
 
-Igual que Advance Fitness (proyecto hermano): una interfaz de dominio
-(`ProveedorExtraccionIA.extraerComprobante(archivo, mimeType)`) con
-adaptadores intercambiables — `ProveedorGemini` y `ProveedorClaude` — elegidos
-por `IA_PROVEEDOR` (env var). El contrato de qué extraer (schema, prompt) es
-del dominio y vive en `ia/tipos.ts`; cada adaptador solo traduce esa forma al
-formato de su proveedor (Gemini: `responseSchema` OpenAPI en mayúsculas vía
-`fetch`; Claude: `tool_choice` forzado vía `@anthropic-ai/sdk`). Añadir un
-proveedor nuevo es un archivo más, sin tocar el resto del sistema.
+Igual que Advance Fitness (proyecto hermano): dos interfaces de dominio —
+`ProveedorExtraccionIA.extraerComprobante(archivo, mimeType)` (Fase 3) y
+`ProveedorChatIA.chat(promptSistema, historial, pregunta)` (Fase 4) — con los
+mismos adaptadores intercambiables — `ProveedorGemini` y `ProveedorClaude`,
+cada uno implementa ambas interfaces — elegidos por `IA_PROVEEDOR` (env var,
+un solo switch para toda la IA de la plataforma vía `proveedorExtraccion()` y
+`proveedorChat()` en `ia/index.ts`). El contrato de qué extraer (schema,
+prompt) es del dominio y vive en `ia/tipos.ts`; cada adaptador solo traduce
+esa forma al formato de su proveedor (Gemini: `responseSchema` OpenAPI en
+mayúsculas vía `fetch` para extracción, `generateContent` de texto libre para
+chat; Claude: `tool_choice` forzado para extracción, `messages.create` simple
+para chat — ambos vía `@anthropic-ai/sdk`). Añadir un proveedor nuevo es un
+archivo más, sin tocar el resto del sistema; cambiar de proveedor en
+cualquiera de las dos fases es una sola env var.
 
 - **Por qué Gemini activo**: sin dependencia adicional (llamada REST directa
   con `fetch`, sin SDK), `responseSchema` nativo para salida estructurada,
@@ -597,7 +603,7 @@ Cada fase entrega algo usable de punta a punta.
 - [x] Fase 1 — motor + tests de regresión con los 2 comprobantes reales (26 tests, `packages/reglas`) + Supabase Postgres conectado con schema inicial migrado
 - [x] Fase 2 — verificador anónimo manual end-to-end (formularios turnos/fijo, `POST /api/nomina/calcular`, resultado con comparación neto esperado vs. recibido)
 - [x] **Fase 3 — extracción por imagen: DESBLOQUEADA** (código completo: `POST /api/comprobantes/extraer`, capa multi-proveedor Gemini/Claude, editable antes de calcular). Key de Gemini nueva y funcional en `.env` (`IA_PROVEEDOR=gemini`, modelo `gemini-flash-latest`, ya el que usa `proveedorGemini.ts`). Verificado con una llamada real de punta a punta: comprobante sintético (imagen PNG generada con salario/período/auxilio) subido a `POST /api/comprobantes/extraer` → Gemini extrajo correctamente `salarioBasicoMensual: 2000000`, `periodoDesde/Hasta`, `recibeAuxilioTransporte: true`, y hasta generó una `advertenciaExtraccion` razonable notando que el comprobante no detallaba conceptos individuales. Mismo endpoint que usa `SubirComprobante.tsx` en el wizard anónimo — no se tocó código, solo la credencial.
-- [x] Fase 4 — chat contador: código completo (`POST /api/chat/explicar`, `chatService.ts` — solo Claude, no pasa por la capa multi-proveedor de extracción porque es texto, no visión). El prompt de sistema serializa el `ResultadoNomina` completo (líneas, totales, advertencias, cita legal de cada línea) y explícitamente instruye a NUNCA recalcular ni contradecir las cifras. UI: `ChatContador.tsx` con disclaimer siempre visible, montado en `Resultado.tsx` (wizard anónimo) y en `DashboardColaborador.tsx` (un chat por recibo propio, adaptando `ReciboPropio` a la forma `ResultadoNomina`). **⏸ Sigue pausado**: `ANTHROPIC_API_KEY` en `.env` sigue siendo un placeholder (`sk-ant-..`) — a diferencia de Gemini, todavía no se recibió una key real de Anthropic. En cuanto llegue, la Fase 4 queda funcional sin tocar código (mismo criterio que Fase 3).
+- [x] **Fase 4 — chat contador: DESBLOQUEADA** (`POST /api/chat/explicar`, `chatService.ts`). Antes solo hablaba con Claude directo (bloqueado por falta de key real de Anthropic); ahora pasa por la misma capa multi-proveedor de la Fase 3 (`services/ia/`) — se extendió `ProveedorExtraccionIA`/`tipos.ts` con una segunda interfaz Strategy, `ProveedorChatIA` (`chat(promptSistema, historial, pregunta): Promise<string>`), implementada tanto en `ProveedorGemini` (REST `generateContent`, sin `responseSchema` — texto libre) como en `ProveedorClaude` (`messages.create` sin `tools`). El factory `services/ia/index.ts` ahora expone `proveedorChat()` además de `proveedorExtraccion()`, ambos leyendo el mismo `IA_PROVEEDOR` — así extracción y chat comparten switch de proveedor/modelo, y cambiar de proveedor más adelante (o volver a Claude cuando llegue una key real) no vuelve a bloquear nada ni toca este archivo. El prompt de sistema sigue serializando el `ResultadoNomina` completo (líneas, totales, advertencias, cita legal) e instruye a NUNCA recalcular ni contradecir las cifras — eso no cambió. UI sin cambios: `ChatContador.tsx` en `Resultado.tsx` y `DashboardColaborador.tsx`. Verificado con `POST /api/chat/explicar` real (Gemini, `IA_PROVEEDOR=gemini`): explicó correctamente por qué se descontó salud/pensión (4%/4% sobre el salario básico, sin incluir auxilio) citando CST; segunda llamada con `historial` de 2 turnos respondió coherente al contexto previo. `ANTHROPIC_API_KEY` sigue siendo un placeholder — no se necesita para que la Fase 4 funcione hoy.
 - [x] Fase 5 — cuentas + empresa + empleados: schema completo migrado (`Empresa`, `Empleado`, `PeriodoNomina`, `Turno`, `ReciboPago`, `ReporteDiscrepancia`) con políticas RLS aplicadas; Supabase Auth (Google + email) para registro/login; middleware `requiereAuth`/`requiereRol`; CRUD de empleados + invitación de colaborador. Verificado end-to-end en navegador (registro → login → crear empleado) y limpiado de la base
 - [x] Fase 6 — liquidación y recibos: `PeriodoNomina` (borrador/liquidado), captura de `Turno` en grilla, `POST .../liquidar` genera `ReciboPago` por empleado reusando `CalculadoraPorTurnos`/`CalculadoraSalarioFijo` de `packages/reglas` (mismo motor del verificador anónimo). Verificado end-to-end en navegador: recibo liquidado coincide exactamente con la aritmética esperada
 - [x] Fase 7 — portal colaborador + discrepancias: `requiereAuth` adjunta `empleadoId` (join `Usuario.empleado`); rutas `GET /colaborador/recibos` y `POST /colaborador/recibos/:id/reportar` (`soloColaborador`) filtran siempre por el `empleadoId` del token — nunca de otro colaborador. Lado empresa: `GET/PUT /empresa/discrepancias` para ver y responder. UI: `PortalColaborador.tsx` (nuevo shell en `/colaborador`, login con `AuthColaborador.tsx` — sin auto-registro, la cuenta la crea la invitación existente) lista recibos propios con `ValidationRow` reutilizado y un formulario de reporte; pestaña "Discrepancias" nueva en `EmpresaApp.tsx`. Verificado con un script contra la DB de desarrollo (Supabase Auth es remoto, no se puede fabricar un login real): recibos propios correctos, reporte→respuesta funcionando, y un intento de reportar con un `empleadoId` ajeno rechazado ("Recibo no encontrado")

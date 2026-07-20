@@ -3,6 +3,8 @@ import {
   comprobanteExtraidoSchema,
   PROMPT_SISTEMA_EXTRACCION,
   type ComprobanteExtraido,
+  type MensajeConversacion,
+  type ProveedorChatIA,
   type ProveedorExtraccionIA,
 } from "./tipos.js";
 
@@ -50,7 +52,7 @@ const HERRAMIENTA_EXTRACCION = {
   },
 };
 
-export class ProveedorClaude implements ProveedorExtraccionIA {
+export class ProveedorClaude implements ProveedorExtraccionIA, ProveedorChatIA {
   constructor(
     private readonly apiKey: string,
     private readonly modelo = "claude-sonnet-5"
@@ -96,5 +98,21 @@ export class ProveedorClaude implements ProveedorExtraccionIA {
       throw new Error("La extracción de Claude no cumple el formato esperado");
     }
     return parseo.data;
+  }
+
+  async chat(promptSistema: string, historial: MensajeConversacion[], pregunta: string): Promise<string> {
+    const client = new Anthropic({ apiKey: this.apiKey });
+    const respuesta = await client.messages.create({
+      model: this.modelo,
+      max_tokens: 1024,
+      system: promptSistema,
+      messages: [...historial.map((m) => ({ role: m.rol, content: m.texto })), { role: "user" as const, content: pregunta }],
+    });
+
+    const bloque = respuesta.content.find((b) => b.type === "text");
+    if (!bloque || bloque.type !== "text") {
+      throw new Error("Claude no devolvió una respuesta de texto");
+    }
+    return bloque.text;
   }
 }
