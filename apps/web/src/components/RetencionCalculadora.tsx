@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Landmark, Users } from "lucide-react";
+import { ArrowLeft, HeartPulse, Landmark, Users } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularRetencion, type ResultadoRetencion } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
@@ -15,7 +15,9 @@ export default function RetencionCalculadora({ onAtras }: Props) {
   const [ingresoLaboralMensual, setIngresoLaboralMensual] = useState("");
   const [declaraRenta, setDeclaraRenta] = useState(false);
   const [aportesVoluntariosAfc, setAportesVoluntariosAfc] = useState("");
+  const [aportesVoluntariosPensionObligatoria, setAportesVoluntariosPensionObligatoria] = useState("");
   const [tieneDependientes, setTieneDependientes] = useState(false);
+  const [medicinaPrepagadaMensual, setMedicinaPrepagadaMensual] = useState("");
   const [resultado, setResultado] = useState<ResultadoRetencion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [calculando, setCalculando] = useState(false);
@@ -34,7 +36,11 @@ export default function RetencionCalculadora({ onAtras }: Props) {
           ingresoLaboralMensual: Number(ingresoLaboralMensual),
           declaraRenta,
           aportesVoluntariosAfc: aportesVoluntariosAfc ? Number(aportesVoluntariosAfc) : undefined,
+          aportesVoluntariosPensionObligatoria: aportesVoluntariosPensionObligatoria
+            ? Number(aportesVoluntariosPensionObligatoria)
+            : undefined,
           tieneDependientes,
+          medicinaPrepagadaMensual: medicinaPrepagadaMensual ? Number(medicinaPrepagadaMensual) : undefined,
         })
       );
     } catch (e) {
@@ -87,18 +93,37 @@ export default function RetencionCalculadora({ onAtras }: Props) {
             </p>
 
             {declaraRenta && (
-              <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-                <span>Aporte voluntario mensual a AFC / pensión voluntaria (opcional)</span>
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  value={aportesVoluntariosAfc}
-                  onChange={(e) => setAportesVoluntariosAfc(e.target.value)}
-                  className={inputCls}
-                  placeholder="Ej: 500.000"
-                />
-              </label>
+              <>
+                <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+                  <span>Aporte voluntario mensual a AFC (opcional)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={aportesVoluntariosAfc}
+                    onChange={(e) => setAportesVoluntariosAfc(e.target.value)}
+                    className={inputCls}
+                    placeholder="Ej: 500.000"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+                  <span>Aporte voluntario mensual a pensión obligatoria (opcional)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={aportesVoluntariosPensionObligatoria}
+                    onChange={(e) => setAportesVoluntariosPensionObligatoria(e.target.value)}
+                    className={inputCls}
+                    placeholder="Ej: 500.000"
+                  />
+                </label>
+                <p className="text-xs text-muted -mt-2.5">
+                  AFC y pensión voluntaria comparten el mismo tope (E.T. art. 126-1) — se suman antes de
+                  aplicarlo, no cada uno por separado.
+                </p>
+              </>
             )}
 
             <label className="flex items-center gap-2.5 text-sm text-ink">
@@ -109,6 +134,22 @@ export default function RetencionCalculadora({ onAtras }: Props) {
                 className="w-4 h-4 accent-mint"
               />
               <Users size={16} className="text-muted" /> Tengo al menos un dependiente a cargo
+            </label>
+
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+              <span className="flex items-center gap-2">
+                <HeartPulse size={16} className="text-muted" /> Medicina prepagada / seguro de salud mensual
+                (opcional)
+              </span>
+              <input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                value={medicinaPrepagadaMensual}
+                onChange={(e) => setMedicinaPrepagadaMensual(e.target.value)}
+                className={inputCls}
+                placeholder="Ej: 300.000"
+              />
             </label>
           </div>
         </PaycheckCard>
@@ -139,11 +180,11 @@ export default function RetencionCalculadora({ onAtras }: Props) {
                 {formatCOP(resultado.rentaExentaLaboral)}
               </span>
             </div>
-            {resultado.rentaExentaAfc > 0 && (
+            {resultado.rentaExentaAfcYPension > 0 && (
               <div className="flex justify-between items-baseline">
                 <span className="text-sm text-muted">Renta exenta AFC/pensión voluntaria</span>
                 <span className="text-sm font-medium text-ink tabular-nums">
-                  {formatCOP(resultado.rentaExentaAfc)}
+                  {formatCOP(resultado.rentaExentaAfcYPension)}
                 </span>
               </div>
             )}
@@ -152,6 +193,14 @@ export default function RetencionCalculadora({ onAtras }: Props) {
                 <span className="text-sm text-muted">Deducción por dependientes</span>
                 <span className="text-sm font-medium text-ink tabular-nums">
                   {formatCOP(resultado.deduccionDependientes)}
+                </span>
+              </div>
+            )}
+            {resultado.deduccionMedicinaPrepagada > 0 && (
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm text-muted">Deducción por medicina prepagada/seguro de salud</span>
+                <span className="text-sm font-medium text-ink tabular-nums">
+                  {formatCOP(resultado.deduccionMedicinaPrepagada)}
                 </span>
               </div>
             )}

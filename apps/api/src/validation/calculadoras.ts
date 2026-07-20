@@ -27,9 +27,13 @@ const horasNoNegativas = z.number().min(0).optional();
 export const datosRetencionSchema = z.object({
   ingresoLaboralMensual: z.number().positive(),
   declaraRenta: z.boolean().default(false),
-  // Solo se toma en cuenta si declaraRenta=true — ver calcularRetencionFuente.
+  // Solo se toman en cuenta si declaraRenta=true — comparten el mismo tope
+  // combinado (E.T. art. 126-1) — ver calcularRetencionFuente.
   aportesVoluntariosAfc: z.number().min(0).optional(),
+  aportesVoluntariosPensionObligatoria: z.number().min(0).optional(),
   tieneDependientes: z.boolean().default(false),
+  // Deducible sin importar declaraRenta (E.T. art. 387, par. 1).
+  medicinaPrepagadaMensual: z.number().min(0).optional(),
 });
 
 export const datosRecargosSchema = z.object({

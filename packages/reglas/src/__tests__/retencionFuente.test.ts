@@ -13,7 +13,7 @@ describe("calcularRetencionFuente", () => {
     );
     expect(r.ingresoNoConstitutivo).toBe(640_000);
     expect(r.deduccionDependientes).toBe(0);
-    expect(r.rentaExentaAfc).toBe(0);
+    expect(r.rentaExentaAfcYPension).toBe(0);
     expect(r.rentaExentaLaboral).toBe(1_840_000);
     expect(r.baseGravable).toBe(5_520_000);
     expect(r.retencionMensual).toBe(103_449);
@@ -42,7 +42,7 @@ describe("calcularRetencionFuente", () => {
     // subtotal1 = 7.360.000; 40% = 2.944.000 — más ajustado que el tope
     // anual (1340 UVT / 12), así que el 40% es el que corta.
     expect(r.deduccionDependientes).toBe(689_619);
-    expect(r.rentaExentaAfc).toBe(936_983);
+    expect(r.rentaExentaAfcYPension).toBe(936_983);
     expect(r.rentaExentaLaboral).toBe(1_317_398);
     expect(r.totalExentoYDeducible).toBe(2_944_000);
     expect(r.retencionMensual).toBe(0);
@@ -67,8 +67,44 @@ describe("calcularRetencionFuente", () => {
       REGLAS_JUL_2026,
       FECHA
     );
-    expect(r.rentaExentaAfc).toBe(0);
+    expect(r.rentaExentaAfcYPension).toBe(0);
     expect(r.advertencias.some((a) => a.includes("no se tomó como renta exenta"))).toBe(true);
+  });
+
+  it("medicina prepagada se deduce sin importar si declara renta", () => {
+    const r = calcularRetencionFuente(
+      { ingresoLaboralMensual: 6_000_000, declaraRenta: false, medicinaPrepagadaMensual: 300_000 },
+      REGLAS_JUL_2026,
+      FECHA
+    );
+    expect(r.deduccionMedicinaPrepagada).toBe(300_000);
+    expect(r.rentaExentaLaboral).toBe(1_305_000);
+    expect(r.baseGravable).toBe(3_915_000);
+  });
+
+  it("medicina prepagada se topa a 16 UVT/mes aunque se pague más", () => {
+    const r = calcularRetencionFuente(
+      { ingresoLaboralMensual: 6_000_000, declaraRenta: false, medicinaPrepagadaMensual: 2_000_000 },
+      REGLAS_JUL_2026,
+      FECHA
+    );
+    expect(r.deduccionMedicinaPrepagada).toBe(837_984); // 16 UVT × 52.374
+  });
+
+  it("AFC y aportes voluntarios a pensión obligatoria se suman bajo el mismo tope combinado", () => {
+    const r = calcularRetencionFuente(
+      {
+        ingresoLaboralMensual: 8_000_000,
+        declaraRenta: true,
+        aportesVoluntariosAfc: 500_000,
+        aportesVoluntariosPensionObligatoria: 800_000,
+      },
+      REGLAS_JUL_2026,
+      FECHA
+    );
+    expect(r.rentaExentaAfcYPension).toBe(1_300_000); // 500.000 + 800.000, sin tope aún
+    expect(r.rentaExentaLaboral).toBe(1_515_000);
+    expect(r.baseGravable).toBe(4_545_000);
   });
 
   it("siempre incluye la advertencia de que 'declara renta' es autodeclarado", () => {

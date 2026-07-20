@@ -183,7 +183,8 @@ export interface ResultadoRetencion {
   ingresoLaboralMensual: number;
   ingresoNoConstitutivo: number;
   deduccionDependientes: number;
-  rentaExentaAfc: number;
+  deduccionMedicinaPrepagada: number;
+  rentaExentaAfcYPension: number;
   rentaExentaLaboral: number;
   totalExentoYDeducible: number;
   baseGravable: number;
@@ -198,7 +199,9 @@ export function calcularRetencion(datos: {
   ingresoLaboralMensual: number;
   declaraRenta: boolean;
   aportesVoluntariosAfc?: number;
+  aportesVoluntariosPensionObligatoria?: number;
   tieneDependientes: boolean;
+  medicinaPrepagadaMensual?: number;
 }): Promise<ResultadoRetencion> {
   return postCalculadora("/api/retencion/calcular", datos, "No se pudo calcular la retención en la fuente");
 }
