@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Plus, Trash2 } from "lucide-react
 import { formatCOP, type ConceptoNomina } from "@pv/reglas";
 import type { ComprobanteExtraido, ParametrosPublicos } from "../api";
 import PaycheckCard from "./PaycheckCard.tsx";
-import DateField from "./DateField.tsx";
+import DateRangeField from "./DateRangeField.tsx";
 
 interface Props {
   extraido: ComprobanteExtraido;
@@ -85,16 +85,18 @@ export default function PasoRevision({ extraido, parametros, onAtras, onConfirma
               Autocompletar salario mínimo vigente ({formatCOP(parametros.smlmv)})
             </label>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-              Periodo desde
-              <DateField value={desde} onChange={setDesde} placeholder="Desde" />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-              Periodo hasta
-              <DateField value={hasta} onChange={setHasta} placeholder="Hasta" minimo={desde || undefined} />
-            </label>
-          </div>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            Período
+            <DateRangeField
+              desde={desde}
+              hasta={hasta}
+              onCambio={(d, h) => {
+                setDesde(d);
+                setHasta(h);
+              }}
+              placeholder="Selecciona el período"
+            />
+          </label>
           <label className="flex items-center gap-2.5 text-sm text-ink">
             <input
               type="checkbox"

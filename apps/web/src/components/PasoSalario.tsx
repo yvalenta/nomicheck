@@ -13,7 +13,7 @@ import {
 import { finDePeriodoMensual, formatCOP } from "@pv/reglas";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
-import DateField from "./DateField.tsx";
+import DateRangeField from "./DateRangeField.tsx";
 
 export type Periodicidad = "semanal" | "quincenal" | "mensual" | "personalizado";
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
@@ -109,15 +109,18 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
     onCambio({ ...datos, periodicidad, hasta });
   }
 
-  function cambiarDesde(desde: string) {
-    const hasta = datos.periodicidad === "personalizado" ? datos.hasta : calcularHasta(desde, datos.periodicidad);
-    onCambio({ ...datos, desde, hasta });
-  }
-
-  function cambiarHasta(hasta: string) {
-    // Editar "Hasta" a mano es la forma de elegir otra fecha: se desmarca
-    // del cálculo automático para que no se sobrescriba después.
-    onCambio({ ...datos, hasta, periodicidad: "personalizado" });
+  // El calendario en modo rango devuelve desde+hasta juntos (dos clics). Si
+  // solo llegó el primer clic (hasta vacío), seguimos calculando "hasta"
+  // según la periodicidad como antes; si llegó el rango completo, es una
+  // elección manual — se desmarca del cálculo automático (mismo criterio
+  // que antes al editar "Hasta" a mano).
+  function cambiarPeriodo(desde: string, hasta: string) {
+    if (!hasta) {
+      const hastaCalculada = datos.periodicidad === "personalizado" ? datos.hasta : calcularHasta(desde, datos.periodicidad);
+      onCambio({ ...datos, desde, hasta: hastaCalculada });
+    } else {
+      onCambio({ ...datos, desde, hasta, periodicidad: "personalizado" });
+    }
   }
 
   function marcarEmbargo(tipo: TipoEmbargo, marcado: boolean) {
@@ -325,18 +328,12 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               ))}
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-              <span className="flex items-center gap-2">
-                <CalendarRange size={16} className="text-mint-dark" /> Desde
-              </span>
-              <DateField required value={datos.desde} onChange={cambiarDesde} placeholder="Desde" />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-              <span>Hasta</span>
-              <DateField required value={datos.hasta} onChange={cambiarHasta} placeholder="Hasta" minimo={datos.desde || undefined} />
-            </label>
-          </div>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            <span className="flex items-center gap-2">
+              <CalendarRange size={16} className="text-mint-dark" /> Período
+            </span>
+            <DateRangeField required desde={datos.desde} hasta={datos.hasta} onCambio={cambiarPeriodo} placeholder="Selecciona el período" />
+          </label>
           {datos.periodicidad !== "personalizado" && (
             <p className="text-xs text-muted">
               Calculada automáticamente según la periodicidad — puedes editarla si tu periodo real

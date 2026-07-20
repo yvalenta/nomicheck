@@ -37,7 +37,7 @@ import {
 import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
 import ComprobanteNomina from "../ComprobanteNomina.tsx";
-import DateField from "../DateField.tsx";
+import DateRangeField from "../DateRangeField.tsx";
 import EmptyState from "../EmptyState.tsx";
 import HorarioSemanalEditor from "../HorarioSemanalEditor.tsx";
 
@@ -181,10 +181,16 @@ function FormPeriodo({ onCreado }: { onCreado: (p: Periodo) => void }) {
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <DateField required value={fechaInicio} onChange={setFechaInicio} placeholder="Fecha de inicio" />
-          <DateField required value={fechaFin} onChange={setFechaFin} placeholder="Fecha de fin" minimo={fechaInicio || undefined} />
-        </div>
+        <DateRangeField
+          required
+          desde={fechaInicio}
+          hasta={fechaFin}
+          onCambio={(d, h) => {
+            setFechaInicio(d);
+            setFechaFin(h);
+          }}
+          placeholder="Selecciona el período"
+        />
         {error && <p className="text-coral text-sm">{error}</p>}
         <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200">
           <CalendarPlus size={16} /> Crear periodo
@@ -226,16 +232,19 @@ function FormEditarPeriodo({
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Desde
-            <DateField required value={fechaInicio} onChange={setFechaInicio} placeholder="Desde" />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Hasta
-            <DateField required value={fechaFin} onChange={setFechaFin} placeholder="Hasta" minimo={fechaInicio || undefined} />
-          </label>
-        </div>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Período
+          <DateRangeField
+            required
+            desde={fechaInicio}
+            hasta={fechaFin}
+            onCambio={(d, h) => {
+              setFechaInicio(d);
+              setFechaFin(h);
+            }}
+            placeholder="Selecciona el período"
+          />
+        </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Motivo de la edición (queda registrado)
           <textarea
