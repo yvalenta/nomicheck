@@ -14,7 +14,13 @@ import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
 import { registro, registroIndividual, invitar, perfilIndividual, whoami } from "../controllers/authController.js";
-import { listar as listarEmpresasAdmin, crear as crearEmpresaAdmin } from "../controllers/empresasAdminController.js";
+import {
+  listar as listarEmpresasAdmin,
+  crear as crearEmpresaAdmin,
+  reasignarAdmin as reasignarAdminEmpresa,
+  quitarAdmin as quitarAdminEmpresa,
+  cambiarEstado as cambiarEstadoEmpresa,
+} from "../controllers/empresasAdminController.js";
 import { crear as crearLiquidacion, listar as listarLiquidaciones } from "../controllers/liquidacionesController.js";
 import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
@@ -184,11 +190,16 @@ router.post("/admin/reglas", ...soloPlataforma, crearRegla);
 router.get("/admin/festivos", ...soloPlataforma, listarFestivosAdminHandler);
 router.post("/admin/festivos", ...soloPlataforma, crearFestivoHandler);
 router.delete("/admin/festivos/:id", ...soloPlataforma, eliminarFestivoHandler);
-// Solo lectura por ahora — ver qué empresas usan la plataforma y quién las
-// administra. Crear/reasignar/suspender quedan para otra ronda.
+// Ver qué empresas usan la plataforma, quién las administra y su estado.
 router.get("/admin/empresas", ...soloPlataforma, listarEmpresasAdmin);
 // Onboarding manual: crea la empresa + invita a su primer admin_empresa
-// (define su propia contraseña por correo, sin reasignar/suspender todavía).
+// (define su propia contraseña por correo).
 router.post("/admin/empresas", ...soloPlataforma, crearEmpresaAdmin);
+// Reasignar = reemplazar al admin_empresa actual por uno nuevo (invitación).
+router.put("/admin/empresas/:id/admin", ...soloPlataforma, reasignarAdminEmpresa);
+// Quitar: desvincula al admin_empresa indicado (no borra su cuenta).
+router.delete("/admin/empresas/:id/admin/:usuarioId", ...soloPlataforma, quitarAdminEmpresa);
+// Suspender/reactivar: bloquea/desbloquea de verdad el acceso (ver middleware/auth.ts).
+router.put("/admin/empresas/:id/estado", ...soloPlataforma, cambiarEstadoEmpresa);
 
 export default router;

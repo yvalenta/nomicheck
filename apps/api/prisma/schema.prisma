@@ -76,6 +76,10 @@ model Empresa {
   nit      String @unique
   sector   String
   creadoEn DateTime @default(now())
+  // Suspender bloquea de verdad el acceso (403 en requiereAuth) para
+  // admin_empresa y colaboradores de esta empresa — admin_plataforma sigue
+  // viendo/reactivando la empresa sin problema (SDD.md §03 Módulo D).
+  activa   Boolean @default(true)
 
   usuarios     Usuario[]
   empleados    Empleado[]

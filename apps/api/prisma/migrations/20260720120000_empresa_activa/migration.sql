@@ -1,0 +1,1 @@
+ALTER TABLE "Empresa" ADD COLUMN "activa" BOOLEAN NOT NULL DEFAULT true;

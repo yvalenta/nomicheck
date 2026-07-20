@@ -43,6 +43,20 @@ export async function requiereAuth(req: Request, res: Response, next: NextFuncti
     return;
   }
 
+  // Suspender una empresa (admin_plataforma) bloquea de verdad el acceso de
+  // su admin_empresa y colaboradores — admin_plataforma nunca tiene
+  // empresaId, así que jamás se bloquea a sí mismo (SDD.md §03 Módulo D).
+  if (perfil.empresaId) {
+    const empresa = await prisma.empresa.findUnique({
+      where: { id: perfil.empresaId },
+      select: { activa: true },
+    });
+    if (empresa && !empresa.activa) {
+      res.status(403).json({ error: "Esta empresa está suspendida — contacta al soporte de NomiCheck." });
+      return;
+    }
+  }
+
   // usuarioId ya no es único (una cuenta puede tener varios Empleado: historial
   // + invitaciones pendientes). El empleado "actual" es el activo y aceptado.
   const empleadoActivo = await prisma.empleado.findFirst({

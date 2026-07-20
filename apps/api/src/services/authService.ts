@@ -181,3 +181,61 @@ export async function crearEmpresaConAdmin(datos: {
     throw err;
   }
 }
+
+// Desvincula al admin_empresa indicado (NO borra su cuenta ni su fila
+// Usuario — solo pierde el rol operativo y el empresaId, queda como
+// "individual", igual que cualquier cuenta sin empresa). Reversible: se
+// puede volver a invitar/asignar más adelante. Valida que el usuario
+// realmente sea admin_empresa DE ESA empresa antes de tocar nada, para que
+// un admin_plataforma no pueda desvincular por error (o URL manipulada) a
+// alguien de otra empresa.
+export async function quitarAdminEmpresa(empresaId: number, usuarioId: string): Promise<void> {
+  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+  if (!usuario || usuario.rol !== "admin_empresa" || usuario.empresaId !== empresaId) {
+    throw new Error("Ese usuario no es el admin_empresa de esta empresa");
+  }
+  await prisma.usuario.update({ where: { id: usuarioId }, data: { rol: "individual", empresaId: null } });
+}
+
+// Reasignar = reemplazar: invita a un admin_empresa nuevo y desvincula a
+// cualquier admin_empresa actual de esta empresa (mismo efecto que
+// quitarAdminEmpresa) — la empresa nunca queda con más de un admin_empresa
+// a la vez. Se crea primero el reemplazo y solo después se desvincula al
+// anterior: si la invitación o la creación fallan, el admin actual queda
+// intacto (nada que compensar); si falla después de crear el reemplazo, sí
+// se compensa borrando la cuenta de Auth recién invitada.
+export async function reasignarAdminEmpresa(
+  empresaId: number,
+  datos: { nombreAdmin: string; emailAdmin: string }
+) {
+  const empresa = await prisma.empresa.findUnique({ where: { id: empresaId } });
+  if (!empresa) throw new Error("Empresa no encontrada");
+
+  const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(datos.emailAdmin);
+  if (esCorreoDuplicado(error)) {
+    throw new ErrorConflicto("Ya existe una cuenta con este correo. Verifica que sea la persona correcta.");
+  }
+  if (error || !data.user) {
+    throw new Error(error?.message ?? "No se pudo enviar la invitación");
+  }
+
+  try {
+    const usuario = await prisma.usuario.create({
+      data: {
+        id: data.user.id,
+        nombre: datos.nombreAdmin,
+        email: datos.emailAdmin,
+        rol: "admin_empresa",
+        empresaId,
+      },
+    });
+    await prisma.usuario.updateMany({
+      where: { empresaId, rol: "admin_empresa", NOT: { id: usuario.id } },
+      data: { rol: "individual", empresaId: null },
+    });
+    return usuario;
+  } catch (err) {
+    await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+    throw err;
+  }
+}

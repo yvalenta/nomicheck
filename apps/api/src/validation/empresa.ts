@@ -21,6 +21,17 @@ export const crearEmpresaAdminSchema = z.object({
   empresa: registroSchema.shape.empresa,
 });
 
+// Reasignar admin_empresa de una empresa existente (SDD §09): mismo shape
+// que la parte de admin de crearEmpresaAdminSchema, sin datos de empresa.
+export const reasignarAdminSchema = z.object({
+  nombreAdmin: z.string().min(1),
+  emailAdmin: z.string().email(),
+});
+
+export const cambiarEstadoEmpresaSchema = z.object({
+  activa: z.boolean(),
+});
+
 export const empleadoSchema = z.object({
   nombre: z.string().min(1),
   documento: z.string().min(1),

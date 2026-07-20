@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Building2, CalendarPlus, Plus, Trash2 } from "lucide-react";
+import { Building2, CalendarPlus, Pause, Play, Plus, Trash2, UserCog } from "lucide-react";
 import {
+  cambiarEstadoEmpresa,
   crearEmpresa,
   crearFestivo,
   crearVigencia,
@@ -8,6 +9,8 @@ import {
   listarEmpresas,
   listarFestivosAdmin,
   listarReglas,
+  quitarAdmin,
+  reasignarAdmin,
   type EmpresaAdmin,
   type Festivo,
   type ReglaAgrupada,
@@ -29,14 +32,15 @@ export default function DashboardAdmin() {
   );
 }
 
-// Onboarding manual de empresas: admin_plataforma puede crear una empresa e
-// invitar su primer admin_empresa (define su propia contraseña por correo).
-// Reasignar/suspender empresas queda para otra ronda (SDD.md §13).
+// Onboarding manual de empresas: admin_plataforma puede crear una empresa,
+// invitar/reasignar su admin_empresa, quitarlo, y suspender/reactivar el
+// acceso de toda la empresa (SDD.md §03 Módulo D).
 function Empresas() {
   const [empresas, setEmpresas] = useState<EmpresaAdmin[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [exito, setExito] = useState<string | null>(null);
+  const [filaReasignar, setFilaReasignar] = useState<number | null>(null);
 
   function recargar() {
     listarEmpresas()
@@ -76,31 +80,213 @@ function Empresas() {
         {empresas?.length === 0 && <EmptyState icon={Building2} titulo="Todavía no hay empresas registradas" />}
         <div className="flex flex-col">
           {empresas?.map((e) => (
-            <div
+            <FilaEmpresa
               key={e.id}
-              className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 last:border-0"
-            >
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 text-mint-dark flex items-center justify-center shrink-0">
-                <Building2 size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{e.nombre}</p>
-                <p className="text-xs text-muted truncate">
-                  NIT {e.nit} · {e.sector} · {e.colaboradores} colaborador{e.colaboradores === 1 ? "" : "es"}
-                  {e.contratistas > 0 && ` · ${e.contratistas} contratista${e.contratistas === 1 ? "" : "s"}`}
-                </p>
-                <p className="text-xs text-muted truncate">
-                  {e.admins.length > 0
-                    ? `Admin: ${e.admins.map((a) => a.nombre).join(", ")}`
-                    : "Sin admin_empresa asignado"}
-                </p>
-              </div>
-              <span className="text-xs text-muted shrink-0">{e.creadoEn.slice(0, 10)}</span>
-            </div>
+              empresa={e}
+              reasignarAbierto={filaReasignar === e.id}
+              onToggleReasignar={() => setFilaReasignar(filaReasignar === e.id ? null : e.id)}
+              onCambio={(msg) => {
+                setExito(msg);
+                setFilaReasignar(null);
+                recargar();
+              }}
+              onError={setError}
+            />
           ))}
         </div>
       </PaycheckCard>
     </div>
+  );
+}
+
+function FilaEmpresa({
+  empresa: e,
+  reasignarAbierto,
+  onToggleReasignar,
+  onCambio,
+  onError,
+}: {
+  empresa: EmpresaAdmin;
+  reasignarAbierto: boolean;
+  onToggleReasignar: () => void;
+  onCambio: (mensaje: string) => void;
+  onError: (mensaje: string) => void;
+}) {
+  const [procesando, setProcesando] = useState(false);
+
+  async function quitar(usuarioId: string, nombre: string) {
+    if (!confirm(`¿Quitar a ${nombre} como admin de ${e.nombre}? Su cuenta sigue existiendo, solo pierde el acceso.`))
+      return;
+    setProcesando(true);
+    try {
+      await quitarAdmin(e.id, usuarioId);
+      onCambio(`${nombre} ya no es admin de ${e.nombre}.`);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "No se pudo quitar el admin");
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  async function toggleEstado() {
+    const accion = e.activa ? "suspender" : "reactivar";
+    if (!confirm(`¿${e.activa ? "Suspender" : "Reactivar"} ${e.nombre}?${e.activa ? " Su admin_empresa y colaboradores no podrán entrar." : ""}`))
+      return;
+    setProcesando(true);
+    try {
+      await cambiarEstadoEmpresa(e.id, !e.activa);
+      onCambio(`${e.nombre} fue ${accion === "suspender" ? "suspendida" : "reactivada"}.`);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "No se pudo cambiar el estado");
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  return (
+    <div className="border-b border-slate-100 last:border-0">
+      <div className="flex items-center gap-3 px-3 py-3">
+        <div className="w-9 h-9 rounded-lg bg-emerald-50 text-mint-dark flex items-center justify-center shrink-0">
+          <Building2 size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-ink truncate flex items-center gap-1.5">
+            {e.nombre}
+            {!e.activa && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-red-50 text-coral rounded-full px-1.5 py-0.5">
+                Suspendida
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-muted truncate">
+            NIT {e.nit} · {e.sector} · {e.colaboradores} colaborador{e.colaboradores === 1 ? "" : "es"}
+            {e.contratistas > 0 && ` · ${e.contratistas} contratista${e.contratistas === 1 ? "" : "s"}`}
+          </p>
+          <div className="flex items-center flex-wrap gap-x-1.5 text-xs text-muted">
+            {e.admins.length > 0 ? (
+              e.admins.map((a) => (
+                <span key={a.id} className="inline-flex items-center gap-1">
+                  Admin: {a.nombre}
+                  <button
+                    disabled={procesando}
+                    onClick={() => quitar(a.id, a.nombre)}
+                    title="Quitar admin"
+                    className="text-muted hover:text-coral disabled:opacity-40"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </span>
+              ))
+            ) : (
+              <span>Sin admin_empresa asignado</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={onToggleReasignar}
+            title="Reasignar admin"
+            className="w-8 h-8 rounded-lg border border-slate-200 text-muted hover:text-mint-dark hover:border-mint flex items-center justify-center"
+          >
+            <UserCog size={15} />
+          </button>
+          <button
+            onClick={toggleEstado}
+            disabled={procesando}
+            title={e.activa ? "Suspender" : "Reactivar"}
+            className={`w-8 h-8 rounded-lg border flex items-center justify-center disabled:opacity-40 ${
+              e.activa
+                ? "border-slate-200 text-muted hover:text-coral hover:border-coral"
+                : "border-mint text-mint-dark"
+            }`}
+          >
+            {e.activa ? <Pause size={15} /> : <Play size={15} />}
+          </button>
+          <span className="text-xs text-muted">{e.creadoEn.slice(0, 10)}</span>
+        </div>
+      </div>
+
+      {reasignarAbierto && (
+        <div className="px-3 pb-3">
+          <FormReasignarAdmin
+            empresaId={e.id}
+            onOk={(email) => onCambio(`Invitación de admin enviada a ${email} para ${e.nombre}.`)}
+            onError={onError}
+            onCancelar={onToggleReasignar}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormReasignarAdmin({
+  empresaId,
+  onOk,
+  onError,
+  onCancelar,
+}: {
+  empresaId: number;
+  onOk: (email: string) => void;
+  onError: (mensaje: string) => void;
+  onCancelar: () => void;
+}) {
+  const [nombreAdmin, setNombreAdmin] = useState("");
+  const [emailAdmin, setEmailAdmin] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    setEnviando(true);
+    try {
+      await reasignarAdmin(empresaId, { nombreAdmin, emailAdmin });
+      onOk(emailAdmin);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "No se pudo reasignar el admin");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={enviar} className="rounded-xl bg-slate-50 p-3 flex flex-col gap-2.5">
+      <p className="text-xs text-muted">
+        Invita a un admin_empresa nuevo — si ya hay uno, queda desvinculado (no se borra su cuenta).
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <input
+          required
+          placeholder="Nombre del nuevo admin"
+          value={nombreAdmin}
+          onChange={(e) => setNombreAdmin(e.target.value)}
+          className={inputCls}
+        />
+        <input
+          required
+          type="email"
+          placeholder="Correo del nuevo admin"
+          value={emailAdmin}
+          onChange={(e) => setEmailAdmin(e.target.value)}
+          className={inputCls}
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="flex-1 rounded-xl border border-slate-200 bg-white text-ink text-sm py-2"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={enviando}
+          className="flex-1 rounded-xl bg-mint text-white font-semibold text-sm py-2 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+        >
+          {enviando ? "Enviando…" : "Invitar"}
+        </button>
+      </div>
+    </form>
   );
 }
 

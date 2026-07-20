@@ -66,16 +66,16 @@ export function eliminarFestivo(id: number): Promise<null> {
   return autenticado(`/admin/festivos/${id}`, { method: "DELETE" });
 }
 
-// Reasignar/suspender quedan para otra ronda (§13 del SDD).
 export interface EmpresaAdmin {
   id: number;
   nombre: string;
   nit: string;
   sector: string;
   creadoEn: string;
+  activa: boolean;
   colaboradores: number;
   contratistas: number;
-  admins: { nombre: string; email: string | null }[];
+  admins: { id: string; nombre: string; email: string | null }[];
 }
 
 export function listarEmpresas(): Promise<EmpresaAdmin[]> {
@@ -88,4 +88,21 @@ export function crearEmpresa(datos: {
   empresa: { nombre: string; nit: string; sector: string };
 }): Promise<{ empresa: EmpresaAdmin; usuario: { nombre: string; email: string | null } }> {
   return autenticado("/admin/empresas", { method: "POST", body: JSON.stringify(datos) });
+}
+
+// Reemplaza al admin_empresa actual (si lo hay) por uno nuevo invitado.
+export function reasignarAdmin(
+  empresaId: number,
+  datos: { nombreAdmin: string; emailAdmin: string }
+): Promise<{ usuario: { id: string; nombre: string; email: string | null } }> {
+  return autenticado(`/admin/empresas/${empresaId}/admin`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+// Desvincula al admin sin borrar su cuenta — queda como "individual".
+export function quitarAdmin(empresaId: number, usuarioId: string): Promise<null> {
+  return autenticado(`/admin/empresas/${empresaId}/admin/${usuarioId}`, { method: "DELETE" });
+}
+
+export function cambiarEstadoEmpresa(empresaId: number, activa: boolean): Promise<{ empresa: EmpresaAdmin }> {
+  return autenticado(`/admin/empresas/${empresaId}/estado`, { method: "PUT", body: JSON.stringify({ activa }) });
 }
