@@ -8,7 +8,13 @@ import type { z } from "zod";
 export function listarRecibosPropios(empleadoId: number) {
   return prisma.reciboPago.findMany({
     where: { empleadoId },
-    include: { periodo: true, reportes: true },
+    // empleado + empresa del periodo: solo para el encabezado del comprobante
+    // imprimible (ComprobanteNomina) — no afecta el cálculo ni el scoping.
+    include: {
+      periodo: { include: { empresa: { select: { nombre: true } } } },
+      empleado: { select: { nombre: true, documento: true } },
+      reportes: true,
+    },
     orderBy: { liquidadoEn: "desc" },
   });
 }

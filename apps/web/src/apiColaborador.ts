@@ -31,12 +31,14 @@ export interface ReporteDiscrepancia {
 export interface ReciboPropio {
   id: number;
   periodoId: number;
-  periodo: { fechaInicio: string; fechaFin: string };
+  periodo: { fechaInicio: string; fechaFin: string; empresa: { nombre: string } };
+  empleado: { nombre: string; documento: string } | null;
   lineas: LineaRecibo[];
   advertencias: string[];
   totalDevengado: number;
   totalDeducido: number;
   neto: number;
+  liquidadoEn: string;
   reportes: ReporteDiscrepancia[];
 }
 

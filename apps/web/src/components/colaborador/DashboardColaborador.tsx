@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { AlertCircle, AlertTriangle, Building2, Check, Flag, Mail, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Building2, Check, FileText, Flag, Mail, X } from "lucide-react";
 import { formatCOP, formatRangoFechas, type ResultadoNomina } from "@pv/reglas";
 import {
   aceptarInvitacion,
@@ -16,6 +16,7 @@ import {
 import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
 import ChatContador from "../ChatContador.tsx";
+import ComprobanteNomina from "../ComprobanteNomina.tsx";
 
 const TIPO_LABEL: Record<TipoDiscrepancia, string> = {
   pago_de_mas: "Me pagaron de más",
@@ -54,6 +55,7 @@ export default function DashboardColaborador() {
   const [error, setError] = useState<string | null>(null);
   const [reportando, setReportando] = useState<number | null>(null);
   const [procesando, setProcesando] = useState<number | null>(null);
+  const [comprobanteAbierto, setComprobanteAbierto] = useState<number | null>(null);
 
   function recargar() {
     listarMisRecibos()
@@ -132,9 +134,17 @@ export default function DashboardColaborador() {
               <ValidationRow key={i} linea={l} />
             ))}
           </div>
-          <div className="border-t border-slate-100 mx-3 py-2.5 px-3 flex justify-between text-sm font-semibold text-ink">
-            <span>Neto</span>
-            <span className="tabular-nums">{formatCOP(r.neto)}</span>
+          <div className="border-t border-slate-100 mx-3 py-2.5 px-3 flex items-center justify-between gap-3">
+            <button
+              onClick={() => setComprobanteAbierto(comprobanteAbierto === r.id ? null : r.id)}
+              className="flex items-center gap-1.5 text-xs text-mint-dark hover:underline shrink-0"
+            >
+              <FileText size={14} /> {comprobanteAbierto === r.id ? "Ocultar comprobante" : "Ver comprobante"}
+            </button>
+            <div className="flex justify-between gap-3 text-sm font-semibold text-ink">
+              <span>Neto</span>
+              <span className="tabular-nums">{formatCOP(r.neto)}</span>
+            </div>
           </div>
 
           {r.advertencias.length > 0 && (
@@ -180,6 +190,17 @@ export default function DashboardColaborador() {
             </button>
           )}
         </PaycheckCard>
+
+        {comprobanteAbierto === r.id && (
+          <ComprobanteNomina
+            resultado={comoResultadoNomina(r)}
+            empresa={r.periodo.empresa.nombre}
+            empleado={r.empleado ?? undefined}
+            numero={`NC-${String(r.id).padStart(6, "0")}`}
+            fechaElaboracion={r.liquidadoEn}
+          />
+        )}
+
         <ChatContador resultado={comoResultadoNomina(r)} />
         </Fragment>
       ))}
