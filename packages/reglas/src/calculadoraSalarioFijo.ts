@@ -6,6 +6,7 @@ import { calcularAuxilioTransporte } from "./auxilio.js";
 import {
   advertenciaIbcTiempoParcial,
   advertenciaPatronAprendiz,
+  advertenciaSalarioBajoMinimo,
   advertenciaTerminoNoIndefinido,
 } from "./advertenciasContrato.js";
 import { rangoFechas, reglaEn, validarPeriodo } from "./utils.js";
@@ -35,6 +36,8 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     if (advertenciaTermino) advertencias.push(advertenciaTermino);
     const advertenciaIbc = advertenciaIbcTiempoParcial(d.salarioBasicoMensual, d.tipoContrato, reglas, d.periodoDesde);
     if (advertenciaIbc) advertencias.push(advertenciaIbc);
+    const advertenciaMinimo = advertenciaSalarioBajoMinimo(d.salarioBasicoMensual, d.tipoContrato, reglas, d.periodoDesde);
+    if (advertenciaMinimo) advertencias.push(advertenciaMinimo);
 
     // Aprendizaje SENA (Ley 789 de 2002, art. 30): sigue siendo salario fijo
     // con horario, pero el devengo base no es "salario" sino auxilio de

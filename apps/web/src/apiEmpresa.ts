@@ -16,6 +16,9 @@ export interface Empleado {
     | "tiempo_parcial"
     | "aprendizaje_sena_lectiva"
     | "aprendizaje_sena_practica";
+  // Clase de riesgo laboral ARL (I a V, Decreto 1772 de 1994) — 1 = riesgo
+  // mínimo (default). Usada en costos y liquidación PILA.
+  claseRiesgoArl: 1 | 2 | 3 | 4 | 5;
   activo: boolean;
   // Estado de la cuenta del colaborador: usuarioId null = sin cuenta;
   // con usuarioId y invitacionAceptadaEn null = invitación pendiente;
@@ -153,6 +156,59 @@ export interface CostosEmpresa {
 
 export function obtenerCostos(exonerado: boolean): Promise<CostosEmpresa> {
   return autenticado(`/empresa/costos?exonerado=${exonerado}`);
+}
+
+// --- Liquidación PILA exacta por periodo (SDD §14) ---
+
+export interface PilaEmpleado {
+  empleadoId: number;
+  nombre: string;
+  tipoContrato: string;
+  claseRiesgoArl: number;
+  pila: {
+    ibcPeriodo: number;
+    lineas: LineaCosto[];
+    costoTotalPeriodo: number;
+    advertencias: string[];
+  } | null; // null = aprendiz SENA etapa lectiva, sin IBC
+}
+
+export interface PilaPeriodo {
+  periodoId: number;
+  fechaInicio: string;
+  fechaFin: string;
+  exonerado: boolean;
+  empleados: PilaEmpleado[];
+  totales: { ibcTotal: number; costoTotalPeriodo: number };
+}
+
+export function obtenerPilaPeriodo(periodoId: number, exonerado: boolean): Promise<PilaPeriodo> {
+  return autenticado(`/empresa/periodos/${periodoId}/pila?exonerado=${exonerado}`);
+}
+
+// --- Semáforo de cumplimiento (SDD §14) ---
+
+export interface AlertaEmpleado {
+  empleadoId: number;
+  nombre: string;
+  mensaje: string;
+}
+
+export interface AlertaHorasExtra extends AlertaEmpleado {
+  periodoId: number;
+  fechaInicio: string;
+  fechaFin: string;
+}
+
+export interface SemaforoCumplimiento {
+  nivel: "verde" | "amarillo" | "rojo";
+  aprendicesMalClasificados: AlertaEmpleado[];
+  salariosBajoMinimo: AlertaEmpleado[];
+  horasExtraExcedidas: AlertaHorasExtra[];
+}
+
+export function obtenerCumplimiento(): Promise<SemaforoCumplimiento> {
+  return autenticado("/empresa/cumplimiento");
 }
 
 export interface Periodo {

@@ -111,6 +111,12 @@ model Empleado {
   // aprendizaje_sena_practica — ver TipoContrato en @pv/reglas.
   // "servicios" NO se modela aquí: no es contrato laboral (SDD §07).
   tipoContrato      String  @default("indefinido")
+  // Clase de riesgo laboral ARL (I a V, Decreto 1772 de 1994) — 1 = riesgo
+  // mínimo (oficinas/comercio). Antes solo existía como parámetro de
+  // cálculo con default silencioso a 1 para todos; persistirla por
+  // empleado es lo que hace "exacta" la liquidación PILA (packages/reglas
+  // costoEmpleador.ts, calcularLiquidacionPilaEmpleado).
+  claseRiesgoArl    Int     @default(1)
   activo            Boolean @default(true)
   creadoEn          DateTime @default(now())
 

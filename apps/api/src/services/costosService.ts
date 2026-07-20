@@ -48,6 +48,7 @@ export async function calcularCostosEmpresa(
           fecha: hoy,
           exoneradoParafiscales,
           recibeAuxilioTransporte: e.auxilioTransporte,
+          claseRiesgoArl: e.claseRiesgoArl as 1 | 2 | 3 | 4 | 5,
         }),
   }));
 

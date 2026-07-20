@@ -51,6 +51,9 @@ export const empleadoSchema = z.object({
       "aprendizaje_sena_practica",
     ])
     .default("indefinido"),
+  // Clase de riesgo laboral ARL (I a V, Decreto 1772 de 1994) — default 1
+  // (riesgo mínimo). Usada en costos/PILA.
+  claseRiesgoArl: z.number().int().min(1).max(5).default(1),
 });
 
 export const empleadoUpdateSchema = empleadoSchema.partial().extend({

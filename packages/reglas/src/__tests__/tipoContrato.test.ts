@@ -233,3 +233,71 @@ describe("tipoContrato — término fijo / obra o labor / tiempo parcial", () =>
     }
   });
 });
+
+describe("advertencia — salario bajo el mínimo (tiempo completo)", () => {
+  it("indefinido/fijo/obra_labor bajo un SMLMV advierten (CST art. 145)", () => {
+    for (const tipoContrato of ["indefinido", "fijo", "obra_labor"] as const) {
+      const r = CalculadoraSalarioFijo.calcular(
+        {
+          modo: "salario-fijo",
+          salarioBasicoMensual: 1_500_000,
+          recibeAuxilioTransporte: false,
+          tipoContrato,
+          conceptos: [],
+          ...PERIODO,
+        },
+        REGLAS_JUL_2026,
+        []
+      );
+      expect(r.advertencias.some((a) => a.includes("salario mínimo legal mensual vigente"))).toBe(true);
+    }
+  });
+
+  it("tiempo_parcial bajo un SMLMV NO dispara esta advertencia (tiene la suya propia de IBC)", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      {
+        modo: "salario-fijo",
+        salarioBasicoMensual: 900_000,
+        recibeAuxilioTransporte: false,
+        tipoContrato: "tiempo_parcial",
+        conceptos: [],
+        ...PERIODO,
+      },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("salario mínimo legal mensual vigente"))).toBe(false);
+  });
+
+  it("aprendizaje SENA bajo un SMLMV tampoco dispara esta advertencia (su pago es legalmente menor)", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      {
+        modo: "salario-fijo",
+        salarioBasicoMensual: 900_000,
+        recibeAuxilioTransporte: false,
+        tipoContrato: "aprendizaje_sena_practica",
+        conceptos: [],
+        ...PERIODO,
+      },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("salario mínimo legal mensual vigente"))).toBe(false);
+  });
+
+  it("salario igual o sobre un SMLMV no advierte", () => {
+    const r = CalculadoraSalarioFijo.calcular(
+      {
+        modo: "salario-fijo",
+        salarioBasicoMensual: 1_750_905,
+        recibeAuxilioTransporte: false,
+        tipoContrato: "indefinido",
+        conceptos: [],
+        ...PERIODO,
+      },
+      REGLAS_JUL_2026,
+      []
+    );
+    expect(r.advertencias.some((a) => a.includes("salario mínimo legal mensual vigente"))).toBe(false);
+  });
+});

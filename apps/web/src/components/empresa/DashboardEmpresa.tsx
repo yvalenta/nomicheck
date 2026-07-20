@@ -443,13 +443,14 @@ function FormEmpleado({
   const [auxilioTransporte, setAuxilioTransporte] = useState(inicial?.auxilioTransporte ?? true);
   const [fechaIngreso, setFechaIngreso] = useState(inicial?.fechaIngreso.slice(0, 10) ?? "");
   const [tipoContrato, setTipoContrato] = useState<Empleado["tipoContrato"]>(inicial?.tipoContrato ?? "indefinido");
+  const [claseRiesgoArl, setClaseRiesgoArl] = useState<Empleado["claseRiesgoArl"]>(inicial?.claseRiesgoArl ?? 1);
 
   return (
     <PaycheckCard titulo={inicial ? `Editar a ${inicial.nombre}` : "Nuevo colaborador"} className={inicial ? "mx-3 mb-2" : ""}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso, tipoContrato });
+          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso, tipoContrato, claseRiesgoArl });
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
@@ -496,6 +497,20 @@ function FormEmpleado({
         <label className="flex flex-col gap-1 text-sm text-ink">
           Fecha de ingreso (antigüedad para cesantías, prima y vacaciones)
           <DateField required value={fechaIngreso} onChange={setFechaIngreso} placeholder="Fecha de ingreso" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          Clase de riesgo ARL (Decreto 1772 de 1994)
+          <select
+            value={claseRiesgoArl}
+            onChange={(e) => setClaseRiesgoArl(Number(e.target.value) as Empleado["claseRiesgoArl"])}
+            className={inputCls}
+          >
+            <option value={1}>I — riesgo mínimo (oficinas, comercio)</option>
+            <option value={2}>II — riesgo bajo</option>
+            <option value={3}>III — riesgo medio</option>
+            <option value={4}>IV — riesgo alto</option>
+            <option value={5}>V — riesgo máximo</option>
+          </select>
         </label>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input

@@ -1,0 +1,1 @@
+ALTER TABLE "Empleado" ADD COLUMN "claseRiesgoArl" INTEGER NOT NULL DEFAULT 1;

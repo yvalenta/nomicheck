@@ -181,3 +181,154 @@ export function calcularCostoEmpleador(
     advertencias,
   };
 }
+
+// --- Liquidación PILA por periodo (SDD.md §14) ---
+//
+// A diferencia de calcularCostoEmpleador (estimado gerencial mensual, mismo
+// salario cada mes, ARL clase 1 para todos), esta función recibe el IBC y el
+// auxilio de transporte REALES de un ReciboPago ya liquidado — ya reflejan
+// los días efectivamente trabajados en el periodo (incapacidades no
+// remuneradas, ingreso/retiro a mitad de mes, etc., ver ensamblarResultado.ts)
+// sin que esta función tenga que volver a prorratear nada. Los aportes
+// (salud/pensión/ARL/caja/SENA/ICBF) se calculan directo sobre ese IBC — ya
+// es la porción exacta del periodo. Las provisiones de prestaciones
+// reutilizan la misma fracción 30/360 de calcularCostoEmpleador: como el IBC
+// ya es proporcional a los días del periodo, el resultado sale
+// proporcionalmente correcto sin necesidad de conocer cuántos días duró el
+// periodo (verificado en costoEmpleador.test.ts con periodos de distinta
+// duración). El umbral de exoneración (Ley 1607, 10 SMLMV) y el tope de ARL
+// se evalúan contra el salario MENSUAL PACTADO del empleado, no contra el
+// IBC del periodo (que en una quincena sería la mitad y falsearía el
+// umbral).
+export interface DatosLiquidacionPilaEmpleado {
+  /** IBC real del periodo — del ReciboPago ya liquidado: suma de líneas devengo-legal, sin auxilio de transporte. */
+  ibcPeriodo: number;
+  /** Auxilio de transporte real ya pagado en ese ReciboPago (0 si no aplica). */
+  auxilioTransportePeriodo: number;
+  /** Empleado.salarioBase — solo para el umbral de exoneración Ley 1607, no para el cálculo de aportes. */
+  salarioMensualPactado: number;
+  /** Empleado.claseRiesgoArl persistida — a diferencia del estimado gerencial, aquí NO hay default silencioso a clase 1. */
+  claseRiesgoArl: ClaseRiesgoArl;
+}
+
+export interface ResultadoLiquidacionPila {
+  ibcPeriodo: number;
+  lineas: LineaCostoEmpleador[];
+  costoTotalPeriodo: number;
+  advertencias: string[];
+}
+
+export function calcularLiquidacionPilaEmpleado(
+  datos: DatosLiquidacionPilaEmpleado,
+  reglas: ReglaLegal[] | ResolutorReglas,
+  opciones: { exoneradoParafiscales?: boolean; fecha: string }
+): ResultadoLiquidacionPila {
+  if (!(datos.ibcPeriodo > 0)) {
+    throw new Error(`El IBC del periodo debe ser mayor que cero (recibido: ${datos.ibcPeriodo})`);
+  }
+  const r = comoResolutor(reglas);
+  const { exoneradoParafiscales = true, fecha } = opciones;
+  const { ibcPeriodo, auxilioTransportePeriodo, salarioMensualPactado, claseRiesgoArl } = datos;
+
+  const advertencias: string[] = [];
+  const lineas: LineaCostoEmpleador[] = [];
+
+  const smlmv = r.en("smlmv", fecha);
+  const exonerado = exoneradoParafiscales && salarioMensualPactado < smlmv * EXONERACION_UMBRAL_SMLMV;
+  if (exoneradoParafiscales && !exonerado) {
+    advertencias.push(
+      `Este salario pactado ($${salarioMensualPactado.toLocaleString("es-CO")}) es igual o superior a ${EXONERACION_UMBRAL_SMLMV} SMLMV: la exoneración de la Ley 1607 de 2012 no aplica y se cobran salud patronal, SENA e ICBF completos.`
+    );
+  }
+
+  if (auxilioTransportePeriodo > 0) {
+    lineas.push({
+      concepto: "Auxilio de transporte",
+      valor: redondearPeso(auxilioTransportePeriodo),
+      ley: "Decreto de salario mínimo vigente",
+    });
+  }
+
+  if (!exonerado) {
+    lineas.push({
+      concepto: "Salud (aporte empleador)",
+      pct: PCT_SALUD_EMPLEADOR,
+      valor: redondearPeso(ibcPeriodo * PCT_SALUD_EMPLEADOR),
+      ley: "Ley 100 de 1993, art. 204",
+    });
+  }
+  lineas.push({
+    concepto: "Pensión (aporte empleador)",
+    pct: PCT_PENSION_EMPLEADOR,
+    valor: redondearPeso(ibcPeriodo * PCT_PENSION_EMPLEADOR),
+    ley: "Ley 100 de 1993, art. 20",
+  });
+  lineas.push({
+    concepto: `ARL (clase de riesgo ${["I", "II", "III", "IV", "V"][claseRiesgoArl - 1]})`,
+    pct: TARIFAS_ARL[claseRiesgoArl],
+    valor: redondearPeso(ibcPeriodo * TARIFAS_ARL[claseRiesgoArl]),
+    ley: "Decreto 1772 de 1994, art. 13",
+  });
+  lineas.push({
+    concepto: "Caja de compensación familiar",
+    pct: PCT_CAJA_COMPENSACION,
+    valor: redondearPeso(ibcPeriodo * PCT_CAJA_COMPENSACION),
+    ley: "Ley 21 de 1982",
+  });
+  if (!exonerado) {
+    lineas.push({
+      concepto: "SENA",
+      pct: PCT_SENA,
+      valor: redondearPeso(ibcPeriodo * PCT_SENA),
+      ley: "Ley 21 de 1982",
+    });
+    lineas.push({
+      concepto: "ICBF",
+      pct: PCT_ICBF,
+      valor: redondearPeso(ibcPeriodo * PCT_ICBF),
+      ley: "Ley 89 de 1988",
+    });
+  }
+  if (exonerado) {
+    advertencias.push(
+      "Exoneración aplicada (Ley 1607 de 2012, art. 25): sin salud patronal, SENA ni ICBF para salarios menores a 10 SMLMV en empresas contribuyentes de renta. Si la empresa no es contribuyente (p. ej. entidad sin ánimo de lucro), desactiva la exoneración."
+    );
+  }
+
+  // Provisiones: misma fracción 30/360 de calcularCostoEmpleador. El IBC ya
+  // es la porción exacta del periodo (no un salario mensual completo), así
+  // que el resultado sale proporcionalmente correcto sin conocer los días
+  // del periodo — ver nota de diseño arriba.
+  const baseCesantias = ibcPeriodo + auxilioTransportePeriodo;
+  const cesantiasPeriodo = redondearPeso((baseCesantias * DIAS_MES_COMERCIAL) / DIAS_ANO_COMERCIAL);
+  lineas.push({
+    concepto: "Provisión cesantías",
+    valor: cesantiasPeriodo,
+    ley: "CST art. 249",
+  });
+  lineas.push({
+    concepto: "Provisión intereses sobre cesantías",
+    pct: PCT_INTERES_CESANTIAS,
+    valor: redondearPeso(cesantiasPeriodo * PCT_INTERES_CESANTIAS),
+    ley: "Ley 52 de 1975",
+  });
+  lineas.push({
+    concepto: "Provisión prima de servicios",
+    valor: redondearPeso((baseCesantias * DIAS_MES_COMERCIAL) / DIAS_ANO_COMERCIAL),
+    ley: "CST art. 306",
+  });
+  lineas.push({
+    concepto: "Provisión vacaciones",
+    valor: redondearPeso((ibcPeriodo * DIAS_MES_COMERCIAL) / DIVISOR_VACACIONES),
+    ley: "CST art. 186",
+  });
+
+  const costoTotalPeriodo = redondearPeso(ibcPeriodo + lineas.reduce((s, l) => s + l.valor, 0));
+
+  return {
+    ibcPeriodo: redondearPeso(ibcPeriodo),
+    lineas,
+    costoTotalPeriodo,
+    advertencias,
+  };
+}

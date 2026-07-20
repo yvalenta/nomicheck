@@ -32,6 +32,32 @@ export function advertenciaPatronAprendiz(
   );
 }
 
+/**
+ * Salario básico por debajo de un SMLMV en un contrato de tiempo COMPLETO
+ * (indefinido/fijo/obra_labor) — nunca es legal, a diferencia de tiempo
+ * parcial (proporcional por diseño, ver advertenciaIbcTiempoParcial) o
+ * aprendizaje SENA (su "salario" es legalmente un auxilio de sostenimiento
+ * menor al SMLMV, Ley 789 de 2002). Señal para el semáforo de cumplimiento
+ * de la empresa (SDD.md §14).
+ */
+export function advertenciaSalarioBajoMinimo(
+  salarioBasicoMensual: number,
+  tipoContrato: TipoContrato | undefined,
+  reglas: ReglaLegal[] | ResolutorReglas,
+  fecha: string
+): string | undefined {
+  if (tipoContrato === "tiempo_parcial") return undefined;
+  if (tipoContrato?.startsWith("aprendizaje_sena")) return undefined;
+  const r = comoResolutor(reglas);
+  const smlmv = r.en("smlmv", fecha);
+  if (salarioBasicoMensual >= smlmv) return undefined;
+  return (
+    `El salario básico declarado ($${salarioBasicoMensual.toLocaleString("es-CO")}) está por debajo del ` +
+    `salario mínimo legal mensual vigente ($${smlmv.toLocaleString("es-CO")}). Para un contrato de tiempo ` +
+    `completo esto no es legal salvo que sea tiempo parcial o aprendizaje SENA (CST art. 145).`
+  );
+}
+
 const LABEL_TERMINO: Record<"fijo" | "obra_labor" | "tiempo_parcial", string> = {
   fijo: "a término fijo",
   obra_labor: "por obra o labor",

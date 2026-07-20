@@ -30,6 +30,8 @@ import {
   eliminar as eliminarContratista,
 } from "../controllers/contratistasController.js";
 import { costos } from "../controllers/costosController.js";
+import { pilaPeriodo } from "../controllers/pilaController.js";
+import { cumplimiento } from "../controllers/cumplimientoController.js";
 import {
   listar as listarPeriodos,
   crear as crearPeriodo,
@@ -150,6 +152,11 @@ router.delete("/empresa/contratistas/:id", ...soloEmpresa, eliminarContratista);
 // provisiones por empleado activo, con la exoneración Ley 1607 como toggle.
 router.get("/empresa/costos", ...soloEmpresa, costos);
 
+// Semáforo de cumplimiento (SDD §14): aprendices mal clasificados, salarios
+// bajo el mínimo (estado actual de empleados activos) y horas extra
+// excedidas (últimos periodos liquidados) — reusa detección ya existente.
+router.get("/empresa/cumplimiento", ...soloEmpresa, cumplimiento);
+
 router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
 router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);
 // Editar fechas SOLO en borrador (uno liquidado se revierte primero) — la
@@ -163,6 +170,9 @@ router.get("/empresa/periodos/:id/empleados", ...soloEmpresa, empleadosIncluidos
 router.put("/empresa/periodos/:id/empleados", ...soloEmpresa, guardarEmpleadosIncluidos);
 router.post("/empresa/periodos/:id/liquidar", ...soloEmpresa, liquidar);
 router.post("/empresa/periodos/:id/revertir", ...soloEmpresa, revertir);
+// PILA exacta por periodo ya liquidado (SDD §14): IBC real de cada recibo,
+// no un salario mensual estimado — ver pilaService.ts.
+router.get("/empresa/periodos/:id/pila", ...soloEmpresa, pilaPeriodo);
 router.get("/empresa/recibos", ...soloEmpresa, recibos);
 router.get("/empresa/discrepancias", ...soloEmpresa, listarDiscrepancias);
 router.put("/empresa/discrepancias/:id", ...soloEmpresa, responderDiscrepancia);

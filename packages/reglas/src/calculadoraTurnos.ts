@@ -10,6 +10,7 @@ import { crearResolutorReglas, diaSemana, esDomingo, esFechaValida, rangoFechas,
 import {
   advertenciaIbcTiempoParcial,
   advertenciaPatronAprendiz,
+  advertenciaSalarioBajoMinimo,
   advertenciaTerminoNoIndefinido,
 } from "./advertenciasContrato.js";
 import { redondearPeso } from "./numero.js";
@@ -162,6 +163,8 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     if (advertenciaTermino) advertencias.push(advertenciaTermino);
     const advertenciaIbc = advertenciaIbcTiempoParcial(d.salarioBasicoMensual, d.tipoContrato, r, d.periodoDesde);
     if (advertenciaIbc) advertencias.push(advertenciaIbc);
+    const advertenciaMinimo = advertenciaSalarioBajoMinimo(d.salarioBasicoMensual, d.tipoContrato, r, d.periodoDesde);
+    if (advertenciaMinimo) advertencias.push(advertenciaMinimo);
 
     const dias: DiaTrabajado[] = [];
     for (const fecha of fechas) {
