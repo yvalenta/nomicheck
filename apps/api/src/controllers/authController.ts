@@ -70,6 +70,15 @@ export async function perfilIndividual(req: Request, res: Response) {
   }
 }
 
+// "¿Quién soy?" — el frontend no conoce el rol real de la cuenta hasta
+// autenticar (no hay 3 SPAs separadas por rol con lógica propia de sesión,
+// pero ninguna sabía a qué portal pertenece la cuenta hasta que un fetch le
+// daba 403). requiereAuth ya resolvió req.usuario; esto solo lo expone.
+export async function whoami(req: Request, res: Response) {
+  const { rol, empresaId, empleadoId } = req.usuario!;
+  res.json({ rol, empresaId, empleadoId });
+}
+
 export async function invitar(req: Request, res: Response) {
   const parseo = invitarSchema.safeParse(req.body);
   if (!parseo.success) {

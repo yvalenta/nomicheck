@@ -65,3 +65,20 @@ export function crearFestivo(datos: { fecha: string; nombre: string }): Promise<
 export function eliminarFestivo(id: number): Promise<null> {
   return autenticado(`/admin/festivos/${id}`, { method: "DELETE" });
 }
+
+// Vista de solo lectura — ver §13 del SDD: crear/reasignar/suspender quedan
+// para otra ronda.
+export interface EmpresaAdmin {
+  id: number;
+  nombre: string;
+  nit: string;
+  sector: string;
+  creadoEn: string;
+  colaboradores: number;
+  contratistas: number;
+  admins: { nombre: string; email: string | null }[];
+}
+
+export function listarEmpresas(): Promise<EmpresaAdmin[]> {
+  return autenticado("/admin/empresas");
+}

@@ -289,12 +289,16 @@ export default function App() {
           NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
           certificada.
         </span>
+        <a href="/login" className="text-mint-dark hover:underline font-medium">
+          ¿Ya tienes cuenta? Ingresa aquí
+        </a>
         <a href="/empresa" className="text-mint-dark hover:underline">
           ¿Eres empresa? Liquida y administra tu nómina
         </a>
         <a href="/colaborador" className="text-mint-dark hover:underline">
           ¿Tu empresa ya usa NomiCheck? Ingresa al portal del colaborador
         </a>
+        <span className="mt-2 font-medium text-slate-400">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
 
       {/* Orquestador de delayed auth: AuthModal + interceptor de pendingAction.

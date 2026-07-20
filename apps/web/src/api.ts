@@ -268,6 +268,28 @@ export async function listarMisLiquidaciones(): Promise<LiquidacionListada[]> {
   return body as LiquidacionListada[];
 }
 
+// --- "¿Quién soy?" — usado por el login unificado y por los 3 portales
+// para redirigir a la cuenta a donde le corresponde según su rol real. ---
+export interface MiRol {
+  rol: string;
+  empresaId: number | null;
+  empleadoId: number | null;
+}
+
+export async function obtenerMiRol(): Promise<MiRol> {
+  const { supabase } = await import("./lib/supabase");
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("No hay sesión activa");
+
+  const res = await fetch("/api/auth/whoami", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? "No se pudo determinar tu rol");
+  return body as MiRol;
+}
+
 export interface MensajeChat {
   rol: "usuario" | "asistente";
   texto: string;

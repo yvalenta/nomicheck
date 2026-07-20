@@ -12,7 +12,8 @@ import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
-import { registro, registroIndividual, invitar, perfilIndividual } from "../controllers/authController.js";
+import { registro, registroIndividual, invitar, perfilIndividual, whoami } from "../controllers/authController.js";
+import { listar as listarEmpresasAdmin } from "../controllers/empresasAdminController.js";
 import { crear as crearLiquidacion, listar as listarLiquidaciones } from "../controllers/liquidacionesController.js";
 import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
@@ -111,6 +112,9 @@ router.post("/auth/registro-individual", registroIndividual);
 // Asegura el perfil Usuario tras un login con OAuth (Google) — Supabase Auth
 // crea la cuenta directo en el redirect, sin pasar por registro-individual.
 router.post("/auth/perfil-individual", perfilIndividual);
+// "¿Quién soy?" — usado por el login unificado (/login) y por los 3 portales
+// para redirigir al correcto según el rol real de la cuenta.
+router.get("/auth/whoami", requiereAuth, whoami);
 
 // Historial personal de liquidaciones — cualquier usuario autenticado guarda
 // y lista SUS propias (scoping por req.usuario.id, no por rol).
@@ -178,5 +182,8 @@ router.post("/admin/reglas", ...soloPlataforma, crearRegla);
 router.get("/admin/festivos", ...soloPlataforma, listarFestivosAdminHandler);
 router.post("/admin/festivos", ...soloPlataforma, crearFestivoHandler);
 router.delete("/admin/festivos/:id", ...soloPlataforma, eliminarFestivoHandler);
+// Solo lectura por ahora — ver qué empresas usan la plataforma y quién las
+// administra. Crear/reasignar/suspender quedan para otra ronda.
+router.get("/admin/empresas", ...soloPlataforma, listarEmpresasAdmin);
 
 export default router;

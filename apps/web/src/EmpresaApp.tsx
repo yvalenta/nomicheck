@@ -10,6 +10,8 @@ import ContratistasEmpresa from "./components/empresa/ContratistasEmpresa.tsx";
 import DiscrepanciasEmpresa from "./components/empresa/DiscrepanciasEmpresa.tsx";
 import CostosEmpresa from "./components/empresa/CostosEmpresa.tsx";
 import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
+import { obtenerMiRol } from "./api.ts";
+import { irAPortalSegunRol } from "./lib/irAPortal.ts";
 
 type Seccion = "colaboradores" | "contratistas" | "periodos" | "discrepancias" | "costos";
 
@@ -17,6 +19,10 @@ export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [seccion, setSeccion] = useState<Seccion>("colaboradores");
   const [recuperando, setRecuperando] = useState(false);
+  // undefined = sin verificar, true = es admin_empresa, false = rebotando a
+  // su portal real (ver irAPortalSegunRol) — evita mostrar este dashboard a
+  // una cuenta que entró aquí por error (ej. con Google) siendo otro rol.
+  const [rolOk, setRolOk] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -30,6 +36,16 @@ export default function EmpresaApp() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session || recuperando) return;
+    obtenerMiRol()
+      .then(({ rol }) => {
+        if (rol === "admin_empresa") setRolOk(true);
+        else irAPortalSegunRol();
+      })
+      .catch(() => setRolOk(true)); // si falla la verificación, no bloquea el acceso normal
+  }, [session, recuperando]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <HeaderProfile paso={session ? "Panel de empresa" : "Acceso empresa"} />
@@ -37,7 +53,10 @@ export default function EmpresaApp() {
         {session === undefined && <p className="text-sm text-muted text-center">Cargando…</p>}
         {recuperando && <ResetPasswordForm onListo={() => setRecuperando(false)} />}
         {!recuperando && session === null && <AuthEmpresa />}
-        {!recuperando && session && (
+        {!recuperando && session && rolOk === undefined && (
+          <p className="text-sm text-muted text-center">Cargando…</p>
+        )}
+        {!recuperando && session && rolOk && (
           <div className="flex flex-col gap-5">
             <div className="flex justify-center">
               <SegmentedControl<Seccion>

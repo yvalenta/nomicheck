@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { CalendarPlus, Plus, Trash2 } from "lucide-react";
+import { Building2, CalendarPlus, Plus, Trash2 } from "lucide-react";
 import {
   crearFestivo,
   crearVigencia,
   eliminarFestivo,
+  listarEmpresas,
   listarFestivosAdmin,
   listarReglas,
+  type EmpresaAdmin,
   type Festivo,
   type ReglaAgrupada,
 } from "../../apiAdmin";
 import PaycheckCard from "../PaycheckCard.tsx";
+import EmptyState from "../EmptyState.tsx";
+import Skeleton from "../Skeleton.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -17,8 +21,60 @@ const inputCls =
 export default function DashboardAdmin() {
   return (
     <div className="flex flex-col gap-6">
+      <Empresas />
       <ReglasLegales />
       <Festivos />
+    </div>
+  );
+}
+
+// Vista de solo lectura para admin_plataforma: qué empresas usan la
+// plataforma y quién las administra. Crear/reasignar/suspender empresas
+// queda para otra ronda (SDD.md §13).
+function Empresas() {
+  const [empresas, setEmpresas] = useState<EmpresaAdmin[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listarEmpresas()
+      .then(setEmpresas)
+      .catch((e) => setError(e.message));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="text-lg font-bold text-ink px-1">Empresas</h2>
+      {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
+
+      <PaycheckCard>
+        {empresas === null && !error && <Skeleton filas={3} />}
+        {empresas?.length === 0 && <EmptyState icon={Building2} titulo="Todavía no hay empresas registradas" />}
+        <div className="flex flex-col">
+          {empresas?.map((e) => (
+            <div
+              key={e.id}
+              className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 last:border-0"
+            >
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 text-mint-dark flex items-center justify-center shrink-0">
+                <Building2 size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-ink truncate">{e.nombre}</p>
+                <p className="text-xs text-muted truncate">
+                  NIT {e.nit} · {e.sector} · {e.colaboradores} colaborador{e.colaboradores === 1 ? "" : "es"}
+                  {e.contratistas > 0 && ` · ${e.contratistas} contratista${e.contratistas === 1 ? "" : "s"}`}
+                </p>
+                <p className="text-xs text-muted truncate">
+                  {e.admins.length > 0
+                    ? `Admin: ${e.admins.map((a) => a.nombre).join(", ")}`
+                    : "Sin admin_empresa asignado"}
+                </p>
+              </div>
+              <span className="text-xs text-muted shrink-0">{e.creadoEn.slice(0, 10)}</span>
+            </div>
+          ))}
+        </div>
+      </PaycheckCard>
     </div>
   );
 }

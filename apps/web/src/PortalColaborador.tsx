@@ -5,10 +5,13 @@ import HeaderProfile from "./components/HeaderProfile.tsx";
 import AuthColaborador from "./components/colaborador/AuthColaborador.tsx";
 import DashboardColaborador from "./components/colaborador/DashboardColaborador.tsx";
 import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
+import { obtenerMiRol } from "./api.ts";
+import { irAPortalSegunRol } from "./lib/irAPortal.ts";
 
 export default function PortalColaborador() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recuperando, setRecuperando] = useState(false);
+  const [rolOk, setRolOk] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -19,6 +22,16 @@ export default function PortalColaborador() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session || recuperando) return;
+    obtenerMiRol()
+      .then(({ rol }) => {
+        if (rol === "colaborador") setRolOk(true);
+        else irAPortalSegunRol();
+      })
+      .catch(() => setRolOk(true));
+  }, [session, recuperando]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <HeaderProfile paso={session ? "Portal del colaborador" : "Acceso colaborador"} />
@@ -26,7 +39,10 @@ export default function PortalColaborador() {
         {session === undefined && <p className="text-sm text-muted text-center">Cargando…</p>}
         {recuperando && <ResetPasswordForm onListo={() => setRecuperando(false)} />}
         {!recuperando && session === null && <AuthColaborador />}
-        {!recuperando && session && <DashboardColaborador />}
+        {!recuperando && session && rolOk === undefined && (
+          <p className="text-sm text-muted text-center">Cargando…</p>
+        )}
+        {!recuperando && session && rolOk && <DashboardColaborador />}
       </main>
       <footer className="text-center text-xs text-muted py-4 px-6 flex flex-col gap-1.5">
         <span>
