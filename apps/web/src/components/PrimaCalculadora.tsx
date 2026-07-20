@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Gift } from "lucide-react";
+import { ArrowLeft, Bus, Gift } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularPrima, type ResultadoPrima } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
@@ -13,6 +13,7 @@ interface Props {
 
 export default function PrimaCalculadora({ onAtras }: Props) {
   const [salarioMensual, setSalarioMensual] = useState("");
+  const [recibeAuxilioTransporte, setRecibeAuxilioTransporte] = useState(true);
   const [fechaIngreso, setFechaIngreso] = useState("");
   const [fechaCorte, setFechaCorte] = useState("");
   const [resultado, setResultado] = useState<ResultadoPrima | null>(null);
@@ -29,7 +30,12 @@ export default function PrimaCalculadora({ onAtras }: Props) {
     setResultado(null);
     try {
       setResultado(
-        await calcularPrima({ salarioMensual: Number(salarioMensual), fechaIngreso, fechaCorte })
+        await calcularPrima({
+          salarioMensual: Number(salarioMensual),
+          recibeAuxilioTransporte,
+          fechaIngreso,
+          fechaCorte,
+        })
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
@@ -64,6 +70,16 @@ export default function PrimaCalculadora({ onAtras }: Props) {
                 className={inputCls}
                 placeholder="Ej: 1.750.905"
               />
+            </label>
+
+            <label className="flex items-center gap-2.5 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={recibeAuxilioTransporte}
+                onChange={(e) => setRecibeAuxilioTransporte(e.target.checked)}
+                className="w-4 h-4 accent-mint"
+              />
+              <Bus size={16} className="text-muted" /> Recibo auxilio de transporte (hace base de prima)
             </label>
 
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
@@ -108,10 +124,19 @@ export default function PrimaCalculadora({ onAtras }: Props) {
               <span className="text-sm text-muted">Días considerados</span>
               <span className="text-sm font-medium text-ink tabular-nums">{resultado.diasTrabajadosAcumulado}</span>
             </div>
+            {resultado.auxilioIncluido > 0 && (
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm text-muted">Auxilio de transporte en la base</span>
+                <span className="text-sm font-medium text-ink tabular-nums">{formatCOP(resultado.auxilioIncluido)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-baseline">
               <span className="text-base font-bold text-ink">Prima estimada</span>
               <span className="text-lg font-bold text-ink tabular-nums">{formatCOP(resultado.prima)}</span>
             </div>
+            {resultado.advertencias.map((a) => (
+              <p key={a} className="rounded-xl bg-amber-50 text-amber-800 text-xs p-2.5">{a}</p>
+            ))}
             <p className="text-xs text-muted mt-1">{resultado.explicacion}</p>
             <p className="text-xs text-muted">{resultado.ley}</p>
           </div>

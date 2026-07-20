@@ -65,7 +65,7 @@ describe("calcularPrestacionesSociales", () => {
     expect(r.prima).toBe(1_950_000);
   });
 
-  it("el auxilio de transporte solo afecta la base de cesantías, NO prima ni vacaciones", () => {
+  it("el auxilio de transporte hace base de cesantías Y prima (Ley 1ª de 1963, art. 7), pero NO vacaciones", () => {
     const conAuxilio = calcularPrestacionesSociales({
       fechaIngreso: "2026-01-01",
       fechaCorte: "2026-12-31",
@@ -79,11 +79,12 @@ describe("calcularPrestacionesSociales", () => {
     });
     expect(conAuxilio.cesantias).toBe(1_216_667);
     expect(conAuxilio.interesesCesantias).toBe(148_028);
-    // Vacaciones y prima son idénticas con o sin auxilio: la base que usan es la misma.
+    // Vacaciones es idéntica con o sin auxilio (excluido por doctrina/jurisprudencia);
+    // prima SÍ cambia — usa la misma base que cesantías (salario + auxilio).
     expect(conAuxilio.vacaciones).toBe(sinAuxilio.vacaciones);
-    expect(conAuxilio.prima).toBe(sinAuxilio.prima);
     expect(conAuxilio.vacaciones).toBe(506_944);
-    expect(conAuxilio.prima).toBe(1_000_000);
+    expect(conAuxilio.prima).toBe(1_200_000);
+    expect(sinAuxilio.prima).toBe(1_000_000);
   });
 
   it("tope de 180 días por semestre: un semestre de 181 días reales da la misma prima que uno de exactamente 180", () => {

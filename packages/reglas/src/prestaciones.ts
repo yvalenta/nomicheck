@@ -49,9 +49,15 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
   const diasTrabajadosAcumulado = diasEnRango(datos.fechaIngreso, datos.fechaCorte, excluir);
 
   const salarioOrdinario = salarioBasePrestacional(datos);
-  const salarioCesantias = salarioOrdinario + (datos.auxilioTransporte ?? 0);
+  // Ley 1ª de 1963, art. 7: el auxilio de transporte "se entiende incorporado
+  // al salario para todos los efectos" — en la práctica esto se aplica a
+  // cesantías (CST art. 249) y prima (CST art. 306), NO a vacaciones: la
+  // doctrina y jurisprudencia (CSJ) excluyen el auxilio de la base de
+  // vacaciones porque compensa un gasto de transporte que no se causa
+  // mientras el trabajador está de vacaciones.
+  const salarioConAuxilio = salarioOrdinario + (datos.auxilioTransporte ?? 0);
 
-  const cesantias = redondearPeso((salarioCesantias * diasTrabajadosAcumulado) / DIAS_ANO_COMERCIAL);
+  const cesantias = redondearPeso((salarioConAuxilio * diasTrabajadosAcumulado) / DIAS_ANO_COMERCIAL);
   const interesesCesantias = redondearPeso((cesantias * diasTrabajadosAcumulado * PCT_INTERES_CESANTIAS) / DIAS_ANO_COMERCIAL);
   const vacaciones = redondearPeso((salarioOrdinario * diasTrabajadosAcumulado) / DIVISOR_VACACIONES);
 
@@ -64,7 +70,7 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
     diasPrima += diasSemestrePrima(`${anio}-01-01`, `${anio}-06-30`, datos.fechaIngreso, datos.fechaCorte, excluir);
     diasPrima += diasSemestrePrima(`${anio}-07-01`, `${anio}-12-31`, datos.fechaIngreso, datos.fechaCorte, excluir);
   }
-  const prima = redondearPeso((salarioOrdinario * diasPrima) / DIAS_ANO_COMERCIAL);
+  const prima = redondearPeso((salarioConAuxilio * diasPrima) / DIAS_ANO_COMERCIAL);
 
   return {
     diasTrabajadosAcumulado,

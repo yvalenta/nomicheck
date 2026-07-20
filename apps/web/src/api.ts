@@ -121,12 +121,15 @@ async function postCalculadora<T>(path: string, datos: unknown, errorDefault: st
 export interface ResultadoPrima {
   prima: number;
   diasTrabajadosAcumulado: number;
+  auxilioIncluido: number;
+  advertencias: string[];
   explicacion: string;
   ley: string;
 }
 
 export function calcularPrima(datos: {
   salarioMensual: number;
+  recibeAuxilioTransporte: boolean;
   fechaIngreso: string;
   fechaCorte: string;
 }): Promise<ResultadoPrima> {

@@ -16,6 +16,30 @@ import { obtenerReglasYFestivos } from "../services/nominaService.js";
 // 422 error de cálculo). Prima y cesantías reusan calcularPrestacionesSociales
 // respondiendo solo el subconjunto pertinente.
 
+// El auxilio de transporte hace base de cesantías Y prima (Ley 1ª de 1963,
+// art. 7) — mismo cálculo del monto vigente y de la advertencia de tope de
+// 2 SMLMV para ambas calculadoras, factorizado para no duplicarlo.
+async function resolverAuxilioDeclarado(
+  recibeAuxilioTransporte: boolean,
+  salarioMensual: number,
+  fechaCorte: string
+) {
+  const { reglas } = await obtenerReglasYFestivos();
+  const resolutor = crearResolutorReglas(reglas);
+  const advertencias: string[] = [];
+  let auxilioTransporte: number | undefined;
+  if (recibeAuxilioTransporte) {
+    auxilioTransporte = resolutor.en("auxilio_transporte", fechaCorte);
+    const tope = resolutor.en("smlmv", fechaCorte) * resolutor.en("auxilio_transporte_tope_smlmv", fechaCorte);
+    if (salarioMensual > tope) {
+      advertencias.push(
+        `El auxilio de transporte solo aplica con salario de hasta 2 SMLMV ($${tope.toLocaleString("es-CO")}); con el salario declarado normalmente no se recibe — se incluyó en la base porque lo marcaste.`
+      );
+    }
+  }
+  return { auxilioTransporte, advertencias };
+}
+
 export async function calcularPrima(req: Request, res: Response) {
   const parseo = datosPrimaSchema.safeParse(req.body);
   if (!parseo.success) {
@@ -24,13 +48,25 @@ export async function calcularPrima(req: Request, res: Response) {
   }
 
   try {
-    const { salarioMensual, fechaIngreso, fechaCorte } = parseo.data;
-    const r = calcularPrestacionesSociales({ fechaIngreso, fechaCorte, salarioBase: salarioMensual });
+    const { salarioMensual, recibeAuxilioTransporte, fechaIngreso, fechaCorte } = parseo.data;
+    const { auxilioTransporte, advertencias } = await resolverAuxilioDeclarado(
+      recibeAuxilioTransporte,
+      salarioMensual,
+      fechaCorte
+    );
+    const r = calcularPrestacionesSociales({
+      fechaIngreso,
+      fechaCorte,
+      salarioBase: salarioMensual,
+      auxilioTransporte,
+    });
     res.json({
       prima: r.prima,
       diasTrabajadosAcumulado: r.diasTrabajadosAcumulado,
+      auxilioIncluido: auxilioTransporte ?? 0,
+      advertencias,
       explicacion:
-        "Un mes de salario por año trabajado, proporcional al tiempo servido en cada semestre calendario (topado a 180 días por semestre). Se paga en dos cuotas: máximo el 30 de junio y el 20 de diciembre.",
+        "Un mes de salario por año trabajado, proporcional al tiempo servido en cada semestre calendario (topado a 180 días por semestre). El auxilio de transporte hace parte de la base (Ley 1ª de 1963, art. 7). Se paga en dos cuotas: máximo el 30 de junio y el 20 de diciembre.",
       ley: "CST art. 306, mod. Ley 1788 de 2016",
     });
   } catch (err) {
@@ -47,22 +83,11 @@ export async function calcularCesantias(req: Request, res: Response) {
 
   try {
     const { salarioMensual, recibeAuxilioTransporte, fechaIngreso, fechaCorte } = parseo.data;
-    const { reglas } = await obtenerReglasYFestivos();
-    const resolutor = crearResolutorReglas(reglas);
-
-    const advertencias: string[] = [];
-    let auxilioTransporte: number | undefined;
-    if (recibeAuxilioTransporte) {
-      auxilioTransporte = resolutor.en("auxilio_transporte", fechaCorte);
-      const tope =
-        resolutor.en("smlmv", fechaCorte) * resolutor.en("auxilio_transporte_tope_smlmv", fechaCorte);
-      if (salarioMensual > tope) {
-        advertencias.push(
-          `El auxilio de transporte solo aplica con salario de hasta 2 SMLMV ($${tope.toLocaleString("es-CO")}); con el salario declarado normalmente no se recibe — se incluyó en la base porque lo marcaste.`
-        );
-      }
-    }
-
+    const { auxilioTransporte, advertencias } = await resolverAuxilioDeclarado(
+      recibeAuxilioTransporte,
+      salarioMensual,
+      fechaCorte
+    );
     const r = calcularPrestacionesSociales({
       fechaIngreso,
       fechaCorte,

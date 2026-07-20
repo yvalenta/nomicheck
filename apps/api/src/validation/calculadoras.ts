@@ -6,6 +6,9 @@ import { fecha } from "./comunes.js";
 
 export const datosPrimaSchema = z.object({
   salarioMensual: z.number().positive(),
+  // El auxilio de transporte SÍ hace base de prima (Ley 1ª de 1963, art. 7 —
+  // mismo criterio que cesantías) — el usuario solo declara si lo recibe.
+  recibeAuxilioTransporte: z.boolean().default(false),
   fechaIngreso: fecha,
   fechaCorte: fecha,
 });
