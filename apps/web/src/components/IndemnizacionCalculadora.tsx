@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Gavel, Scale } from "lucide-react";
 import { calcularIndemnizacion, type ResultadoIndemnizacion } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
+import DateField from "./DateField.tsx";
 
 type TipoContrato = "indefinido" | "fijo" | "obra_labor" | "tiempo_parcial";
 
@@ -114,36 +115,18 @@ export default function IndemnizacionCalculadora({ onAtras }: Props) {
                 <span>
                   {tipoContrato === "fijo" ? "Fecha de vencimiento pactada" : "Fecha estimada de fin de la obra/labor"}
                 </span>
-                <input
-                  required
-                  type="date"
-                  value={fechaVencimientoPactada}
-                  onChange={(e) => setFechaVencimientoPactada(e.target.value)}
-                  className={inputCls}
-                />
+                <DateField required value={fechaVencimientoPactada} onChange={setFechaVencimientoPactada} placeholder="Fecha de vencimiento" />
               </label>
             ) : (
               <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                 <span>Fecha de ingreso</span>
-                <input
-                  required
-                  type="date"
-                  value={fechaIngreso}
-                  onChange={(e) => setFechaIngreso(e.target.value)}
-                  className={inputCls}
-                />
+                <DateField required value={fechaIngreso} onChange={setFechaIngreso} placeholder="Fecha de ingreso" />
               </label>
             )}
 
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Fecha de terminación</span>
-              <input
-                required
-                type="date"
-                value={fechaTerminacion}
-                onChange={(e) => setFechaTerminacion(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={fechaTerminacion} onChange={setFechaTerminacion} placeholder="Fecha de terminación" />
             </label>
 
             <label className="flex items-center gap-2.5 text-sm text-ink">

@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Plus, Trash2 } from "lucide-react
 import type { ConceptoNomina } from "@pv/reglas";
 import type { ComprobanteExtraido } from "../api";
 import PaycheckCard from "./PaycheckCard.tsx";
+import DateField from "./DateField.tsx";
 
 interface Props {
   extraido: ComprobanteExtraido;
@@ -75,11 +76,11 @@ export default function PasoRevision({ extraido, onAtras, onConfirmar }: Props) 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               Periodo desde
-              <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls} />
+              <DateField value={desde} onChange={setDesde} placeholder="Desde" />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               Periodo hasta
-              <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} />
+              <DateField value={hasta} onChange={setHasta} placeholder="Hasta" minimo={desde || undefined} />
             </label>
           </div>
           <label className="flex items-center gap-2.5 text-sm text-ink">

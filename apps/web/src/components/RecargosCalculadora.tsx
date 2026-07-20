@@ -3,6 +3,7 @@ import { ArrowLeft, MoonStar } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularRecargos, type HorasRecargo, type ResultadoRecargos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
+import DateField from "./DateField.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -107,13 +108,7 @@ export default function RecargosCalculadora({ onAtras }: Props) {
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                 <span>Fecha de referencia</span>
-                <input
-                  required
-                  type="date"
-                  value={fechaReferencia}
-                  onChange={(e) => setFechaReferencia(e.target.value)}
-                  className={inputCls}
-                />
+                <DateField required value={fechaReferencia} onChange={setFechaReferencia} placeholder="Fecha de referencia" />
               </label>
             </div>
           </div>

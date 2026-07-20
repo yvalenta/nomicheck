@@ -3,6 +3,7 @@ import { ArrowLeft, Bus, Gift } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularPrima, type ResultadoPrima } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
+import DateField from "./DateField.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -84,24 +85,12 @@ export default function PrimaCalculadora({ onAtras }: Props) {
 
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Fecha de ingreso (o inicio del semestre si ya te pagaron la anterior)</span>
-              <input
-                required
-                type="date"
-                value={fechaIngreso}
-                onChange={(e) => setFechaIngreso(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={fechaIngreso} onChange={setFechaIngreso} placeholder="Fecha de ingreso" />
             </label>
 
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Fecha de corte (ej: 30 de junio o 20 de diciembre)</span>
-              <input
-                required
-                type="date"
-                value={fechaCorte}
-                onChange={(e) => setFechaCorte(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={fechaCorte} onChange={setFechaCorte} placeholder="Fecha de corte" minimo={fechaIngreso || undefined} />
             </label>
           </div>
         </PaycheckCard>

@@ -3,6 +3,7 @@ import { ArrowLeft, Bus, PiggyBank } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularCesantias, type ResultadoCesantias } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
+import DateField from "./DateField.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -84,24 +85,12 @@ export default function CesantiasCalculadora({ onAtras }: Props) {
 
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Fecha de ingreso (o 1 de enero si ya te consignaron las del año pasado)</span>
-              <input
-                required
-                type="date"
-                value={fechaIngreso}
-                onChange={(e) => setFechaIngreso(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={fechaIngreso} onChange={setFechaIngreso} placeholder="Fecha de ingreso" />
             </label>
 
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Fecha de corte</span>
-              <input
-                required
-                type="date"
-                value={fechaCorte}
-                onChange={(e) => setFechaCorte(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={fechaCorte} onChange={setFechaCorte} placeholder="Fecha de corte" minimo={fechaIngreso || undefined} />
             </label>
           </div>
         </PaycheckCard>

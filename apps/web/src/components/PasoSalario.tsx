@@ -13,6 +13,7 @@ import {
 import { finDePeriodoMensual } from "@pv/reglas";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
+import DateField from "./DateField.tsx";
 
 export type Periodicidad = "semanal" | "quincenal" | "mensual" | "personalizado";
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
@@ -317,23 +318,11 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               <span className="flex items-center gap-2">
                 <CalendarRange size={16} className="text-mint-dark" /> Desde
               </span>
-              <input
-                required
-                type="date"
-                value={datos.desde}
-                onChange={(e) => cambiarDesde(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={datos.desde} onChange={cambiarDesde} placeholder="Desde" />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Hasta</span>
-              <input
-                required
-                type="date"
-                value={datos.hasta}
-                onChange={(e) => cambiarHasta(e.target.value)}
-                className={inputCls}
-              />
+              <DateField required value={datos.hasta} onChange={cambiarHasta} placeholder="Hasta" minimo={datos.desde || undefined} />
             </label>
           </div>
           {datos.periodicidad !== "personalizado" && (
