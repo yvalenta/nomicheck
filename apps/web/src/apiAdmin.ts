@@ -66,8 +66,7 @@ export function eliminarFestivo(id: number): Promise<null> {
   return autenticado(`/admin/festivos/${id}`, { method: "DELETE" });
 }
 
-// Vista de solo lectura — ver §13 del SDD: crear/reasignar/suspender quedan
-// para otra ronda.
+// Reasignar/suspender quedan para otra ronda (§13 del SDD).
 export interface EmpresaAdmin {
   id: number;
   nombre: string;
@@ -81,4 +80,12 @@ export interface EmpresaAdmin {
 
 export function listarEmpresas(): Promise<EmpresaAdmin[]> {
   return autenticado("/admin/empresas");
+}
+
+export function crearEmpresa(datos: {
+  nombreAdmin: string;
+  emailAdmin: string;
+  empresa: { nombre: string; nit: string; sector: string };
+}): Promise<{ empresa: EmpresaAdmin; usuario: { nombre: string; email: string | null } }> {
+  return autenticado("/admin/empresas", { method: "POST", body: JSON.stringify(datos) });
 }

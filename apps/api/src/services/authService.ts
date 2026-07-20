@@ -9,7 +9,7 @@ import type { AuthError } from "@supabase/supabase-js";
 // Supabase reporta el correo duplicado con code "email_exists" (createUser)
 // o "user_already_exists" (inviteUserByEmail) — mensaje raw en inglés, sin
 // distinguirlo de otros fallos. Lo traducimos a un conflicto explícito.
-function esCorreoDuplicado(error: AuthError | null): boolean {
+export function esCorreoDuplicado(error: AuthError | null): boolean {
   return error?.code === "email_exists" || error?.code === "user_already_exists";
 }
 
@@ -145,4 +145,39 @@ export async function invitarColaborador(empleadoId: number, email: string): Pro
   });
 
   return { estado: "correo_enviado" };
+}
+
+// Onboarding manual por admin_plataforma: crea la Empresa y le manda al
+// primer admin_empresa una invitación nativa de Supabase (define su propia
+// contraseña por correo — a diferencia de registrarEmpresa, aquí quien crea
+// la cuenta NO es la misma persona que va a usarla, así que no tiene
+// sentido pedirle una contraseña de una vez). Compensa hacia atrás si algo
+// falla a mitad de camino (mismo criterio que registrarEmpresa/invitarColaborador).
+export async function crearEmpresaConAdmin(datos: {
+  empresa: { nombre: string; nit: string; sector: string };
+  nombreAdmin: string;
+  emailAdmin: string;
+}) {
+  const empresa = await prisma.empresa.create({ data: datos.empresa });
+
+  const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(datos.emailAdmin);
+  if (esCorreoDuplicado(error)) {
+    await prisma.empresa.delete({ where: { id: empresa.id } });
+    throw new ErrorConflicto("Ya existe una cuenta con este correo. Verifica que sea la persona correcta.");
+  }
+  if (error || !data.user) {
+    await prisma.empresa.delete({ where: { id: empresa.id } });
+    throw new Error(error?.message ?? "No se pudo enviar la invitación");
+  }
+
+  try {
+    const usuario = await prisma.usuario.create({
+      data: { id: data.user.id, nombre: datos.nombreAdmin, email: datos.emailAdmin, rol: "admin_empresa", empresaId: empresa.id },
+    });
+    return { empresa, usuario };
+  } catch (err) {
+    await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+    await prisma.empresa.delete({ where: { id: empresa.id } });
+    throw err;
+  }
 }

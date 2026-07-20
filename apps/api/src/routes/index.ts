@@ -13,7 +13,7 @@ import { parametrosPublicos } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
 import { registro, registroIndividual, invitar, perfilIndividual, whoami } from "../controllers/authController.js";
-import { listar as listarEmpresasAdmin } from "../controllers/empresasAdminController.js";
+import { listar as listarEmpresasAdmin, crear as crearEmpresaAdmin } from "../controllers/empresasAdminController.js";
 import { crear as crearLiquidacion, listar as listarLiquidaciones } from "../controllers/liquidacionesController.js";
 import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
 import {
@@ -185,5 +185,8 @@ router.delete("/admin/festivos/:id", ...soloPlataforma, eliminarFestivoHandler);
 // Solo lectura por ahora — ver qué empresas usan la plataforma y quién las
 // administra. Crear/reasignar/suspender quedan para otra ronda.
 router.get("/admin/empresas", ...soloPlataforma, listarEmpresasAdmin);
+// Onboarding manual: crea la empresa + invita a su primer admin_empresa
+// (define su propia contraseña por correo, sin reasignar/suspender todavía).
+router.post("/admin/empresas", ...soloPlataforma, crearEmpresaAdmin);
 
 export default router;

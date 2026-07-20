@@ -12,6 +12,15 @@ export const registroSchema = z.object({
   }),
 });
 
+// Onboarding manual por admin_plataforma (SDD §09 POST /api/admin/empresas):
+// sin password — quien crea la cuenta no es quien la va a usar, la persona
+// invitada la define por correo.
+export const crearEmpresaAdminSchema = z.object({
+  nombreAdmin: z.string().min(1),
+  emailAdmin: z.string().email(),
+  empresa: registroSchema.shape.empresa,
+});
+
 export const empleadoSchema = z.object({
   nombre: z.string().min(1),
   documento: z.string().min(1),

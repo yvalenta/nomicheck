@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Building2, CalendarPlus, Plus, Trash2 } from "lucide-react";
 import {
+  crearEmpresa,
   crearFestivo,
   crearVigencia,
   eliminarFestivo,
@@ -28,23 +29,47 @@ export default function DashboardAdmin() {
   );
 }
 
-// Vista de solo lectura para admin_plataforma: qué empresas usan la
-// plataforma y quién las administra. Crear/reasignar/suspender empresas
-// queda para otra ronda (SDD.md §13).
+// Onboarding manual de empresas: admin_plataforma puede crear una empresa e
+// invitar su primer admin_empresa (define su propia contraseña por correo).
+// Reasignar/suspender empresas queda para otra ronda (SDD.md §13).
 function Empresas() {
   const [empresas, setEmpresas] = useState<EmpresaAdmin[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const [exito, setExito] = useState<string | null>(null);
 
-  useEffect(() => {
+  function recargar() {
     listarEmpresas()
       .then(setEmpresas)
       .catch((e) => setError(e.message));
-  }, []);
+  }
+
+  useEffect(recargar, []);
 
   return (
     <div className="flex flex-col gap-3">
-      <h2 className="text-lg font-bold text-ink px-1">Empresas</h2>
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-lg font-bold text-ink">Empresas</h2>
+        <button
+          onClick={() => setMostrarForm(!mostrarForm)}
+          className="flex items-center gap-1.5 text-sm font-medium text-mint-dark hover:underline"
+        >
+          <Plus size={16} /> Nueva empresa
+        </button>
+      </div>
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
+      {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
+
+      {mostrarForm && (
+        <FormNuevaEmpresa
+          onCreada={(emailAdmin) => {
+            setMostrarForm(false);
+            setExito(`Empresa creada — invitación enviada a ${emailAdmin}.`);
+            recargar();
+          }}
+          onCancelar={() => setMostrarForm(false)}
+        />
+      )}
 
       <PaycheckCard>
         {empresas === null && !error && <Skeleton filas={3} />}
@@ -76,6 +101,76 @@ function Empresas() {
         </div>
       </PaycheckCard>
     </div>
+  );
+}
+
+function FormNuevaEmpresa({
+  onCreada,
+  onCancelar,
+}: {
+  onCreada: (emailAdmin: string) => void;
+  onCancelar: () => void;
+}) {
+  const [nombreEmpresa, setNombreEmpresa] = useState("");
+  const [nit, setNit] = useState("");
+  const [sector, setSector] = useState("");
+  const [nombreAdmin, setNombreAdmin] = useState("");
+  const [emailAdmin, setEmailAdmin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setEnviando(true);
+    try {
+      await crearEmpresa({
+        nombreAdmin,
+        emailAdmin,
+        empresa: { nombre: nombreEmpresa, nit, sector },
+      });
+      onCreada(emailAdmin);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo crear la empresa");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <PaycheckCard titulo="Nueva empresa">
+      <form onSubmit={enviar} className="px-3 pb-3 pt-1 flex flex-col gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input required placeholder="Nombre de la empresa" value={nombreEmpresa} onChange={(e) => setNombreEmpresa(e.target.value)} className={inputCls} />
+          <input required placeholder="NIT" value={nit} onChange={(e) => setNit(e.target.value)} className={inputCls} />
+        </div>
+        <input required placeholder="Sector (ej: restaurante)" value={sector} onChange={(e) => setSector(e.target.value)} className={inputCls} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input required placeholder="Nombre del admin" value={nombreAdmin} onChange={(e) => setNombreAdmin(e.target.value)} className={inputCls} />
+          <input required type="email" placeholder="Correo del admin" value={emailAdmin} onChange={(e) => setEmailAdmin(e.target.value)} className={inputCls} />
+        </div>
+        <p className="text-xs text-muted">
+          Se le envía un correo de invitación para que defina su propia contraseña — nunca la ves ni la fijas tú.
+        </p>
+        {error && <p className="text-coral text-sm">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="flex-1 rounded-xl border border-slate-200 bg-white text-ink text-sm py-2.5"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={enviando}
+            className="flex-1 rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+          >
+            {enviando ? "Creando…" : "Crear e invitar"}
+          </button>
+        </div>
+      </form>
+    </PaycheckCard>
   );
 }
 
