@@ -170,6 +170,29 @@ export const INDEMNIZACION_DIAS_ANIO_ADICIONAL_SOBRE_UMBRAL = 15;
 /** Aporte a pensión del independiente — paga el 100%. Ley 100 de 1993, art. 20. */
 export const PCT_PENSION_INDEPENDIENTE = 0.16;
 
+// --- Retención en la fuente por el sistema de depuración (E.T. art. 383, 388) ---
+//
+// Rangos en UVT MENSUALES y tarifa marginal — la tabla en sí (rangos y %)
+// es fija en la ley, solo el valor en pesos de la UVT cambia cada año (esa
+// sí vive como ReglaLegal, clave "uvt"). Vigente desde la unificación de
+// tarifas de la Ley 2277 de 2022, art. 7 (aplica desde el año gravable
+// 2023) — no se ha modificado desde entonces. `restarUvt` es el valor fijo
+// que se suma después de aplicar la tarifa marginal al excedente del rango
+// (columna oficial "en UVT" de la tabla del art. 383), evita tener que
+// sumar manualmente cada tramo anterior en cada cálculo.
+export const TABLA_RETENCION_FUENTE_ART_383: { desdeUvt: number; tarifa: number; restarUvt: number }[] = [
+  { desdeUvt: 0, tarifa: 0, restarUvt: 0 },
+  { desdeUvt: 95, tarifa: 0.19, restarUvt: 0 },
+  { desdeUvt: 150, tarifa: 0.28, restarUvt: 10 },
+  { desdeUvt: 360, tarifa: 0.33, restarUvt: 69 },
+  { desdeUvt: 640, tarifa: 0.35, restarUvt: 162 },
+  { desdeUvt: 945, tarifa: 0.37, restarUvt: 268 },
+  { desdeUvt: 2300, tarifa: 0.39, restarUvt: 770 },
+];
+
+/** Deducción por dependientes (E.T. art. 387, par. 2): 10% del ingreso, tope 32 UVT/mes — una sola deducción, no importa cuántos dependientes se declaren. */
+export const PCT_DEDUCCION_DEPENDIENTES = 0.10;
+
 // --- Redondeo monetario ---
 
 // El peso colombiano no circula con fracciones (no hay centavos en la

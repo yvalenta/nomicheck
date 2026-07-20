@@ -179,6 +179,30 @@ export function calcularRecargos(datos: {
   return postCalculadora("/api/recargos/calcular", datos, "No se pudieron calcular los recargos");
 }
 
+export interface ResultadoRetencion {
+  ingresoLaboralMensual: number;
+  ingresoNoConstitutivo: number;
+  deduccionDependientes: number;
+  rentaExentaAfc: number;
+  rentaExentaLaboral: number;
+  totalExentoYDeducible: number;
+  baseGravable: number;
+  baseGravableUvt: number;
+  retencionMensual: number;
+  advertencias: string[];
+  explicacion: string;
+  ley: string;
+}
+
+export function calcularRetencion(datos: {
+  ingresoLaboralMensual: number;
+  declaraRenta: boolean;
+  aportesVoluntariosAfc?: number;
+  tieneDependientes: boolean;
+}): Promise<ResultadoRetencion> {
+  return postCalculadora("/api/retencion/calcular", datos, "No se pudo calcular la retención en la fuente");
+}
+
 // --- Registro de cuenta individual (server-side) ---
 // El usuario se crea con email_confirm=true en el backend, así el cliente
 // puede iniciar sesión de inmediato (sin correo de confirmación) y el guardado

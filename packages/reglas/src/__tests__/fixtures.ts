@@ -22,6 +22,13 @@ export const REGLAS_JUL_2026: ReglaLegal[] = [
   { clave: "embargo_alimentos_pct_max", valor: 0.5, vigenteDesde: "1950-01-01", fuente: "CST art. 156" },
   { clave: "max_horas_extra_dia", valor: 2, vigenteDesde: "1967-01-01", fuente: "D.L. 13 de 1967, art. 1" },
   { clave: "max_horas_extra_semana", valor: 12, vigenteDesde: "1981-01-01", fuente: "Ley 6 de 1981" },
+  { clave: "uvt", valor: 52374, vigenteDesde: "2026-01-01", fuente: "DIAN, Resolución 000238 de 15-12-2025" },
+  { clave: "limite_porcentaje_afc", valor: 0.3, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4" },
+  { clave: "limite_anual_uvt_afc", valor: 3800, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4" },
+  { clave: "limite_rentas_exentas_porcentaje", valor: 0.4, vigenteDesde: "2023-01-01", fuente: "E.T. art. 336" },
+  { clave: "limite_rentas_exentas_uvt_anual", valor: 1340, vigenteDesde: "2023-01-01", fuente: "E.T. art. 336" },
+  { clave: "limite_renta_exenta_laboral_uvt_mes", valor: 790, vigenteDesde: "2007-01-01", fuente: "E.T. art. 206, num. 10" },
+  { clave: "limite_deduccion_dependientes_uvt_mes", valor: 32, vigenteDesde: "2016-01-01", fuente: "E.T. art. 387, par. 2" },
 ];
 
 export const FESTIVOS_2026: Festivo[] = [

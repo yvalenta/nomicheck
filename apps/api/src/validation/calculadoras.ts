@@ -24,6 +24,14 @@ export const datosCesantiasSchema = z.object({
 
 const horasNoNegativas = z.number().min(0).optional();
 
+export const datosRetencionSchema = z.object({
+  ingresoLaboralMensual: z.number().positive(),
+  declaraRenta: z.boolean().default(false),
+  // Solo se toma en cuenta si declaraRenta=true — ver calcularRetencionFuente.
+  aportesVoluntariosAfc: z.number().min(0).optional(),
+  tieneDependientes: z.boolean().default(false),
+});
+
 export const datosRecargosSchema = z.object({
   salarioMensual: z.number().positive(),
   fechaReferencia: fecha,

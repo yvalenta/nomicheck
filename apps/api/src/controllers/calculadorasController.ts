@@ -2,12 +2,14 @@ import type { Request, Response } from "express";
 import {
   calcularPrestacionesSociales,
   calcularRecargos as calcularRecargosReglas,
+  calcularRetencionFuente,
   crearResolutorReglas,
 } from "@pv/reglas";
 import {
   datosCesantiasSchema,
   datosPrimaSchema,
   datosRecargosSchema,
+  datosRetencionSchema,
 } from "../validation/calculadoras.js";
 import { obtenerReglasYFestivos } from "../services/nominaService.js";
 
@@ -103,6 +105,32 @@ export async function calcularCesantias(req: Request, res: Response) {
       explicacion:
         "Un mes de salario por año trabajado (proporcional por días sobre año de 360). El auxilio de transporte hace parte de la base. Los intereses son el 12% anual sobre el saldo, proporcionales al tiempo.",
       ley: "CST art. 249 (cesantías); Ley 52 de 1975, art. 1 (intereses)",
+    });
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : "Error de cálculo" });
+  }
+}
+
+// Retención en la fuente (SDD §03 Módulo A, Fase 2): informativa, sin
+// recibo — mismo patrón 400/422 que el resto. Usa la fecha de hoy (no hay
+// concepto de "periodo" declarado por el usuario, a diferencia de
+// prima/cesantías) para resolver las reglas/UVT vigentes.
+export async function calcularRetencion(req: Request, res: Response) {
+  const parseo = datosRetencionSchema.safeParse(req.body);
+  if (!parseo.success) {
+    res.status(400).json({ error: "Datos inválidos", detalles: parseo.error.flatten() });
+    return;
+  }
+
+  try {
+    const { reglas } = await obtenerReglasYFestivos();
+    const hoy = new Date().toISOString().slice(0, 10);
+    const r = calcularRetencionFuente(parseo.data, reglas, hoy);
+    res.json({
+      ...r,
+      explicacion:
+        "Estimado por el sistema de depuración (E.T. art. 383/388): del ingreso laboral se restan los aportes obligatorios de salud/pensión, la renta exenta laboral del 25% (siempre aplica, tope 790 UVT/mes) y, si declaras renta, el aporte voluntario a AFC/pensión voluntaria y la deducción por dependientes — sujeto a un tope combinado del 40% del ingreso (o 1.340 UVT/año, lo que sea menor). Sobre lo que queda se aplica la tabla de tarifas marginales del art. 383.",
+      ley: "E.T. art. 383 y 388 (Ley 2277 de 2022, art. 7)",
     });
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "Error de cálculo" });

@@ -1,6 +1,6 @@
-import { ArrowLeft, Calculator, Gift, MoonStar, PiggyBank, Scale } from "lucide-react";
+import { ArrowLeft, Calculator, Gift, Landmark, MoonStar, PiggyBank, Scale } from "lucide-react";
 
-export type PasoCalculadora = "indemnizacion" | "prima" | "cesantias" | "recargos";
+export type PasoCalculadora = "indemnizacion" | "prima" | "cesantias" | "recargos" | "retencion";
 
 const CALCULADORAS: {
   paso: PasoCalculadora;
@@ -31,6 +31,12 @@ const CALCULADORAS: {
     titulo: "Indemnización por terminación",
     descripcion: "Si te despidieron sin justa causa o terminaron tu contrato antes de tiempo.",
     Icono: Scale,
+  },
+  {
+    paso: "retencion",
+    titulo: "Retención en la fuente",
+    descripcion: "Estimado mensual con renta exenta, AFC y dependientes si declaras renta.",
+    Icono: Landmark,
   },
 ];
 

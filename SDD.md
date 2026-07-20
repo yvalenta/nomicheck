@@ -95,24 +95,35 @@ El único hallazgo real de la revisión fue un **bug de cálculo** (hora extra d
 | `extra_diurna` / `extra_nocturna` | 25 % / 75 % (extra dominical/festiva suma el recargo dominical vigente) | — | CST art. 168 |
 | `aporte_salud` / `aporte_pension` | 4 % / 4 % sobre IBC | sin cambios para 2026 | Ley 100 de 1993 |
 | `fondo_solidaridad` | escalonado 1–2 % si IBC ≥ 4 SMLMV (4–16→1%, 16–17→1.2%, 17–18→1.4%, 18–19→1.6%, 19–20→1.8%, ≥20→2%) | — | Ley 100 de 1993, Ley 797 de 2003 art. 8 — **la reforma pensional (Ley 2381 de 2024) que la modificaría sigue suspendida por la Corte Constitucional (auto 841/25) por vicio de trámite; revisar si se reactiva** |
-| Retención en la fuente | según tabla vigente del Estatuto Tributario | — | E.T. art. 383 — no se calcula automáticamente en v1 (ver Módulo B) |
+| Retención en la fuente | tabla art. 383 (7 tramos, 0%–39%) | vigente desde Ley 2277 de 2022 | E.T. art. 383/388 — calculadora propia `/retencion/calcular` (ver Fase 2 abajo y Módulo B) |
 
 **Ampliación de la semilla — AFC y preparación tributaria (verificado 16-jul-2026):**
 
 | Clave | Valor | Vigencia | Fuente | Uso hoy |
 |---|---|---|---|---|
 | `limite_deducciones_salario` | 50 % del devengado | histórico | CST art. 149 num. 2 (excepción de libranza, Ley 1527 de 2012, art. 3 §5) | **Sí** — recorta el AFC si el total de deducciones lo supera |
-| `uvt` | $52.374 | 2026 | DIAN, Resolución 000238 de 15-dic-2025 | No (Fase 2) |
-| `limite_porcentaje_afc` | 30 % del ingreso laboral/mes | desde 2012 | E.T. art. 126-1 y 126-4 (Ley 1607 de 2012) | No (Fase 2) |
-| `limite_anual_uvt_afc` | 3.800 UVT/año | desde 2012 | E.T. art. 126-1 y 126-4 | No (Fase 2) |
-| `limite_rentas_exentas_porcentaje` | 40 % del ingreso | desde 2023 | E.T. art. 336 (Ley 2277 de 2022) | No (Fase 2) |
+| `uvt` | $52.374 | 2026 | DIAN, Resolución 000238 de 15-dic-2025 | **Sí** (Fase 2) |
+| `limite_porcentaje_afc` | 30 % del ingreso laboral/mes | desde 2012 | E.T. art. 126-1 y 126-4 (Ley 1607 de 2012) | **Sí** (Fase 2, solo si declara renta) |
+| `limite_anual_uvt_afc` | 3.800 UVT/año | desde 2012 | E.T. art. 126-1 y 126-4 | **Sí** (Fase 2 — prorrateado ÷12, ver advertencia abajo) |
+| `limite_rentas_exentas_porcentaje` | 40 % del ingreso | desde 2023 | E.T. art. 336 (Ley 2277 de 2022) | **Sí** (Fase 2, tope combinado) |
+| `limite_rentas_exentas_uvt_anual` | 1.340 UVT/año | desde 2023 | E.T. art. 336 (Ley 2277 de 2022) | **Sí** (Fase 2 — el menor entre este y el 40 % aplica, prorrateado ÷12) |
+| `limite_renta_exenta_laboral_uvt_mes` | 790 UVT/mes | desde 2007 | E.T. art. 206, num. 10 (Ley 1111 de 2006) | **Sí** (Fase 2 — 25 % renta exenta, aplica SIEMPRE, no depende de declarar renta) |
+| `limite_deduccion_dependientes_uvt_mes` | 32 UVT/mes | desde 2016 | E.T. art. 387, par. 2 (Ley 1819 de 2016) | **Sí** (Fase 2, si se declara al menos un dependiente) |
 
 > ⚠️ El valor de UVT del prompt original de diseño ($49.799) es el de **2025**; el vigente para el año gravable 2026, confirmado en la resolución oficial de la DIAN, es **$52.374**. Se corrigió en la semilla (`apps/api/prisma/seed.ts`).
 
 **AFC (Ahorro para el Fomento a la Construcción) — dos fases de tratamiento:**
 
 - **Fase 1 (implementada):** para trabajadores que no declaran renta, el AFC es una **deducción por convenio de monto fijo** — el usuario/empresa declara `aporteAfcMensual`, se prorratea por días del periodo igual que el auxilio de transporte, y se descuenta del neto **sin afectar el IBC** de salud/pensión (E.T. art. 126-4 solo habla de renta exenta para quien declara renta; para quien no declara, el AFC no tiene ningún efecto tributario en la nómina, es un simple descuento autorizado). Protegido por `limite_deducciones_salario`: si salud + pensión + fondo + AFC superan el 50 % del devengado, se recorta el AFC — nunca los aportes obligatorios — y se deja una advertencia trazable (`packages/reglas/src/deducciones.ts`, función `aplicarDeducciones()`).
-- **Fase 2 (preparación, NO implementada):** para perfiles que sí declaran renta, el AFC pasa a ser **renta exenta** que reduce la base de retención en la fuente (E.T. art. 126-4, fórmula `Base_ret = (Devengado − IngresosNoConstitutivos) − DeduccionesPermitidas − RentasExentas`, sujeta a los topes `limite_porcentaje_afc` / `limite_anual_uvt_afc` / `limite_rentas_exentas_porcentaje` ya sembrados). Requiere además: tabla del art. 383 del E.T. (rangos UVT → tarifa marginal), lógica de "¿este colaborador declara renta?" (umbral de ingresos/patrimonio, variable cada año), y UI para declarar dependientes/aportes voluntarios — se deja fuera del alcance actual a propósito (SDD.md §14 Visión a futuro).
+- **Fase 2 (implementada):** calculadora propia de retención en la fuente por el sistema de depuración (`POST /api/retencion/calcular`, motor en `packages/reglas/src/retencionFuente.ts`, función `calcularRetencionFuente()`). Fórmula: `Base = (Devengado − AportesObligatoriosSaludPensión) − DeducciónDependientes − RentaExentaAFC − RentaExentaLaboral25%`, sujeta al tope combinado (el menor entre `limite_rentas_exentas_porcentaje` (40%) y `limite_rentas_exentas_uvt_anual` (1.340 UVT/año, prorrateado ÷12) — si se supera, las tres líneas se recortan proporcionalmente, mismo patrón de `aplicarDeducciones()`). Sobre la base resultante (en UVT) se aplica `TABLA_RETENCION_FUENTE_ART_383` (constante estructural en `constantes.ts`, 7 tramos 0%–39%, no cambia por decreto anual — solo el valor de la UVT en pesos). Decisiones de alcance explícitas (confirmadas con el usuario antes de implementar):
+  - **"¿Declara renta?" es un checkbox autodeclarado, sin validar umbral** — el sistema no intenta calcular el umbral de ingresos/patrimonio vigente (cambia cada año, depende de datos que no se recolectan como patrimonio bruto o consignaciones). Advertencia siempre visible en el resultado aclarando esto.
+  - **La renta exenta laboral del 25% (E.T. art. 206-10) aplica SIEMPRE**, sin importar si declara renta — es un beneficio general, no condicionado. La renta exenta del **AFC/pensión voluntaria (E.T. art. 126-1/126-4) sí requiere declarar renta** (checkbox marcado) — si el usuario declara un aporte AFC sin marcar la casilla, se advierte y no se toma en cuenta.
+  - **Solo se modelan AFC/pensión voluntaria y dependientes** — NO se modelan intereses de vivienda, medicina prepagada ni otras deducciones (E.T. art. 119, art. 387 otras partidas); quedan fuera de alcance a propósito para otra ronda si se necesitan.
+  - Deducción por dependientes (E.T. art. 387, par. 2): una sola deducción (10% del ingreso, tope 32 UVT/mes) sin importar cuántos dependientes se declaren — la UI solo pregunta sí/no ("¿tienes al menos un dependiente?"), no un conteo.
+  - El tope anual del AFC (3.800 UVT/año) se prorratea a mensual (÷12) porque el cálculo es por periodo y no lleva el acumulado real del año — se advierte explícitamente que el cupo disponible real puede ser menor si ya se usó parte en otros meses.
+  - Es una calculadora informativa aparte (como prima/cesantías/recargos/indemnización), NO se integró como línea de deducción real en la liquidación de nómina de empresa (`liquidacionService.ts`) — evita el riesgo de alterar recibos reales de empresas con una estimación que depende de datos personales (declarante, dependientes) que el sistema de nómina de empresa no recolecta hoy.
+  - UI: `RetencionCalculadora.tsx`, registrada en `CalculadorasHub.tsx` junto a las demás calculadoras anónimas.
+  - Verificado con 7 tests de regresión (`retencionFuente.test.ts`, valores golden calculados independientemente) + llamadas reales a `POST /api/retencion/calcular` + navegador real (formulario completo con AFC condicional a "declara renta", dependientes, resultado con las 3 advertencias renderizadas).
 - Ambas fases comparten la misma tabla `ReglaLegal` (`clave`, `valor`, `vigenteDesde`, `vigenteHasta`, `fuente`) — el panel administrativo (Fase 8, rol `admin_plataforma`) las edita sin tocar el repositorio. `packages/reglas/src/catalogoReglas.ts` expone metadatos (etiqueta, unidad, si ya se usa en el cálculo) para que ese panel no tenga que adivinar qué significa cada clave.
 - **UI FinTech:** la línea "Aporte AFC (convenio)" aparece en el `SegmentedControl` bajo "Deducciones", con `tipo: "deduccion"` — el mismo mecanismo de color coral que ya usan salud/pensión/fondo, sin cambios en `ValidationRow.tsx`.
 
@@ -189,7 +200,7 @@ El único hallazgo real de la revisión fue un **bug de cálculo** (hora extra d
 3. Fondo de solidaridad solo si IBC ≥ 4 SMLMV, escalonado 1–2 %; NO exigirlo por debajo. Fixture: 1 % = $129.584.
 4. Devengos extralegales (prima, aux. vivienda, medicina prepagada, seguro de vida) no llevan aportes salvo que el usuario los marque salariales.
 5. Deducciones por convenio (créditos, seguros, ahorro): valores declarados, no se recalculan, solo suman al total.
-6. Retención en la fuente según tabla vigente cuando aplique; diferencia con lo declarado = **advertencia**, no error duro (depende de variables personales que el sistema puede no conocer).
+6. Retención en la fuente según tabla vigente cuando aplique; diferencia con lo declarado = **advertencia**, no error duro (depende de variables personales que el sistema puede no conocer) — el verificador de comprobantes no la recalcula, pero sí existe una calculadora aparte que la estima (`/retencion/calcular`, ver Módulo A "AFC — dos fases de tratamiento").
 7. Validar `total devengos − total deducciones = neto declarado`; señalar descuadres.
 8. Resultado con semáforo por concepto + neto esperado + disclaimer.
 

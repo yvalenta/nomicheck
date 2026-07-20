@@ -41,14 +41,17 @@ const reglas = [
   { clave: "max_horas_extra_dia", valor: 2, vigenteDesde: "1967-01-01", fuente: "D.L. 13 de 1967, art. 1" },
   { clave: "max_horas_extra_semana", valor: 12, vigenteDesde: "1981-01-01", fuente: "Ley 6 de 1981" },
 
-  // --- Constantes tributarias (preparación Fase 2: alivios para quienes
-  // declaran renta — AFC como renta exenta, no solo deducción de convenio).
-  // No se usan todavía en el cálculo, solo quedan disponibles en el panel
-  // administrativo para cuando se implemente la Fase 2. Verificado 16-jul-2026.
+  // --- Constantes tributarias (Fase 2: retención en la fuente por el
+  // sistema de depuración, E.T. art. 383/388 — motor en retencionFuente.ts).
+  // Verificado 16-jul-2026 (uvt/AFC/336); tabla de tarifas del art. 383 vive
+  // como constante estructural en constantes.ts (no cambia por decreto anual).
   { clave: "uvt", valor: 52374, vigenteDesde: "2026-01-01", fuente: "DIAN, Resolución 000238 de 15-12-2025" },
   { clave: "limite_porcentaje_afc", valor: 0.30, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4 (Ley 1607 de 2012)" },
   { clave: "limite_anual_uvt_afc", valor: 3800, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4 (Ley 1607 de 2012)" },
   { clave: "limite_rentas_exentas_porcentaje", valor: 0.40, vigenteDesde: "2023-01-01", fuente: "E.T. art. 336 (Ley 2277 de 2022)" },
+  { clave: "limite_rentas_exentas_uvt_anual", valor: 1340, vigenteDesde: "2023-01-01", fuente: "E.T. art. 336 (Ley 2277 de 2022)" },
+  { clave: "limite_renta_exenta_laboral_uvt_mes", valor: 790, vigenteDesde: "2007-01-01", fuente: "E.T. art. 206, num. 10 (Ley 1111 de 2006)" },
+  { clave: "limite_deduccion_dependientes_uvt_mes", valor: 32, vigenteDesde: "2016-01-01", fuente: "E.T. art. 387, par. 2 (Ley 1819 de 2016)" },
 ];
 
 // Festivos Colombia 2026 (Ley Emiliani)

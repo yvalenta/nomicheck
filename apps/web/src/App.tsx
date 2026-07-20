@@ -26,6 +26,7 @@ import CalculadorasHub from "./components/CalculadorasHub.tsx";
 import PrimaCalculadora from "./components/PrimaCalculadora.tsx";
 import CesantiasCalculadora from "./components/CesantiasCalculadora.tsx";
 import RecargosCalculadora from "./components/RecargosCalculadora.tsx";
+import RetencionCalculadora from "./components/RetencionCalculadora.tsx";
 import MisLiquidaciones from "./components/MisLiquidaciones.tsx";
 import AuthFlowManager from "./components/AuthFlowManager.tsx";
 import { supabase } from "./lib/supabase.ts";
@@ -42,6 +43,7 @@ type Paso =
   | "prima"
   | "cesantias"
   | "recargos"
+  | "retencion"
   | "misLiquidaciones";
 
 const PASO_LABEL: Record<Paso, string> = {
@@ -56,6 +58,7 @@ const PASO_LABEL: Record<Paso, string> = {
   prima: "Prima de servicios",
   cesantias: "Cesantías e intereses",
   recargos: "Recargos y horas extra",
+  retencion: "Retención en la fuente",
   misLiquidaciones: "Mis liquidaciones",
 };
 
@@ -226,7 +229,7 @@ export default function App() {
               onClick={() => setPaso("calculadoras")}
               className="text-sm text-mint-dark hover:underline self-center"
             >
-              Calculadoras: prima, cesantías, recargos e indemnización
+              Calculadoras: prima, cesantías, recargos, indemnización y retención en la fuente
             </button>
           </div>
         )}
@@ -239,6 +242,7 @@ export default function App() {
         {paso === "prima" && <PrimaCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
         {paso === "cesantias" && <CesantiasCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
         {paso === "recargos" && <RecargosCalculadora parametros={parametros} onAtras={() => setPaso("calculadoras")} />}
+        {paso === "retencion" && <RetencionCalculadora onAtras={() => setPaso("calculadoras")} />}
         {paso === "misLiquidaciones" && <MisLiquidaciones onAtras={() => setPaso("salario")} />}
 
         {paso === "semana" && (
@@ -298,7 +302,7 @@ export default function App() {
         <a href="/colaborador" className="text-mint-dark hover:underline">
           ¿Tu empresa ya usa NomiCheck? Ingresa al portal del colaborador
         </a>
-        <span className="mt-2 font-medium text-slate-400">© {new Date().getFullYear()} Ynt-labs</span>
+        <span className="font-display text-[9px] font-medium uppercase tracking-[0.2em] text-base-content/25">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
 
       {/* Orquestador de delayed auth: AuthModal + interceptor de pendingAction.

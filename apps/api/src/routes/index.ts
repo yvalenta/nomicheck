@@ -7,6 +7,7 @@ import {
   calcularCesantias,
   calcularPrima,
   calcularRecargos,
+  calcularRetencion,
 } from "../controllers/calculadorasController.js";
 import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos } from "../controllers/reglasController.js";
@@ -97,6 +98,7 @@ router.post("/indemnizacion/calcular", limitadorCalculo, calcularIndemnizacion);
 router.post("/prima/calcular", limitadorCalculo, calcularPrima);
 router.post("/cesantias/calcular", limitadorCalculo, calcularCesantias);
 router.post("/recargos/calcular", limitadorCalculo, calcularRecargos);
+router.post("/retencion/calcular", limitadorCalculo, calcularRetencion);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
