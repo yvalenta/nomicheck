@@ -23,6 +23,8 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       throw new Error(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
     }
     const advertencias: string[] = [];
+    // Issues tipados en paralelo (SDD §15, pilar 2).
+    const issues: import("./qa/tipos.js").IssueQA[] = [];
     const lineas: LineaResultado[] = [];
 
     const advertenciaAprendiz = advertenciaPatronAprendiz(
@@ -82,7 +84,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     // Solo se aplica el tope del 50% (CST art. 149) a salud/pensión/fondo:
     // los conceptos declarados abajo (incl. AFC si viene del comprobante)
     // llegan como valores ya extraídos, no como un monto ajustable aquí.
-    const { lineas: lineasDeduccionLey, advertencias: advertenciasLey } = aplicarDeducciones(
+    const { lineas: lineasDeduccionLey, advertencias: advertenciasLey, issues: issuesLey } = aplicarDeducciones(
       d.salarioBasicoMensual,
       ibc,
       reglas,
@@ -91,6 +93,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     );
     lineas.push(...lineasDeduccionLey);
     advertencias.push(...advertenciasLey);
+    issues.push(...issuesLey);
 
     // Conceptos declarados por el usuario o extraídos del comprobante:
     // devengos extralegales y deducciones por convenio se suman tal cual,
@@ -128,6 +131,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
       advertencias,
+      issues,
       valorDia: redondearPeso(d.salarioBasicoMensual / DIAS_MES_COMERCIAL),
       valorHoraOrdinaria: redondearPeso(
         d.salarioBasicoMensual / reglaEn(reglas, "divisor_hora_ordinaria", d.periodoHasta)

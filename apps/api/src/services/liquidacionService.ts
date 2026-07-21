@@ -27,32 +27,11 @@ export class QaRechazadaError extends Error {
   }
 }
 
-// Extractores de señales a partir de las advertencias string del motor.
-// Estrategia deliberada de este bloque: el QA es tipado, pero las
-// calculadoras aún emiten strings — parseamos aquí en el borde de
-// integración (no en el QA puro) usando el formato estable de
-// calculadoraTurnos.ts / deducciones.ts. Cuando las calculadoras migren a
-// IssueQA nativo, esta capa desaparece sin cambiar el QA.
-const RE_HE_DIA = /^El (\d{4}-\d{2}-\d{2}) trabajaste ([\d.]+) horas extra/;
-const RE_HE_SEMANA = /^En la semana del (\d{4}-\d{2}-\d{2}) acumulaste ([\d.]+) horas extra/;
-const MARCA_TOPE_DEDUCCIONES = "CST art. 149 — mínimo vital";
-
+// SDD §15, pilar 2 — el motor ahora emite IssueQA nativo (ResultadoNomina.issues),
+// así que aquí solo leemos el IBC del recibo y delegamos el resto al QA.
+// Se acabó el parseo regex de strings de advertencia.
 function ibcDeLineas(lineas: LineaResultado[]): number {
   return lineas.find((l) => l.concepto === "Salud (aporte empleado)")?.base ?? 0;
-}
-
-function senalesQA(resultado: ResultadoNomina) {
-  const dia: { fecha: string; horas: number }[] = [];
-  const semana: { semana: string; horas: number }[] = [];
-  let toperoActivado = false;
-  for (const a of resultado.advertencias) {
-    const md = a.match(RE_HE_DIA);
-    if (md) dia.push({ fecha: md[1], horas: parseFloat(md[2]) });
-    const ms = a.match(RE_HE_SEMANA);
-    if (ms) semana.push({ semana: ms[1], horas: parseFloat(ms[2]) });
-    if (a.includes(MARCA_TOPE_DEDUCCIONES)) toperoActivado = true;
-  }
-  return { dia, semana, toperoActivado };
 }
 
 // Horario base "todo descanso": cada Turno capturado ya trae sus propias
@@ -166,9 +145,8 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
   // algún recibo cae en `rechazada`, aborta ANTES de persistir con la lista
   // de issues por empleado. Los `con_advertencias` liquidan pero quedan con
   // sus issues persistidos en ReciboPago.qaIssues para auditoría.
-  const veredictos: ResultadoQA[] = resumenPorEmpleado.map(({ resultado }) => {
-    const senales = senalesQA(resultado);
-    return evaluarQA(
+  const veredictos: ResultadoQA[] = resumenPorEmpleado.map(({ resultado }) =>
+    evaluarQA(
       {
         fecha: periodo.fechaFin,
         periodoDesde: periodo.fechaInicio,
@@ -177,13 +155,11 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
         totalDeducciones: resultado.totalDeducciones,
         netoPagado: resultado.netoEsperado,
         ibcPeriodo: ibcDeLineas(resultado.lineas),
-        toperoDeduccionesActivado: senales.toperoActivado,
-        excesosHorasExtraDia: senales.dia,
-        excesosHorasExtraSemana: senales.semana,
+        issuesMotor: resultado.issues,
       },
       resolutor
-    );
-  });
+    )
+  );
 
   const rechazos = resumenPorEmpleado
     .map((e, i) => ({ empleadoId: e.empleadoId, nombre: e.nombre, veredicto: veredictos[i] }))

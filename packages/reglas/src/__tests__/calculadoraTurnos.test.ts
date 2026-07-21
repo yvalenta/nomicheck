@@ -399,6 +399,11 @@ describe("CalculadoraPorTurnos — deducciones por convenio (AFC, préstamo, aho
     expect(afc / ahorro).toBeCloseTo(500000 / 200000, 0);
     expect(resultado.totalDeducciones).toBeCloseTo(resultado.totalDevengos * 0.5, -1);
     expect(resultado.advertencias.some((a) => a.includes("convenio"))).toBe(true);
+    // Issue tipado equivalente (SDD §15 pilar 2): el recorte emite
+    // TOPE_DEDUCCIONES_SUPERADO como advertencia, no error.
+    const tope = resultado.issues.find((i) => i.codigo === "TOPE_DEDUCCIONES_SUPERADO");
+    expect(tope?.severidad).toBe("advertencia");
+    expect(tope?.referenciaLegal).toBe("CST art. 149");
   });
 });
 
@@ -436,6 +441,12 @@ describe("CalculadoraPorTurnos — tope legal de horas extra (pagar + advertir)"
       FESTIVOS_2026
     );
     expect(resultado.advertencias.some((a) => a.includes("2026-06-16") && a.includes("máximo legal de 2 h/día"))).toBe(true);
+    // También emite el issue tipado equivalente (SDD §15 pilar 2) —
+    // el gate de QA lo lee directo sin re-parsear el string de arriba.
+    const issueDia = resultado.issues.find((i) => i.codigo === "HORAS_EXTRA_EXCEDIDAS_DIA");
+    expect(issueDia?.referenciaLegal).toBe("D.L. 13 de 1967, art. 1");
+    expect(issueDia?.detalles.contexto).toBe("2026-06-16");
+    expect(issueDia?.detalles.valorLimite).toBe(2);
     // Las 4h extra se pagan completas (2 diurnas + 2 nocturnas):
     const extraDiurna = resultado.lineas.find((l) => l.concepto.startsWith("Hora extra diurna"));
     const extraNocturna = resultado.lineas.find((l) => l.concepto.startsWith("Hora extra nocturna"));

@@ -1,4 +1,5 @@
 import type { LineaResultado, ModoCalculo, ResultadoNomina } from "./types.js";
+import type { IssueQA } from "./qa/tipos.js";
 import { redondearPeso } from "./numero.js";
 
 // Cierre común de ambas calculadoras (Strategy): totaliza devengos y
@@ -11,6 +12,9 @@ export function ensamblarResultado(params: {
   salarioBasicoMensual: number;
   lineas: LineaResultado[];
   advertencias: string[];
+  /** Issues tipados que el motor emitió durante el cálculo — coexisten con
+   * las advertencias-string mientras dure la migración (SDD §15, pilar 2). */
+  issues?: IssueQA[];
   /** Si el llamador ya totalizó deducciones (con topes aplicados), se respeta. */
   totalDeducciones?: number;
   valorDia?: number;
@@ -36,6 +40,7 @@ export function ensamblarResultado(params: {
     totalDeducciones,
     netoEsperado: redondearPeso(totalDevengos - totalDeducciones),
     advertencias: params.advertencias,
+    issues: params.issues ?? [],
     valorDia: params.valorDia,
     valorHoraOrdinaria: params.valorHoraOrdinaria,
     diasLaborados: params.diasLaborados,

@@ -44,6 +44,7 @@ function comoResultadoNomina(r: ReciboPropio): ResultadoNomina {
     totalDeducciones: r.totalDeducido,
     netoEsperado: r.neto,
     advertencias: r.advertencias,
+    issues: [],
   };
 }
 

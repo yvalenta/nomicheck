@@ -51,11 +51,8 @@ export interface DatosQA {
   netoPagado: number;
   /** IBC del periodo — leído del campo `base` de la línea "Salud (aporte empleado)". */
   ibcPeriodo: number;
-  /** true si aplicarDeducciones recortó por CST art. 149 (llegó al tope 50%). */
-  toperoDeduccionesActivado?: boolean;
-  /** Excesos de horas extra ya detectados por el motor (calculadoraTurnos).
-   * `horas` es el total EXTRA del día/semana; el QA sabe el límite legal
-   * y compara. Vacío o undefined = no aplica (modo salario-fijo, servicios). */
-  excesosHorasExtraDia?: { fecha: string; horas: number }[];
-  excesosHorasExtraSemana?: { semana: string; horas: number }[];
+  /** Issues ya detectados por el motor durante el cálculo (horas extra,
+   * tope del art. 149…). El QA los incluye tal cual en su ResultadoQA y
+   * agrega los que dependen de la vista global del recibo (IBC, neto). */
+  issuesMotor?: IssueQA[];
 }

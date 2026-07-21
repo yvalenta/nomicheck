@@ -16,6 +16,8 @@ import {
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
+import { crearIssue, emitirIssue } from "./qa/index.js";
+import type { IssueQA } from "./qa/tipos.js";
 import { calcularAuxilioTransporte } from "./auxilio.js";
 import { lineasRecargos, type HorasRecargo } from "./recargos.js";
 import {
@@ -153,6 +155,9 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       fechasNovedades.add(n.fecha);
     }
     const advertencias: string[] = [];
+    // Issues tipados (SDD §15, pilar 2) — el motor los emite en paralelo con
+    // el string libre; el gate de QA los consume directo sin re-parsear.
+    const issues: IssueQA[] = [];
     // Índice + cache de reglas compartido por todo el cálculo (~40 consultas).
     const r = crearResolutorReglas(reglas);
     const fechas = rangoFechas(d.periodoDesde, d.periodoHasta);
@@ -192,9 +197,16 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
 
       const maxDia = r.en("max_horas_extra_dia", dia.fecha);
       if (extrasDia > maxDia) {
-        advertencias.push(
-          `El ${dia.fecha} trabajaste ${redondearHoras(extrasDia)} horas extra — supera el máximo legal de ${maxDia} h/día (D.L. 13 de 1967, art. 1). Se pagan completas, pero la jornada excede lo permitido.`
-        );
+        const horasRedondeadas = redondearHoras(extrasDia);
+        emitirIssue(issues, advertencias, crearIssue(
+          "HORAS_EXTRA_EXCEDIDAS_DIA",
+          "error",
+          `El ${dia.fecha} trabajaste ${horasRedondeadas} horas extra — supera el máximo legal de ${maxDia} h/día (D.L. 13 de 1967, art. 1). Se pagan completas, pero la jornada excede lo permitido.`,
+          "D.L. 13 de 1967, art. 1",
+          horasRedondeadas,
+          maxDia,
+          dia.fecha
+        ));
       }
 
       const semana = lunesDeLaSemana(dia.fecha);
@@ -203,9 +215,16 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     for (const [semana, extrasSemana] of extrasPorSemana) {
       const maxSemana = r.en("max_horas_extra_semana", semana);
       if (extrasSemana > maxSemana) {
-        advertencias.push(
-          `En la semana del ${semana} acumulaste ${redondearHoras(extrasSemana)} horas extra — supera el máximo legal de ${maxSemana} h/semana (Ley 6 de 1981). Se pagan completas, pero la jornada excede lo permitido.`
-        );
+        const horasRedondeadas = redondearHoras(extrasSemana);
+        emitirIssue(issues, advertencias, crearIssue(
+          "HORAS_EXTRA_EXCEDIDAS_SEMANA",
+          "error",
+          `En la semana del ${semana} acumulaste ${horasRedondeadas} horas extra — supera el máximo legal de ${maxSemana} h/semana (Ley 6 de 1981). Se pagan completas, pero la jornada excede lo permitido.`,
+          "Ley 6 de 1981",
+          horasRedondeadas,
+          maxSemana,
+          semana
+        ));
       }
     }
 
@@ -365,8 +384,12 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
           valorMensual: (d.descuentoJudicial.valorMensual / DIAS_MES_COMERCIAL) * diasPeriodo,
         }
       : undefined;
-    const { lineas: lineasDeduccion, totalDeducciones, advertencias: advertenciasDeducciones } =
-      aplicarDeducciones(
+    const {
+      lineas: lineasDeduccion,
+      totalDeducciones,
+      advertencias: advertenciasDeducciones,
+      issues: issuesDeducciones,
+    } = aplicarDeducciones(
         totalDevengos,
         ibc,
         r,
@@ -376,6 +399,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       );
     lineas.push(...lineasDeduccion);
     advertencias.push(...advertenciasDeducciones);
+    issues.push(...issuesDeducciones);
 
     return ensamblarResultado({
       modo: "turnos",
@@ -384,6 +408,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       salarioBasicoMensual: d.salarioBasicoMensual,
       lineas,
       advertencias,
+      issues,
       // Cabecera del comprobante: valor día/hora con el divisor vigente al
       // CIERRE del periodo (si cruza el corte de la Ley 2101, las líneas por
       // tramo ya muestran cada divisor — esto es solo el dato de referencia).

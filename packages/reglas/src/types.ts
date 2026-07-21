@@ -133,7 +133,14 @@ export interface ResultadoNomina {
   totalDevengos: number;
   totalDeducciones: number;
   netoEsperado: number;
+  /** Mensajes libres del motor — legacy, se conservan para el semáforo y la UI.
+   * Migración en curso (SDD §15 pilar 2) hacia `issues` tipado; por ahora
+   * ambos coexisten (los issues emiten también su mensaje al string). */
   advertencias: string[];
+  /** Issues tipados que el motor detectó durante el cálculo (horas extra
+   * excedidas, tope del art. 149 activado, etc.). El QA pre-pago los consume
+   * directamente (SDD §15 pilar 2) sin re-parsear los strings de arriba. */
+  issues: import("./qa/tipos.js").IssueQA[];
   /** Salario mensual / 30 — dato de cabecera del comprobante. */
   valorDia?: number;
   /** Salario mensual / divisor vigente al cierre del periodo (220 ó 210, Ley 2101 de 2021). */

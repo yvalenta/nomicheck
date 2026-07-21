@@ -22,6 +22,30 @@ function issue(
   return { codigo, severidad, mensaje, referenciaLegal, detalles: { valorCalculado, valorLimite, contexto } };
 }
 
+/** Emisor tipado usado por las calculadoras (SDD §15 pilar 2 — migración de
+ * advertencias-string a IssueQA nativo). Empuja tanto el string legible como
+ * el IssueQA estructurado, para no romper consumidores actuales de `advertencias`
+ * (semáforo, UI). Los llamadores que solo tenían `advertencias.push(...)` se
+ * reemplazan por `emitirIssue(issues, advertencias, issue(...))`. */
+export function emitirIssue(issues: IssueQA[], advertencias: string[], i: IssueQA): void {
+  issues.push(i);
+  advertencias.push(i.mensaje);
+}
+
+/** Constructor exportado del issue (mismo shape que el interno) — para que las
+ * calculadoras armen sus issues sin re-declarar la interfaz. */
+export function crearIssue(
+  codigo: CodigoIssueQA,
+  severidad: SeveridadQA,
+  mensaje: string,
+  referenciaLegal: string,
+  valorCalculado: number,
+  valorLimite: number,
+  contexto?: string
+): IssueQA {
+  return issue(codigo, severidad, mensaje, referenciaLegal, valorCalculado, valorLimite, contexto);
+}
+
 /** Factor del periodo respecto a un mes calendario, para prorratear límites
  * mensuales (SMLMV, tope IBC). 30/30 = mes completo, 15/30 = quincena.
  * Se acota a [0, 1] — un "periodo" en la DB nunca debería superar el mes,
@@ -33,48 +57,12 @@ function factorPeriodo(desde: string, hasta: string): number {
   return Math.min(1, dias / 30);
 }
 
-function validarHorasExtra(datos: DatosQA, r: ResolutorReglas): IssueQA[] {
-  const out: IssueQA[] = [];
-  for (const d of datos.excesosHorasExtraDia ?? []) {
-    const max = r.en("max_horas_extra_dia", d.fecha);
-    if (d.horas > max) {
-      out.push(
-        issue(
-          "HORAS_EXTRA_EXCEDIDAS_DIA",
-          "error",
-          `El ${d.fecha} se trabajaron ${d.horas.toFixed(2)} horas extra, sobre el tope legal de ${max} h/día.`,
-          "D.L. 13 de 1967, art. 1",
-          d.horas,
-          max,
-          d.fecha
-        )
-      );
-    }
-  }
-  for (const s of datos.excesosHorasExtraSemana ?? []) {
-    const max = r.en("max_horas_extra_semana", s.semana);
-    if (s.horas > max) {
-      out.push(
-        issue(
-          "HORAS_EXTRA_EXCEDIDAS_SEMANA",
-          "error",
-          `En la semana del ${s.semana} se acumularon ${s.horas.toFixed(2)} horas extra, sobre el tope legal de ${max} h/semana.`,
-          "Ley 6 de 1981",
-          s.horas,
-          max,
-          s.semana
-        )
-      );
-    }
-  }
-  return out;
-}
-
+// Regla de sanidad post-cálculo (defensa en profundidad): aunque el motor
+// ya no debería producir esto si `aplicarDeducciones` funcionó, si por dato
+// de entrada raro el total sí supera el 50%, lo reportamos como error.
+// Los issues que el motor mismo emite (recorte del art. 149 como advertencia)
+// llegan por datos.issuesMotor y no se re-detectan aquí.
 function validarTopeDeducciones(datos: DatosQA, r: ResolutorReglas): IssueQA[] {
-  // Si aplicarDeducciones ya recortó, el total post-tope YA cabe en el 50%
-  // — pero informamos que el tope se activó (bandera del llamador). En
-  // liquidaciones directas o de reproceso donde no pase por aplicarDeducciones,
-  // detectamos por comparación explícita.
   const topePct = r.en("limite_deducciones_salario", datos.fecha);
   const topeMonto = redondearPeso(datos.totalDevengado * topePct);
   if (datos.totalDeducciones > topeMonto) {
@@ -83,18 +71,6 @@ function validarTopeDeducciones(datos: DatosQA, r: ResolutorReglas): IssueQA[] {
         "TOPE_DEDUCCIONES_SUPERADO",
         "error",
         `Las deducciones ($${datos.totalDeducciones.toLocaleString("es-CO")}) superan el tope del ${redondearPeso(topePct * 100)}% del devengado ($${topeMonto.toLocaleString("es-CO")}).`,
-        "CST art. 149",
-        datos.totalDeducciones,
-        topeMonto
-      ),
-    ];
-  }
-  if (datos.toperoDeduccionesActivado) {
-    return [
-      issue(
-        "TOPE_DEDUCCIONES_SUPERADO",
-        "advertencia",
-        `Las deducciones voluntarias se recortaron para respetar el tope del ${redondearPeso(topePct * 100)}% del devengado — el trabajador se acerca al mínimo vital.`,
         "CST art. 149",
         datos.totalDeducciones,
         topeMonto
@@ -163,7 +139,7 @@ function validarNetoMinimo(datos: DatosQA, r: ResolutorReglas): IssueQA[] {
 export function evaluarQA(datos: DatosQA, reglas: ReglaLegal[] | ResolutorReglas): ResultadoQA {
   const r = comoResolutor(reglas);
   const issues: IssueQA[] = [
-    ...validarHorasExtra(datos, r),
+    ...(datos.issuesMotor ?? []),
     ...validarTopeDeducciones(datos, r),
     ...validarRangoIbc(datos, r),
     ...validarNetoMinimo(datos, r),

@@ -2,6 +2,8 @@ import type { DescuentoJudicial, LineaResultado, ReglaLegal, TipoEmbargo } from 
 import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { TABLA_FONDO_SOLIDARIDAD } from "./constantes.js";
+import { crearIssue, emitirIssue } from "./qa/index.js";
+import type { IssueQA } from "./qa/tipos.js";
 
 // Recorre TABLA_FONDO_SOLIDARIDAD (constantes.ts) de mayor a menor rango y
 // devuelve el porcentaje del primer tramo que aplica. La tabla en sí —
@@ -79,6 +81,8 @@ export interface ResultadoDeducciones {
   lineas: LineaResultado[];
   totalDeducciones: number;
   advertencias: string[];
+  /** Issues tipados equivalentes a las advertencias (SDD §15 pilar 2). */
+  issues: IssueQA[];
 }
 
 // TipoEmbargo/DescuentoJudicial viven en types.ts (los usa también la
@@ -154,6 +158,7 @@ export function aplicarDeducciones(
   const r = comoResolutor(reglas);
   const lineas = deduccionesDeLey(ibc, r, fecha, opciones.alcanceDeduccionesLey);
   const advertencias: string[] = [];
+  const issues: IssueQA[] = [];
 
   const convenio = (opciones.deduccionesConvenio ?? []).filter((c) => c.valorMensual > 0);
   const lineasConvenio = convenio.map((c) => ({
@@ -175,9 +180,14 @@ export function aplicarDeducciones(
     const factorRecorte = convenioDisponible / totalConvenioSolicitado;
     for (const l of lineasConvenio) l.valorCalculado = redondearPeso(l.valorCalculado * factorRecorte);
     totalDeducciones = redondearPeso(totalLey + convenioDisponible);
-    advertencias.push(
-      `Tus deducciones por convenio (AFC, préstamos, ahorro, etc.) se recortaron de $${totalConvenioSolicitado.toLocaleString("es-CO")} a $${convenioDisponible.toLocaleString("es-CO")} porque el total de deducciones no puede superar el ${redondearPeso(topePct * 100)}% del salario devengado (CST art. 149 — mínimo vital).`
-    );
+    emitirIssue(issues, advertencias, crearIssue(
+      "TOPE_DEDUCCIONES_SUPERADO",
+      "advertencia",
+      `Tus deducciones por convenio (AFC, préstamos, ahorro, etc.) se recortaron de $${totalConvenioSolicitado.toLocaleString("es-CO")} a $${convenioDisponible.toLocaleString("es-CO")} porque el total de deducciones no puede superar el ${redondearPeso(topePct * 100)}% del salario devengado (CST art. 149 — mínimo vital).`,
+      "CST art. 149",
+      totalConvenioSolicitado,
+      convenioDisponible
+    ));
   }
 
   const embargo = opciones.descuentoJudicial;
@@ -203,5 +213,5 @@ export function aplicarDeducciones(
     }
   }
 
-  return { lineas, totalDeducciones, advertencias };
+  return { lineas, totalDeducciones, advertencias, issues };
 }

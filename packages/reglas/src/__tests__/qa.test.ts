@@ -28,22 +28,28 @@ describe("evaluarQA", () => {
     expect(r.issues).toEqual([]);
   });
 
-  it("horas extra semanales excedidas → rechazada con código y referencia legal correctos", () => {
-    const r = evaluarQA(
+  it("issues del motor (horas extra) llegan tal cual al ResultadoQA", () => {
+    // Los issues los emite el motor durante el cálculo (SDD §15 pilar 2) y
+    // el QA los pasa por sin re-detectarlos.
+    const issuesMotor = [
       {
-        ...baseLegal(),
-        excesosHorasExtraDia: [{ fecha: "2026-07-06", horas: 3 }],
-        excesosHorasExtraSemana: [{ semana: "2026-07-06", horas: 15 }],
+        codigo: "HORAS_EXTRA_EXCEDIDAS_DIA" as const,
+        severidad: "error" as const,
+        mensaje: "día excedido",
+        referenciaLegal: "D.L. 13 de 1967, art. 1",
+        detalles: { valorCalculado: 3, valorLimite: 2, contexto: "2026-07-06" },
       },
-      REGLAS_JUL_2026
-    );
+      {
+        codigo: "HORAS_EXTRA_EXCEDIDAS_SEMANA" as const,
+        severidad: "error" as const,
+        mensaje: "semana excedida",
+        referenciaLegal: "Ley 6 de 1981",
+        detalles: { valorCalculado: 15, valorLimite: 12, contexto: "2026-07-06" },
+      },
+    ];
+    const r = evaluarQA({ ...baseLegal(), issuesMotor }, REGLAS_JUL_2026);
     expect(r.estado).toBe("rechazada");
-    const semanal = r.issues.find((i) => i.codigo === "HORAS_EXTRA_EXCEDIDAS_SEMANA");
-    expect(semanal?.referenciaLegal).toBe("Ley 6 de 1981");
-    expect(semanal?.detalles.valorLimite).toBe(12);
-    const diario = r.issues.find((i) => i.codigo === "HORAS_EXTRA_EXCEDIDAS_DIA");
-    expect(diario?.referenciaLegal).toBe("D.L. 13 de 1967, art. 1");
-    expect(diario?.detalles.valorLimite).toBe(2);
+    expect(r.issues.filter((i) => i.codigo.startsWith("HORAS_EXTRA")).length).toBe(2);
   });
 
   it("deducciones sobre el 50% y neto bajo el SMLMV → rechazada con ambos issues", () => {
@@ -72,14 +78,19 @@ describe("evaluarQA", () => {
     expect(ibc?.detalles.valorLimite).toBe(SMLMV * 25);
   });
 
-  it("tope de deducciones activado sin superarlo → advertencia (no error), score 95", () => {
-    const r = evaluarQA(
-      { ...baseLegal(), toperoDeduccionesActivado: true },
-      REGLAS_JUL_2026
-    );
+  it("issue de advertencia (tope 149 activado por el motor) → con_advertencias, score 95", () => {
+    const issuesMotor = [
+      {
+        codigo: "TOPE_DEDUCCIONES_SUPERADO" as const,
+        severidad: "advertencia" as const,
+        mensaje: "recortado",
+        referenciaLegal: "CST art. 149",
+        detalles: { valorCalculado: 100, valorLimite: 50 },
+      },
+    ];
+    const r = evaluarQA({ ...baseLegal(), issuesMotor }, REGLAS_JUL_2026);
     expect(r.estado).toBe("con_advertencias");
     expect(r.score).toBe(95);
-    expect(r.issues[0].severidad).toBe("advertencia");
     expect(r.issues[0].codigo).toBe("TOPE_DEDUCCIONES_SUPERADO");
   });
 

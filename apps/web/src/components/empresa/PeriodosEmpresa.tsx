@@ -72,6 +72,7 @@ function comoResultadoNomina(r: Recibo): ResultadoNomina {
     totalDeducciones: r.totalDeducido,
     netoEsperado: r.neto,
     advertencias: r.advertencias,
+    issues: [],
   };
 }
 
