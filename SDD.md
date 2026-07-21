@@ -748,3 +748,42 @@ Usar la versión gratuita (B2C) para adquirir clientes de pago (B2B):
 - **Exportes contables**: integración o archivo plano hacia Siigo/Alegra/World Office.
 - **API pública del motor de reglas** legales colombianas (el activo más defendible del proyecto).
 - **Nómina electrónica DIAN** cuando el producto madure hacia empleadores formales medianos.
+
+---
+
+## 15 — Próximo bloque: B2B enterprise (roles granulares, auditoría inmutable, QA de nómina)
+
+Diseño aprobado para la siguiente ronda de implementación — dos pilares para el nivel empresarial, **adaptados al stack real del monorepo** (el brief original proponía Ruby/RSpec y nombres en inglés como `company_members`/`payroll_settlements`/`PayrollQAService`; aquí todo es TypeScript/Vitest con el naming en español del resto del código, y varias piezas pedidas YA existen — este mapeo evita reconstruirlas).
+
+### Pilar 1 — Roles granulares por empresa + auditoría inmutable (Supabase/Postgres)
+
+**Qué ya existe (no reconstruir):**
+- Roles de plataforma en `Usuario.rol` (`admin_plataforma` | `admin_empresa` | `colaborador` | `individual`), validados en `middleware/auth.ts` (`requiereAuth`/`requiereRol`) — nunca se confía en el rol declarado por el cliente.
+- Políticas RLS sobre todas las tablas sensibles (migración `20260716214300_rls_policies`) como defensa adicional al scoping en código (doble capa, §05/§07). Nota vigente: Prisma conecta como superusuario (BYPASSRLS) — las políticas protegen accesos futuros vía roles `authenticated`/`anon` de Supabase.
+- Rastro de auditoría parcial y disperso: `PeriodoNomina.notaEdicion`/`editadoEn`, `Empleado.invitacionAceptadaEn` — puntual, no sistemático ni inmutable.
+
+**Qué falta (el trabajo real de este pilar):**
+- **Roles granulares dentro de la empresa**: hoy `admin_empresa` es todo-o-nada. Nuevos roles `analista_rrhh` (ver/crear liquidaciones solo de su sucursal/departamento asignado) y `auditor` (solo lectura de todo lo de su empresa). Requiere primero el concepto de **sucursal/departamento** — no existe en el schema (`Empleado` no tiene ese campo): nuevo modelo (p. ej. `Sede`) + FK opcional en `Empleado` + asignación de sedes al `analista_rrhh`. Decisión de diseño pendiente al implementar: extender `Usuario.rol` (consistente con lo actual, una empresa por usuario) vs. tabla puente tipo `MiembroEmpresa` (multi-empresa por usuario — más cerca del brief pero rompe el supuesto "una membresía activa" que ya usa `invitarColaborador`).
+- **Auditoría inmutable por triggers**: nueva tabla `AuditoriaCambio` (`id`, `empresaId`, `usuarioId`, `tabla`, `registroId`, `accion` INSERT/UPDATE/DELETE, `valoresAnteriores` JSONB, `valoresNuevos` JSONB, `creadoEn`) + función/trigger PL/pgSQL que registre automáticamente todo UPDATE/DELETE sobre `ReciboPago` y `PeriodoNomina` (los equivalentes reales de "payroll_settlements"). Inmutabilidad: RLS solo-SELECT para autenticados, sin política de UPDATE/DELETE, y `REVOKE UPDATE, DELETE` al rol de la app. **Restricción clave del stack**: `auth.uid()` es NULL en conexiones de Prisma (superusuario, no hay sesión Supabase) — el `usuarioId` debe llegar por `SET LOCAL app.usuario_actual` en la transacción desde `apps/api` (o registrarse desde el service), no por `auth.uid()` a secas como asume el brief; documentar la opción elegida en la migración.
+- Las políticas RLS nuevas por rol granular (`analista_rrhh` limitado a su sede, `auditor` solo SELECT) sobre `ReciboPago`/`PeriodoNomina`/`Empleado`.
+
+### Pilar 2 — Motor de QA de nómina pre-pago (`packages/reglas/src/qa/`)
+
+Servicio determinista, TS puro sin dependencias (mismo contrato del resto de `@pv/reglas`), que evalúa una pre-liquidación ANTES de ejecutar pagos y devuelve un veredicto tipado.
+
+**Qué ya existe (el QA lo reusa, no lo duplica — mismo criterio que el semáforo §13):**
+- Horas extra sobre tope diario/semanal: detección en `calculadoraTurnos.ts` (claves `max_horas_extra_dia`/`max_horas_extra_semana`, D.L. 13 de 1967 / Ley 6 de 1981) — hoy emite advertencia string.
+- Tope del 50% de deducciones (CST art. 149): `aplicarDeducciones()` en `deducciones.ts` ya recorta y advierte.
+- Topes de embargo por régimen (CST art. 154-156): `limiteEmbargo()` ya implementado, incluida la inembargabilidad de 1 SMLMV en embargos ordinarios.
+- Salario bajo el mínimo en tiempo completo: `advertenciaSalarioBajoMinimo()` (CST art. 145).
+- Semáforo de cumplimiento agregado por empresa (`cumplimientoService.ts`).
+
+**Qué falta (el trabajo real de este pilar):**
+- **Advertencias tipadas en vez de strings**: hoy todo es `advertencias: string[]` (el semáforo tuvo que matchear substrings). Nuevo tipo `IssueQA { codigo, severidad: "error" | "advertencia", mensaje, referenciaLegal, detalles: { valorCalculado, valorLimite } }` con códigos estables (`HORAS_EXTRA_EXCEDIDAS`, `TOPE_DEDUCCIONES_SUPERADO`, `NETO_BAJO_MINIMO`, `IBC_FUERA_DE_RANGO`, …). Estrategia de migración: el QA produce los tipados; las calculadoras existentes pueden migrar gradualmente (el string se deriva del tipado, no al revés) sin romper `ReciboPago.advertencias`.
+- **`ResultadoQA`**: `estado: "aprobada" | "rechazada" | "con_advertencias"` + `score` 0-100 (fórmula simple y determinista, p. ej. 100 − penalización fija por error y menor por advertencia, documentada en el código) + `issues: IssueQA[]`.
+- **Validación nueva — rango del IBC** (no existe en ninguna parte del motor): piso 1 SMLMV y **techo 25 SMLMV** (Ley 100 de 1993, art. 18 mod. Ley 797 de 2003, art. 5) — sembrar clave `ibc_tope_smlmv = 25` en `ReglaLegal` (+ catálogo + fixtures), y validar que el IBC de cada recibo esté en `[1 SMLMV prorrateado, 25 SMLMV prorrateado]` por periodo.
+- **Validación nueva — neto no puede quedar bajo el SMLMV** tras deducciones/embargos ordinarios (complementa el recorte del art. 149 con un chequeo explícito post-cálculo, alineado con la inembargabilidad del art. 154 ya modelada en `limiteEmbargo`).
+- **Gate de pre-liquidación**: `liquidacionService.liquidarPeriodo()` corre el QA sobre cada recibo antes de persistir — `rechazada` bloquea la liquidación del periodo (422 con los issues), `con_advertencias` liquida pero persiste los issues. UI: resultado del QA visible en el panel de periodos antes de confirmar.
+- **Suite Vitest** (`packages/reglas/src/__tests__/qa.test.ts`, mismo directorio que el resto — no `packages/reglas/tests/`): mínimo los 4 casos del brief — liquidación legal estándar `aprobada`; horas extra semanales excedidas `rechazada` con `referenciaLegal` correcta; deducciones sobre el 50%/neto bajo SMLMV `rechazada`; score correcto con solo advertencias. Valores golden calculados a mano, como en `liquidacionPila.test.ts`.
+
+**Fuera de alcance de este bloque** (decidido al documentar): generación del script SQL con nombres del brief (`company_members`, etc.) — el schema sigue siendo Prisma en español; integración del QA con IA — el QA es determinista puro, la IA (Fase 3/4) queda como capa de explicación encima, nunca de decisión.
