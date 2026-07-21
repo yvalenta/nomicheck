@@ -712,13 +712,39 @@ Cada fase entrega algo usable de punta a punta.
 
 Ideas del "proyecto grande" para no perderlas — ninguna entra al MVP:
 
-- **SaaS multi-empresa con pricing**: plan gratuito (verificador) como embudo hacia planes de pago por empleados activos.
-- **Exporte CSV de nómina**: descarga plana de recibos/periodo compatible con contabilidad — primer paso hacia la integración Siigo/Alegra.
-- **Provisiones mensuales avanzadas**: panel de acumulado de provisiones por empleado a lo largo del año (cesantías provisión corriente vs. lo consignado al fondo, intereses acumulados, vacaciones acumuladas — más allá de las líneas en el recibo ya en scope desde v2.3).
-- **Exportes contables**: integración o archivo plano hacia Siigo/Alegra/World Office.
+### Producto — portal del colaborador (UX y retención)
+
+El portal ya permite ver recibos, verificar el pago y reportar discrepancias. Para hacerlo indispensable:
+
+- **Accesibilidad vía WhatsApp (automatización)**: a los colaboradores operativos (restaurantes, fábricas) a veces les cuesta usar portales web. Un bot (n8n u orquestador similar) conectado al motor: el trabajador envía la foto/PDF de su comprobante por WhatsApp, la API extrae los datos con la capa de IA multi-proveedor ya existente (`POST /api/comprobantes/extraer`, Fase 3) y le devuelve el análisis semaforizado directo en el chat. El motor ya está construido — el trabajo nuevo es el canal.
+- **Simulador de próximo pago**: "si hago 5 horas extra nocturnas esta semana, ¿cuánto me llega en la quincena?" — reusa las calculadoras/motor existentes (`/recargos/calcular`, `CalculadoraPorTurnos`) sobre el salario base del colaborador logueado y devuelve el neto esperado. Genera uso recurrente antes del día de pago.
+- **Certificados laborales 1-click**: botón en el portal del colaborador que genera un PDF de certificado laboral al instante — los datos ya están en la DB (empresa, contrato, salario base, fecha de ingreso en `Empleado`). Un dolor de cabeza menos para RR.HH. y un servicio de alto valor para el empleado.
 - **Notificaciones**: email al colaborador cuando hay recibo nuevo o respuesta a su reporte.
 - **Firma/acuse del recibo** por el colaborador (valor probatorio).
 - **Histórico del colaborador entre empleos**: su hoja de vida salarial le pertenece a él, no a la empresa.
 - **Comparador de ofertas**: "¿me conviene este turno/salario?" usando el mismo motor.
+
+### Negocio — cross-selling sobre los datos existentes
+
+NomiCheck ya maneja datos muy ricos sobre la realidad financiera del usuario — expansión sin desviarse del core legal colombiano:
+
+- **SaaS multi-empresa con pricing**: plan gratuito (verificador) como embudo hacia planes de pago por empleados activos.
+- **Optimización tributaria como servicio**: sobre la calculadora de retención en la fuente (Fase 2, ya implementada con AFC/pensión voluntaria/dependientes/medicina prepagada) — sugerencia proactiva "estás pagando $X de retención; si aportas $Y a un AFC podrías ahorrarte $Z". Premium, o generación de leads para firmas contables aliadas.
+- **Directorio de contadores aliados**: el chat contador (Fase 4) explica bien fórmulas y leyes, pero si la discrepancia es grave y se necesita representación o una reliquidación oficial, un botón "Contactar a un contador experto" — comisión por lead a contadores en Medellín y el resto de Colombia.
+- **Adelantos de nómina / préstamos**: el sistema ya soporta deducciones por convenio generalizadas con el tope del 50% del salario (CST art. 149, `aplicarDeducciones()`) — alianza con fintechs para ofrecer adelantos de nómina descontados automáticamente en el siguiente periodo.
+
+### Marketing — el embudo NomiCheck (B2C gratuito → B2B de pago)
+
+Usar la versión gratuita (B2C) para adquirir clientes de pago (B2B):
+
+- **Contenidos TikTok/Reels**: videos cortos con casos reales de errores de nómina ("¿trabajaste un domingo hasta las 10 PM y te pagaron esto? Te están robando $X") mostrando el flujo real: subir la foto a NomiCheck → la IA detecta el error → cálculo correcto con la ley citada. CTA: "verifica tu nómina gratis en el link de la bio".
+- **SEO programático con las calculadoras**: landing pages específicas por calculadora ("Calculadora de indemnización por despido Colombia 2026", prima, cesantías, recargos, retención en la fuente) apuntando a los endpoints ya existentes (`/indemnizacion/calcular`, `/prima/calcular`, …) — búsquedas de altísima intención que traen tráfico orgánico.
+- **PDF "caballo de Troya" hacia empresas**: cuando el verificador anónimo detecta una discrepancia, ofrecer generar un PDF amable y profesional ("NomiCheck detectó esta diferencia basada en la Ley 2466 de 2025") que el empleado puede presentar — y en ese mismo PDF, publicidad para el empleador: "evita estos errores legales y automatiza tu nómina, prueba NomiCheck Empresas gratis". El propio empleado le presenta el software al dueño del negocio.
+
+### Plataforma — técnico
+
+- **Exporte CSV de nómina**: descarga plana de recibos/periodo compatible con contabilidad — primer paso hacia la integración Siigo/Alegra.
+- **Provisiones mensuales avanzadas**: panel de acumulado de provisiones por empleado a lo largo del año (cesantías provisión corriente vs. lo consignado al fondo, intereses acumulados, vacaciones acumuladas — más allá de las líneas en el recibo ya en scope desde v2.3).
+- **Exportes contables**: integración o archivo plano hacia Siigo/Alegra/World Office.
 - **API pública del motor de reglas** legales colombianas (el activo más defendible del proyecto).
 - **Nómina electrónica DIAN** cuando el producto madure hacia empleadores formales medianos.
