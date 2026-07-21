@@ -68,6 +68,7 @@ import {
   listarStaffCtrl,
   quitarStaffCtrl,
 } from "../controllers/sedesController.js";
+import { listar as listarAuditoriaCtrl } from "../controllers/auditoriaController.js";
 import { requiereAuth, requiereEmpresaEdicion, requiereEmpresaLectura, requiereRol } from "../middleware/auth.js";
 
 const router = Router();
@@ -202,6 +203,10 @@ router.delete("/empresa/sedes/:id", ...soloAdminEmpresa, eliminarSedeCtrl);
 router.get("/empresa/staff", ...empresaLectura, listarStaffCtrl);
 router.post("/empresa/staff", ...soloAdminEmpresa, asignarStaffCtrl);
 router.delete("/empresa/staff/:id", ...soloAdminEmpresa, quitarStaffCtrl);
+
+// Bitácora de cambios (SDD §15, pilar 1B) — solo lectura para todos los
+// roles de empresa. El auditor la usa para verificar quién tocó qué.
+router.get("/empresa/auditoria", ...empresaLectura, listarAuditoriaCtrl);
 
 // Portal colaborador (Fase 7): un colaborador solo ve/reporta sobre SUS
 // propios recibos — requiereAuth ya adjunta empleadoId, el controller

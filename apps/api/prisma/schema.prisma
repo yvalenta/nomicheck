@@ -280,6 +280,30 @@ model ReciboPago {
   @@unique([contratistaId, periodoId])
 }
 
+// Bitácora inmutable de cambios sensibles (SDD §15, pilar 1). Poblada por
+// trigger PL/pgSQL sobre ReciboPago/PeriodoNomina/Empleado (INSERT/UPDATE/
+// DELETE). El usuarioId viene del setting de sesión `app.usuario_actual`
+// que setea `conAuditoria()` en la transacción del service — auth.uid() es
+// NULL con la conexión superusuaria de Prisma (documentado en la migración).
+// La "inmutabilidad" se refuerza vía RLS/GRANT en la migración; en el
+// entorno actual la app conecta como superusuario y sí puede escribir —
+// esa doble capa protege futuros clientes vía roles authenticated de
+// Supabase (mismo criterio que el resto de RLS del proyecto).
+model AuditoriaCambio {
+  id                  BigInt   @id @default(autoincrement())
+  empresaId           Int?
+  usuarioId           String?  @db.Uuid
+  tabla               String
+  registroId          String
+  accion              String   // INSERT | UPDATE | DELETE
+  valoresAnteriores   Json?
+  valoresNuevos       Json?
+  creadoEn            DateTime @default(now())
+
+  @@index([empresaId, creadoEn])
+  @@index([tabla, registroId])
+}
+
 model ReporteDiscrepancia {
   id               Int        @id @default(autoincrement())
   reciboId         Int

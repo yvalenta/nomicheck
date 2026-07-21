@@ -78,7 +78,7 @@ export async function guardarTurnos(req: Request, res: Response) {
 
 export async function liquidar(req: Request, res: Response) {
   try {
-    const recibos = await liquidarPeriodo(req.usuario!.empresaId!, Number(req.params.id));
+    const recibos = await liquidarPeriodo(req.usuario!.empresaId!, Number(req.params.id), req.usuario!.id);
     res.json(recibos);
   } catch (err) {
     if (err instanceof QaRechazadaError) {
@@ -91,7 +91,7 @@ export async function liquidar(req: Request, res: Response) {
 
 export async function revertir(req: Request, res: Response) {
   try {
-    await revertirABorrador(req.usuario!.empresaId!, Number(req.params.id));
+    await revertirABorrador(req.usuario!.empresaId!, Number(req.params.id), req.usuario!.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo revertir el periodo" });

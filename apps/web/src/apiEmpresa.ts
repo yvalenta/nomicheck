@@ -398,3 +398,20 @@ export function asignarStaff(datos: {
 export function quitarStaff(id: string): Promise<{ ok: true }> {
   return autenticado(`/empresa/staff/${id}`, { method: "DELETE" });
 }
+
+// --- Auditoría (SDD §15, pilar 1B) ---
+
+export interface EntradaAuditoria {
+  id: string;
+  creadoEn: string;
+  tabla: string;
+  registroId: string;
+  accion: "INSERT" | "UPDATE" | "DELETE";
+  usuario: { id: string; nombre: string; email: string | null } | null;
+  valoresAnteriores: Record<string, unknown> | null;
+  valoresNuevos: Record<string, unknown> | null;
+}
+
+export function listarAuditoria(limit = 100): Promise<EntradaAuditoria[]> {
+  return autenticado(`/empresa/auditoria?limit=${limit}`);
+}

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { conAuditoria } from "../lib/auditoria.js";
 import type { empleadoSchema, empleadoUpdateSchema, retiroSchema } from "../validation/empresa.js";
 import type { z } from "zod";
 
@@ -27,9 +28,13 @@ async function empleadoAccesible(empresaId: number, empleadoId: number, sedes: n
   return empleado;
 }
 
-export async function crearEmpleado(empresaId: number, datos: z.infer<typeof empleadoSchema>) {
+export async function crearEmpleado(
+  empresaId: number,
+  datos: z.infer<typeof empleadoSchema>,
+  usuarioId: string | null = null
+) {
   try {
-    return await prisma.empleado.create({ data: { ...datos, empresaId } });
+    return await conAuditoria(usuarioId, (tx) => tx.empleado.create({ data: { ...datos, empresaId } }));
   } catch (err) {
     // @@unique([empresaId, documento]) — incluye retirados: el documento de
     // un empleado retirado sigue reservado (su historial de nómina sigue
@@ -46,10 +51,11 @@ export async function actualizarEmpleado(
   empresaId: number,
   empleadoId: number,
   datos: z.infer<typeof empleadoUpdateSchema>,
-  sedes: number[] | null = null
+  sedes: number[] | null = null,
+  usuarioId: string | null = null
 ) {
   await empleadoAccesible(empresaId, empleadoId, sedes);
-  return prisma.empleado.update({ where: { id: empleadoId }, data: datos });
+  return conAuditoria(usuarioId, (tx) => tx.empleado.update({ where: { id: empleadoId }, data: datos }));
 }
 
 // El borrado físico solo procede si el empleado no tiene NINGÚN historial
@@ -58,7 +64,12 @@ export async function actualizarEmpleado(
 // (soft-retire). Los FK Restrict del schema son la red de seguridad final.
 export class ErrorConflicto extends Error {}
 
-export async function eliminarEmpleado(empresaId: number, empleadoId: number, sedes: number[] | null = null) {
+export async function eliminarEmpleado(
+  empresaId: number,
+  empleadoId: number,
+  sedes: number[] | null = null,
+  usuarioId: string | null = null
+) {
   await empleadoAccesible(empresaId, empleadoId, sedes);
 
   const [recibos, turnos] = await Promise.all([
@@ -70,7 +81,7 @@ export async function eliminarEmpleado(empresaId: number, empleadoId: number, se
       "El empleado tiene historial de nómina (recibos o turnos registrados) y no puede eliminarse: los registros de nómina deben conservarse. Usa 'Retirar' para desactivarlo conservando el historial."
     );
   }
-  return prisma.empleado.delete({ where: { id: empleadoId } });
+  return conAuditoria(usuarioId, (tx) => tx.empleado.delete({ where: { id: empleadoId } }));
 }
 
 // Marca el retiro: el empleado deja de aparecer en periodos futuros
@@ -80,13 +91,14 @@ export async function retirarEmpleado(
   empresaId: number,
   empleadoId: number,
   datos: z.infer<typeof retiroSchema>,
-  sedes: number[] | null = null
+  sedes: number[] | null = null,
+  usuarioId: string | null = null
 ) {
   const empleado = await empleadoAccesible(empresaId, empleadoId, sedes);
   if (datos.fechaRetiro < empleado.fechaIngreso) {
     throw new Error("La fecha de retiro no puede ser anterior a la fecha de ingreso");
   }
-  return prisma.$transaction(async (tx) => {
+  return conAuditoria(usuarioId, async (tx) => {
     const actualizado = await tx.empleado.update({
       where: { id: empleadoId },
       data: { fechaRetiro: datos.fechaRetiro, activo: false },

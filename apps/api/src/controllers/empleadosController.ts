@@ -24,7 +24,7 @@ export async function crear(req: Request, res: Response) {
     return;
   }
   try {
-    const empleado = await crearEmpleado(req.usuario!.empresaId!, parseo.data);
+    const empleado = await crearEmpleado(req.usuario!.empresaId!, parseo.data, req.usuario!.id);
     res.status(201).json(empleado);
   } catch (err) {
     if (err instanceof ErrorConflicto) {
@@ -43,7 +43,7 @@ export async function actualizar(req: Request, res: Response) {
   }
   try {
     const sedes = await sedesDelUsuario(req.usuario!);
-    const empleado = await actualizarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data, sedes);
+    const empleado = await actualizarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data, sedes, req.usuario!.id);
     res.json(empleado);
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });
@@ -53,7 +53,7 @@ export async function actualizar(req: Request, res: Response) {
 export async function eliminar(req: Request, res: Response) {
   try {
     const sedes = await sedesDelUsuario(req.usuario!);
-    await eliminarEmpleado(req.usuario!.empresaId!, Number(req.params.id), sedes);
+    await eliminarEmpleado(req.usuario!.empresaId!, Number(req.params.id), sedes, req.usuario!.id);
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof ErrorConflicto) {
@@ -72,7 +72,7 @@ export async function retirar(req: Request, res: Response) {
   }
   try {
     const sedes = await sedesDelUsuario(req.usuario!);
-    const empleado = await retirarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data, sedes);
+    const empleado = await retirarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data, sedes, req.usuario!.id);
     res.json(empleado);
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo retirar" });

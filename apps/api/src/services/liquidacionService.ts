@@ -14,6 +14,7 @@ import {
 } from "@pv/reglas";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { conAuditoria } from "../lib/auditoria.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
 import { obtenerPeriodo } from "./periodosService.js";
 
@@ -65,7 +66,7 @@ const SIN_HORARIO_BASE: DatosNominaTurnos["horarioBase"] = [null, null, null, nu
 // extralegales llegan por extracción, no por captura manual de empresa) y
 // genera su ReciboPago — snapshot, no se recalcula si cambian las reglas
 // después (SDD.md §07 ReciboPago).
-export async function liquidarPeriodo(empresaId: number, periodoId: number) {
+export async function liquidarPeriodo(empresaId: number, periodoId: number, usuarioId: string | null = null) {
   const periodo = await obtenerPeriodo(empresaId, periodoId);
   if (periodo.estado !== "borrador") {
     throw new Error(`El periodo ya está en estado "${periodo.estado}"`);
@@ -224,10 +225,10 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
     };
   });
 
-  await prisma.$transaction([
-    prisma.reciboPago.createMany({ data: [...recibos, ...recibosContratistas] }),
-    prisma.periodoNomina.update({ where: { id: periodoId }, data: { estado: "liquidado" } }),
-  ]);
+  await conAuditoria(usuarioId, async (tx) => {
+    await tx.reciboPago.createMany({ data: [...recibos, ...recibosContratistas] });
+    await tx.periodoNomina.update({ where: { id: periodoId }, data: { estado: "liquidado" } });
+  });
 
   return prisma.reciboPago.findMany({ where: { periodoId }, include: { empleado: true, contratista: true } });
 }
@@ -240,7 +241,7 @@ export function listarRecibos(empresaId: number, periodoId?: number) {
   });
 }
 
-export async function revertirABorrador(empresaId: number, periodoId: number) {
+export async function revertirABorrador(empresaId: number, periodoId: number, usuarioId: string | null = null) {
   const periodo = await obtenerPeriodo(empresaId, periodoId);
   if (periodo.estado !== "liquidado") {
     throw new Error(`El periodo está en estado "${periodo.estado}" y no puede revertirse a borrador`);
@@ -249,8 +250,8 @@ export async function revertirABorrador(empresaId: number, periodoId: number) {
   // Esto fallará automáticamente por restricción de llave foránea de Prisma
   // si existen ReporteDiscrepancia apuntando a los ReciboPago de este periodo,
   // lo cual es correcto: no se debe borrar si el empleado ya reportó un problema.
-  await prisma.$transaction([
-    prisma.reciboPago.deleteMany({ where: { periodoId } }),
-    prisma.periodoNomina.update({ where: { id: periodoId }, data: { estado: "borrador" } }),
-  ]);
+  await conAuditoria(usuarioId, async (tx) => {
+    await tx.reciboPago.deleteMany({ where: { periodoId } });
+    await tx.periodoNomina.update({ where: { id: periodoId }, data: { estado: "borrador" } });
+  });
 }
