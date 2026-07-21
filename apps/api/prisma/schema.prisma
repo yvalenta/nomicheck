@@ -216,6 +216,10 @@ model ReciboPago {
   totalDevengado  Float
   totalDeducido   Float
   neto            Float
+  // IssueQA[] del motor de QA (SDD §15). Solo se pobla si el recibo se
+  // liquidó "con_advertencias" (rechazada bloquea la liquidación antes de
+  // persistir). null = QA aprobada / recibo pre-QA.
+  qaIssues        Json?
   liquidadoEn     DateTime      @default(now())
 
   reportes ReporteDiscrepancia[]

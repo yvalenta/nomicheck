@@ -41,8 +41,34 @@ async function autenticado(path: string, init: RequestInit = {}) {
     },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? "Error de red");
+  if (!res.ok) {
+    const err = new Error(body.error ?? "Error de red") as Error & { body?: unknown };
+    err.body = body;
+    throw err;
+  }
   return body;
+}
+
+// Motor de QA (SDD §15, pilar 2) — el backend rechaza la liquidación cuando
+// algún recibo tiene issues de severidad "error"; el frontend usa este tipo
+// para mostrarlos con código+ley (más útil que un mensaje suelto).
+export interface IssueQA {
+  codigo:
+    | "HORAS_EXTRA_EXCEDIDAS_DIA"
+    | "HORAS_EXTRA_EXCEDIDAS_SEMANA"
+    | "TOPE_DEDUCCIONES_SUPERADO"
+    | "NETO_BAJO_MINIMO"
+    | "IBC_FUERA_DE_RANGO";
+  severidad: "error" | "advertencia";
+  mensaje: string;
+  referenciaLegal: string;
+  detalles: { valorCalculado: number; valorLimite: number; contexto?: string };
+}
+
+export interface RechazoQA {
+  empleadoId: number;
+  nombre: string;
+  issues: IssueQA[];
 }
 
 export interface DatosRegistro {
@@ -250,6 +276,9 @@ export interface Recibo {
   totalDevengado: number;
   totalDeducido: number;
   neto: number;
+  /** Issues del motor de QA (SDD §15). null = QA aprobada. Solo tipo "advertencia"
+   * puede llegar aquí — los "error" bloquean la liquidación antes de persistir. */
+  qaIssues: IssueQA[] | null;
 }
 
 export function listarPeriodos(): Promise<Periodo[]> {

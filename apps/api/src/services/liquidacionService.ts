@@ -4,14 +4,55 @@ import {
   CalculadoraSalarioFijo,
   CalculadoraServicios,
   crearResolutorReglas,
+  evaluarQA,
   type DatosNominaTurnos,
+  type IssueQA,
   type LineaResultado,
+  type ResultadoNomina,
+  type ResultadoQA,
   type TipoContrato,
 } from "@pv/reglas";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
 import { obtenerPeriodo } from "./periodosService.js";
+
+/** Error especializado: la respuesta HTTP no es solo un mensaje — expone al
+ * frontend la lista tipada de issues para poder mostrarlos con código+ley. */
+export class QaRechazadaError extends Error {
+  constructor(public readonly rechazos: { empleadoId: number; nombre: string; issues: IssueQA[] }[]) {
+    super(`La liquidación no pasó las validaciones legales (${rechazos.length} colaborador(es) con errores).`);
+    this.name = "QaRechazadaError";
+  }
+}
+
+// Extractores de señales a partir de las advertencias string del motor.
+// Estrategia deliberada de este bloque: el QA es tipado, pero las
+// calculadoras aún emiten strings — parseamos aquí en el borde de
+// integración (no en el QA puro) usando el formato estable de
+// calculadoraTurnos.ts / deducciones.ts. Cuando las calculadoras migren a
+// IssueQA nativo, esta capa desaparece sin cambiar el QA.
+const RE_HE_DIA = /^El (\d{4}-\d{2}-\d{2}) trabajaste ([\d.]+) horas extra/;
+const RE_HE_SEMANA = /^En la semana del (\d{4}-\d{2}-\d{2}) acumulaste ([\d.]+) horas extra/;
+const MARCA_TOPE_DEDUCCIONES = "CST art. 149 — mínimo vital";
+
+function ibcDeLineas(lineas: LineaResultado[]): number {
+  return lineas.find((l) => l.concepto === "Salud (aporte empleado)")?.base ?? 0;
+}
+
+function senalesQA(resultado: ResultadoNomina) {
+  const dia: { fecha: string; horas: number }[] = [];
+  const semana: { semana: string; horas: number }[] = [];
+  let toperoActivado = false;
+  for (const a of resultado.advertencias) {
+    const md = a.match(RE_HE_DIA);
+    if (md) dia.push({ fecha: md[1], horas: parseFloat(md[2]) });
+    const ms = a.match(RE_HE_SEMANA);
+    if (ms) semana.push({ semana: ms[1], horas: parseFloat(ms[2]) });
+    if (a.includes(MARCA_TOPE_DEDUCCIONES)) toperoActivado = true;
+  }
+  return { dia, semana, toperoActivado };
+}
 
 // Horario base "todo descanso": cada Turno capturado ya trae sus propias
 // horaInicio/horaFin explícitas (SDD.md §07 Turno) — no hay horario
@@ -44,6 +85,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
 
   const resolutor = crearResolutorReglas(reglas);
 
+  const resumenPorEmpleado: { empleadoId: number; nombre: string; resultado: ResultadoNomina }[] = [];
   const recibos = empleados.map((empleado) => {
     const tipoContrato = empleado.tipoContrato as TipoContrato;
     const resultado =
@@ -104,6 +146,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
           ];
         })();
 
+    resumenPorEmpleado.push({ empleadoId: empleado.id, nombre: empleado.nombre, resultado });
     return {
       empleadoId: empleado.id,
       periodoId,
@@ -117,6 +160,44 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number) {
       neto: resultado.netoEsperado,
     };
   });
+
+  // Gate de QA pre-pago (SDD §15, pilar 2). Determinista y sincrónico: si
+  // algún recibo cae en `rechazada`, aborta ANTES de persistir con la lista
+  // de issues por empleado. Los `con_advertencias` liquidan pero quedan con
+  // sus issues persistidos en ReciboPago.qaIssues para auditoría.
+  const veredictos: ResultadoQA[] = resumenPorEmpleado.map(({ resultado }) => {
+    const senales = senalesQA(resultado);
+    return evaluarQA(
+      {
+        fecha: periodo.fechaFin,
+        periodoDesde: periodo.fechaInicio,
+        periodoHasta: periodo.fechaFin,
+        totalDevengado: resultado.totalDevengos,
+        totalDeducciones: resultado.totalDeducciones,
+        netoPagado: resultado.netoEsperado,
+        ibcPeriodo: ibcDeLineas(resultado.lineas),
+        toperoDeduccionesActivado: senales.toperoActivado,
+        excesosHorasExtraDia: senales.dia,
+        excesosHorasExtraSemana: senales.semana,
+      },
+      resolutor
+    );
+  });
+
+  const rechazos = resumenPorEmpleado
+    .map((e, i) => ({ empleadoId: e.empleadoId, nombre: e.nombre, veredicto: veredictos[i] }))
+    .filter((x) => x.veredicto.estado === "rechazada")
+    .map((x) => ({ empleadoId: x.empleadoId, nombre: x.nombre, issues: x.veredicto.issues }));
+
+  if (rechazos.length > 0) throw new QaRechazadaError(rechazos);
+
+  for (let i = 0; i < recibos.length; i++) {
+    const v = veredictos[i];
+    if (v.issues.length > 0) {
+      (recibos[i] as unknown as { qaIssues: Prisma.InputJsonValue }).qaIssues =
+        v.issues as unknown as Prisma.InputJsonValue;
+    }
+  }
 
   // Contratistas de servicios: NO son Empleado (SDD §07) — sin turnos, sin
   // provisión de prestaciones, sin deducciones retenidas (CalculadoraServicios

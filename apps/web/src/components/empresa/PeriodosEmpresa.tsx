@@ -30,8 +30,10 @@ import {
   obtenerTurnos,
   revertirPeriodo,
   type Empleado,
+  type IssueQA,
   type Periodo,
   type Recibo,
+  type RechazoQA,
   type Turno,
 } from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
@@ -292,6 +294,7 @@ function DetallePeriodo({
   const [recibos, setRecibos] = useState<Recibo[]>([]);
   const [festivos, setFestivos] = useState<Festivo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [rechazosQA, setRechazosQA] = useState<RechazoQA[] | null>(null);
   const [exito, setExito] = useState<string | null>(null);
   const [liquidando, setLiquidando] = useState(false);
   const [revertiendo, setRevertiendo] = useState(false);
@@ -475,13 +478,23 @@ function DetallePeriodo({
   async function liquidar() {
     setLiquidando(true);
     setError(null);
+    setRechazosQA(null);
     try {
       await guardarTurnos(periodo.id, turnos);
       const nuevos = await liquidarPeriodo(periodo.id);
       setRecibos(nuevos);
       onCambio({ ...periodo, estado: "liquidado" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo liquidar el periodo");
+      // El motor de QA (SDD §15) devuelve 422 con { error, rechazos: [{empleadoId, nombre, issues}] }
+      // cuando alguna validación legal falla — mostrar el detalle es mucho más útil
+      // que un mensaje suelto: el usuario sabe qué colaborador y qué ley se infringió.
+      const body = (e as { body?: { rechazos?: RechazoQA[] } })?.body;
+      if (body?.rechazos && body.rechazos.length > 0) {
+        setRechazosQA(body.rechazos);
+        setError(e instanceof Error ? e.message : null);
+      } else {
+        setError(e instanceof Error ? e.message : "No se pudo liquidar el periodo");
+      }
     } finally {
       setLiquidando(false);
     }
@@ -547,6 +560,7 @@ function DetallePeriodo({
       </div>
 
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
+      {rechazosQA && <PanelRechazosQA rechazos={rechazosQA} />}
       {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
 
       {editandoFechas && (
@@ -743,6 +757,20 @@ function DetallePeriodo({
                     ))}
                   </div>
                 )}
+                {r.qaIssues && r.qaIssues.length > 0 && (
+                  <div className="mx-3 mb-3 flex flex-col gap-2">
+                    {r.qaIssues.map((i, idx) => (
+                      <div key={idx} className="rounded-xl p-3 bg-amber-50 text-amber-800 flex items-start gap-2 text-xs">
+                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium">QA · {i.codigo}</p>
+                          <p>{i.mensaje}</p>
+                          <p className="opacity-70 mt-0.5">{i.referenciaLegal}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </PaycheckCard>
 
               {comprobanteAbierto === r.id && (
@@ -756,6 +784,34 @@ function DetallePeriodo({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Rechazos del motor de QA (SDD §15): agrupados por colaborador con el detalle
+// de cada infracción — código estable, mensaje y ley citada. Bloquea la
+// liquidación; el usuario debe corregir turnos/salario y volver a intentar.
+function PanelRechazosQA({ rechazos }: { rechazos: RechazoQA[] }) {
+  return (
+    <div className="rounded-2xl border border-red-100 bg-red-50 p-3 flex flex-col gap-2">
+      <p className="text-sm font-bold text-coral flex items-center gap-2">
+        <AlertTriangle size={16} /> La liquidación no pasó las validaciones legales
+      </p>
+      <p className="text-xs text-coral/80">
+        Corrige los siguientes puntos y vuelve a intentar — el sistema no persiste liquidaciones con estos errores.
+      </p>
+      {rechazos.map((r) => (
+        <div key={r.empleadoId} className="rounded-xl bg-white p-3 flex flex-col gap-1.5">
+          <p className="text-sm font-medium text-ink">{r.nombre}</p>
+          {r.issues.map((i: IssueQA, idx: number) => (
+            <div key={idx} className="text-xs text-ink border-l-2 border-coral/40 pl-2">
+              <p className="font-medium">{i.codigo}</p>
+              <p>{i.mensaje}</p>
+              <p className="opacity-70">{i.referenciaLegal}</p>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

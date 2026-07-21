@@ -9,7 +9,7 @@ import {
   listarTurnos,
   reemplazarTurnos,
 } from "../services/periodosService.js";
-import { liquidarPeriodo, listarRecibos, revertirABorrador } from "../services/liquidacionService.js";
+import { liquidarPeriodo, listarRecibos, QaRechazadaError, revertirABorrador } from "../services/liquidacionService.js";
 
 export async function listar(req: Request, res: Response) {
   res.json(await listarPeriodos(req.usuario!.empresaId!));
@@ -81,6 +81,10 @@ export async function liquidar(req: Request, res: Response) {
     const recibos = await liquidarPeriodo(req.usuario!.empresaId!, Number(req.params.id));
     res.json(recibos);
   } catch (err) {
+    if (err instanceof QaRechazadaError) {
+      res.status(422).json({ error: err.message, rechazos: err.rechazos });
+      return;
+    }
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo liquidar" });
   }
 }
