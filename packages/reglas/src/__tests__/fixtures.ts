@@ -30,6 +30,7 @@ export const REGLAS_JUL_2026: ReglaLegal[] = [
   { clave: "limite_renta_exenta_laboral_uvt_mes", valor: 790, vigenteDesde: "2007-01-01", fuente: "E.T. art. 206, num. 10" },
   { clave: "limite_deduccion_dependientes_uvt_mes", valor: 32, vigenteDesde: "2016-01-01", fuente: "E.T. art. 387, par. 2" },
   { clave: "limite_deduccion_salud_uvt_mes", valor: 16, vigenteDesde: "2016-01-01", fuente: "E.T. art. 387, par. 1" },
+  { clave: "ibc_tope_smlmv", valor: 25, vigenteDesde: "2003-01-29", fuente: "Ley 100 de 1993, art. 18 mod. Ley 797 de 2003, art. 5" },
 ];
 
 export const FESTIVOS_2026: Festivo[] = [

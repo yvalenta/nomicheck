@@ -15,3 +15,4 @@ export * from "./recargos.js";
 export * from "./costoEmpleador.js";
 export * from "./retencionFuente.js";
 export * from "./advertenciasContrato.js";
+export * from "./qa/index.js";
