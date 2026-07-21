@@ -54,6 +54,10 @@ export const empleadoSchema = z.object({
   // Clase de riesgo laboral ARL (I a V, Decreto 1772 de 1994) — default 1
   // (riesgo mínimo). Usada en costos/PILA.
   claseRiesgoArl: z.number().int().min(1).max(5).default(1),
+  // Sede/sucursal opcional (SDD §15, pilar 1). El backend NO valida que la
+  // sedeId pertenezca a la empresa aquí — la FK del schema es la barrera
+  // definitiva; empleadosService rechaza con 422 si Postgres devuelve FK.
+  sedeId: z.number().int().positive().nullable().optional(),
 });
 
 export const empleadoUpdateSchema = empleadoSchema.partial().extend({

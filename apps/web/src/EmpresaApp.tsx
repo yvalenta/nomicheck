@@ -11,11 +11,12 @@ import DiscrepanciasEmpresa from "./components/empresa/DiscrepanciasEmpresa.tsx"
 import CostosEmpresa from "./components/empresa/CostosEmpresa.tsx";
 import PilaEmpresa from "./components/empresa/PilaEmpresa.tsx";
 import CumplimientoEmpresa from "./components/empresa/CumplimientoEmpresa.tsx";
+import SedesEmpresa from "./components/empresa/SedesEmpresa.tsx";
 import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
 import { obtenerMiRol } from "./api.ts";
 import { irAPortalSegunRol } from "./lib/irAPortal.ts";
 
-type Seccion = "colaboradores" | "contratistas" | "periodos" | "discrepancias" | "costos" | "pila" | "cumplimiento";
+type Seccion = "colaboradores" | "contratistas" | "periodos" | "discrepancias" | "costos" | "pila" | "cumplimiento" | "sedes";
 
 export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -70,6 +71,7 @@ export default function EmpresaApp() {
                   { valor: "costos", etiqueta: "Costos" },
                   { valor: "pila", etiqueta: "PILA" },
                   { valor: "cumplimiento", etiqueta: "Cumplimiento" },
+                  { valor: "sedes", etiqueta: "Sedes" },
                 ]}
                 activo={seccion}
                 onCambio={setSeccion}
@@ -82,6 +84,7 @@ export default function EmpresaApp() {
             {seccion === "costos" && <CostosEmpresa />}
             {seccion === "pila" && <PilaEmpresa />}
             {seccion === "cumplimiento" && <CumplimientoEmpresa />}
+            {seccion === "sedes" && <SedesEmpresa />}
           </div>
         )}
       </main>

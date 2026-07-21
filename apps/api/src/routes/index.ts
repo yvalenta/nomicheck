@@ -60,7 +60,15 @@ import {
   eliminarFestivoHandler,
 } from "../controllers/reglasAdminController.js";
 import { listar as listarDiscrepancias, responder as responderDiscrepancia } from "../controllers/discrepanciasController.js";
-import { requiereAuth, requiereRol } from "../middleware/auth.js";
+import {
+  asignarStaffCtrl,
+  crear as crearSedeCtrl,
+  eliminar as eliminarSedeCtrl,
+  listar as listarSedesCtrl,
+  listarStaffCtrl,
+  quitarStaffCtrl,
+} from "../controllers/sedesController.js";
+import { requiereAuth, requiereEmpresaEdicion, requiereEmpresaLectura, requiereRol } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -131,51 +139,69 @@ router.get("/auth/whoami", requiereAuth, whoami);
 router.post("/liquidations", requiereAuth, crearLiquidacion);
 router.get("/liquidations", requiereAuth, listarLiquidaciones);
 
-const soloEmpresa = [requiereAuth, requiereRol("admin_empresa")];
-router.get("/empresa/empleados", ...soloEmpresa, listar);
-router.post("/empresa/empleados", ...soloEmpresa, crear);
-router.put("/empresa/empleados/:id", ...soloEmpresa, actualizar);
+// SDD §15, pilar 1 — separación lectura/edición por rol:
+//   lectura  = admin_empresa | analista_rrhh | auditor
+//   edición  = admin_empresa | analista_rrhh (el auditor sale con 403)
+// Invitaciones/eliminación de empleados y CRUD de sedes solo admin_empresa,
+// ver más abajo con `soloAdminEmpresa`.
+const empresaLectura = [requiereAuth, requiereEmpresaLectura];
+const empresaEdicion = [requiereAuth, requiereEmpresaEdicion];
+const soloAdminEmpresa = [requiereAuth, requiereRol("admin_empresa")];
+
+router.get("/empresa/empleados", ...empresaLectura, listar);
+router.post("/empresa/empleados", ...empresaEdicion, crear);
+router.put("/empresa/empleados/:id", ...empresaEdicion, actualizar);
 // Borrado físico SOLO sin historial de nómina (caso "creado por error");
 // con historial responde 409 y el camino es /retirar — los registros de
-// nómina deben conservarse.
-router.delete("/empresa/empleados/:id", ...soloEmpresa, eliminar);
-router.post("/empresa/empleados/:id/invitar", ...soloEmpresa, invitar);
-router.post("/empresa/empleados/:id/retirar", ...soloEmpresa, retirar);
-router.post("/empresa/empleados/:id/liquidacion-final", ...soloEmpresa, liquidacionFinal);
+// nómina deben conservarse. Restringido a admin_empresa: es destructivo.
+router.delete("/empresa/empleados/:id", ...soloAdminEmpresa, eliminar);
+// Invitar es una acción de admin — crea vínculos entre cuentas y sedes.
+router.post("/empresa/empleados/:id/invitar", ...soloAdminEmpresa, invitar);
+router.post("/empresa/empleados/:id/retirar", ...empresaEdicion, retirar);
+router.post("/empresa/empleados/:id/liquidacion-final", ...empresaEdicion, liquidacionFinal);
 
-router.get("/empresa/contratistas", ...soloEmpresa, listarContratistas);
-router.post("/empresa/contratistas", ...soloEmpresa, crearContratista);
-router.put("/empresa/contratistas/:id", ...soloEmpresa, actualizarContratista);
-router.delete("/empresa/contratistas/:id", ...soloEmpresa, eliminarContratista);
+router.get("/empresa/contratistas", ...empresaLectura, listarContratistas);
+router.post("/empresa/contratistas", ...empresaEdicion, crearContratista);
+router.put("/empresa/contratistas/:id", ...empresaEdicion, actualizarContratista);
+router.delete("/empresa/contratistas/:id", ...soloAdminEmpresa, eliminarContratista);
 
 // Panel de costo total empleador (SDD §13): salario + aportes patronales +
 // provisiones por empleado activo, con la exoneración Ley 1607 como toggle.
-router.get("/empresa/costos", ...soloEmpresa, costos);
+router.get("/empresa/costos", ...empresaLectura, costos);
 
 // Semáforo de cumplimiento (SDD §14): aprendices mal clasificados, salarios
 // bajo el mínimo (estado actual de empleados activos) y horas extra
 // excedidas (últimos periodos liquidados) — reusa detección ya existente.
-router.get("/empresa/cumplimiento", ...soloEmpresa, cumplimiento);
+router.get("/empresa/cumplimiento", ...empresaLectura, cumplimiento);
 
-router.get("/empresa/periodos", ...soloEmpresa, listarPeriodos);
-router.post("/empresa/periodos", ...soloEmpresa, crearPeriodo);
+router.get("/empresa/periodos", ...empresaLectura, listarPeriodos);
+router.post("/empresa/periodos", ...empresaEdicion, crearPeriodo);
 // Editar fechas SOLO en borrador (uno liquidado se revierte primero) — la
 // nota de edición queda como rastro de auditoría, ver periodosService.ts.
-router.put("/empresa/periodos/:id", ...soloEmpresa, editarPeriodo);
-router.get("/empresa/periodos/:id/turnos", ...soloEmpresa, obtenerTurnos);
-router.put("/empresa/periodos/:id/turnos", ...soloEmpresa, guardarTurnos);
+router.put("/empresa/periodos/:id", ...empresaEdicion, editarPeriodo);
+router.get("/empresa/periodos/:id/turnos", ...empresaLectura, obtenerTurnos);
+router.put("/empresa/periodos/:id/turnos", ...empresaEdicion, guardarTurnos);
 // Qué empleados quedan incluidos en el periodo (autopoblado al crear, solo
 // editable en borrador) — ver editarEmpleadosPeriodo en periodosService.ts.
-router.get("/empresa/periodos/:id/empleados", ...soloEmpresa, empleadosIncluidos);
-router.put("/empresa/periodos/:id/empleados", ...soloEmpresa, guardarEmpleadosIncluidos);
-router.post("/empresa/periodos/:id/liquidar", ...soloEmpresa, liquidar);
-router.post("/empresa/periodos/:id/revertir", ...soloEmpresa, revertir);
+router.get("/empresa/periodos/:id/empleados", ...empresaLectura, empleadosIncluidos);
+router.put("/empresa/periodos/:id/empleados", ...empresaEdicion, guardarEmpleadosIncluidos);
+router.post("/empresa/periodos/:id/liquidar", ...empresaEdicion, liquidar);
+router.post("/empresa/periodos/:id/revertir", ...soloAdminEmpresa, revertir);
 // PILA exacta por periodo ya liquidado (SDD §14): IBC real de cada recibo,
 // no un salario mensual estimado — ver pilaService.ts.
-router.get("/empresa/periodos/:id/pila", ...soloEmpresa, pilaPeriodo);
-router.get("/empresa/recibos", ...soloEmpresa, recibos);
-router.get("/empresa/discrepancias", ...soloEmpresa, listarDiscrepancias);
-router.put("/empresa/discrepancias/:id", ...soloEmpresa, responderDiscrepancia);
+router.get("/empresa/periodos/:id/pila", ...empresaLectura, pilaPeriodo);
+router.get("/empresa/recibos", ...empresaLectura, recibos);
+router.get("/empresa/discrepancias", ...empresaLectura, listarDiscrepancias);
+router.put("/empresa/discrepancias/:id", ...empresaEdicion, responderDiscrepancia);
+
+// Sedes + staff empresarial (SDD §15, pilar 1). Solo admin_empresa — dar/
+// quitar acceso a la empresa es una decisión de administración.
+router.get("/empresa/sedes", ...empresaLectura, listarSedesCtrl);
+router.post("/empresa/sedes", ...soloAdminEmpresa, crearSedeCtrl);
+router.delete("/empresa/sedes/:id", ...soloAdminEmpresa, eliminarSedeCtrl);
+router.get("/empresa/staff", ...empresaLectura, listarStaffCtrl);
+router.post("/empresa/staff", ...soloAdminEmpresa, asignarStaffCtrl);
+router.delete("/empresa/staff/:id", ...soloAdminEmpresa, quitarStaffCtrl);
 
 // Portal colaborador (Fase 7): un colaborador solo ve/reporta sobre SUS
 // propios recibos — requiereAuth ya adjunta empleadoId, el controller

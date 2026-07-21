@@ -9,9 +9,11 @@ import {
   retirarEmpleado,
 } from "../services/empleadosService.js";
 import { liquidarFinal } from "../services/liquidacionFinalService.js";
+import { sedesDelUsuario } from "../middleware/auth.js";
 
 export async function listar(req: Request, res: Response) {
-  const empleados = await listarEmpleados(req.usuario!.empresaId!);
+  const sedes = await sedesDelUsuario(req.usuario!);
+  const empleados = await listarEmpleados(req.usuario!.empresaId!, sedes);
   res.json(empleados);
 }
 
@@ -40,7 +42,8 @@ export async function actualizar(req: Request, res: Response) {
     return;
   }
   try {
-    const empleado = await actualizarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
+    const sedes = await sedesDelUsuario(req.usuario!);
+    const empleado = await actualizarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data, sedes);
     res.json(empleado);
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });
@@ -49,7 +52,8 @@ export async function actualizar(req: Request, res: Response) {
 
 export async function eliminar(req: Request, res: Response) {
   try {
-    await eliminarEmpleado(req.usuario!.empresaId!, Number(req.params.id));
+    const sedes = await sedesDelUsuario(req.usuario!);
+    await eliminarEmpleado(req.usuario!.empresaId!, Number(req.params.id), sedes);
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof ErrorConflicto) {
@@ -67,7 +71,8 @@ export async function retirar(req: Request, res: Response) {
     return;
   }
   try {
-    const empleado = await retirarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
+    const sedes = await sedesDelUsuario(req.usuario!);
+    const empleado = await retirarEmpleado(req.usuario!.empresaId!, Number(req.params.id), parseo.data, sedes);
     res.json(empleado);
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo retirar" });

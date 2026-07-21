@@ -34,7 +34,18 @@ model Usuario {
   // Correo denormalizado desde Supabase Auth (allí viven las credenciales) —
   // permite buscar la cuenta por correo al invitar sin paginar todo Auth.
   email     String? @unique
-  rol       String // admin_plataforma | admin_empresa | colaborador | individual
+  // admin_plataforma | admin_empresa | analista_rrhh | auditor | colaborador | individual
+  //
+  // Roles dentro de una empresa (SDD §15, pilar 1):
+  //   admin_empresa  → todo. Único que puede crear/borrar sedes, invitar y
+  //                    liquidar. Ve todos los empleados de su empresa.
+  //   analista_rrhh  → operativo. Ve/edita SOLO empleados de las sedes en
+  //                    UsuarioSede; sin sedes asignadas se comporta como
+  //                    admin_empresa (una empresa chica sin sedes sigue
+  //                    funcionando). Puede liquidar. NO invita ni borra.
+  //   auditor        → solo lectura de todo lo de su empresa. Cualquier POST/PUT/
+  //                    DELETE le devuelve 403 (middleware bloqueaEscritura).
+  rol       String
   // Empresa activa actual (puntero denormalizado). Null = sin empresa: recién
   // registrado admin_plataforma, o colaborador libre entre empresas.
   empresaId Int?
@@ -46,6 +57,9 @@ model Usuario {
   empleados         Empleado[]          @relation("EmpleadoUsuario")
   reportes          ReporteDiscrepancia[]
   liquidaciones     Liquidacion[]
+  // Sedes asignadas a un analista_rrhh (many-to-many). Vacío = ve todas las
+  // de su empresa (útil para empresas chicas sin sucursales).
+  sedesAsignadas    UsuarioSede[]
   creadoEn          DateTime            @default(now())
 
   @@index([empresaId])
@@ -85,6 +99,39 @@ model Empresa {
   empleados    Empleado[]
   contratistas Contratista[]
   periodos     PeriodoNomina[]
+  sedes        Sede[]
+}
+
+// Sucursal/departamento dentro de una empresa (SDD §15, pilar 1). Modelo
+// mínimo: nombre + FK a empresa. Sirve para dos cosas:
+//   1) Segmentar empleados (Empleado.sedeId opcional — sin sede = no está
+//      asignado a ninguna sucursal, lo cual es válido para empresas chicas).
+//   2) Scoping del rol analista_rrhh vía UsuarioSede.
+model Sede {
+  id        Int      @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id])
+  nombre    String
+  creadoEn  DateTime @default(now())
+
+  empleados      Empleado[]
+  analistas      UsuarioSede[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
+}
+
+// Tabla puente para el scoping del analista_rrhh. Sin filas para un usuario,
+// se interpreta como "ve todas las sedes de su empresa" (ver comentario en
+// Usuario.rol) — importante para no bloquear empresas sin sucursales.
+model UsuarioSede {
+  usuarioId String @db.Uuid
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  sedeId    Int
+  sede      Sede    @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, sedeId])
+  @@index([sedeId])
 }
 
 model Empleado {
@@ -117,6 +164,11 @@ model Empleado {
   // empleado es lo que hace "exacta" la liquidación PILA (packages/reglas
   // costoEmpleador.ts, calcularLiquidacionPilaEmpleado).
   claseRiesgoArl    Int     @default(1)
+  // Sede/sucursal a la que pertenece — opcional. null = sin sede asignada
+  // (empresa chica sin sucursales). Los analistas_rrhh con UsuarioSede
+  // definido solo ven empleados con sedeId en su lista.
+  sedeId            Int?
+  sede              Sede?    @relation(fields: [sedeId], references: [id])
   activo            Boolean @default(true)
   creadoEn          DateTime @default(now())
 

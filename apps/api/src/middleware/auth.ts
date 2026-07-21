@@ -83,3 +83,26 @@ export function requiereRol(...roles: string[]) {
     next();
   };
 }
+
+// SDD §15, pilar 1 — roles granulares dentro de una empresa.
+// admin_empresa: todo. analista_rrhh: opera sobre su(s) sede(s) o toda la
+// empresa si no le asignaron ninguna. auditor: SOLO lectura, cualquier
+// escritura → 403 vía requiereEmpresaEdicion.
+export const ROLES_EMPRESA = ["admin_empresa", "analista_rrhh", "auditor"] as const;
+export const ROLES_EMPRESA_EDICION = ["admin_empresa", "analista_rrhh"] as const;
+
+export const requiereEmpresaLectura = requiereRol(...ROLES_EMPRESA);
+export const requiereEmpresaEdicion = requiereRol(...ROLES_EMPRESA_EDICION);
+
+/** Sedes visibles para el usuario cuando se trata de un analista_rrhh. Null
+ * = sin scoping (admin_empresa, auditor, o analista sin sedes asignadas —
+ * por convención vacío = ve toda la empresa, útil en empresas chicas). */
+export async function sedesDelUsuario(usuario: UsuarioAutenticado): Promise<number[] | null> {
+  if (usuario.rol !== "analista_rrhh") return null;
+  const filas = await prisma.usuarioSede.findMany({
+    where: { usuarioId: usuario.id },
+    select: { sedeId: true },
+  });
+  if (filas.length === 0) return null;
+  return filas.map((f) => f.sedeId);
+}

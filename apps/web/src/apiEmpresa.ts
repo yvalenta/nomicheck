@@ -19,6 +19,8 @@ export interface Empleado {
   // Clase de riesgo laboral ARL (I a V, Decreto 1772 de 1994) — 1 = riesgo
   // mínimo (default). Usada en costos y liquidación PILA.
   claseRiesgoArl: 1 | 2 | 3 | 4 | 5;
+  /** Sede/sucursal a la que pertenece — null = sin asignar (SDD §15, pilar 1). */
+  sedeId: number | null;
   activo: boolean;
   // Estado de la cuenta del colaborador: usuarioId null = sin cuenta;
   // con usuarioId y invitacionAceptadaEn null = invitación pendiente;
@@ -354,4 +356,45 @@ export function responderDiscrepancia(
   datos: { estado: "en_revision" | "resuelto"; respuestaEmpresa: string }
 ): Promise<DiscrepanciaEmpresa> {
   return autenticado(`/empresa/discrepancias/${id}`, { method: "PUT", body: JSON.stringify(datos) });
+}
+
+// Sedes + staff empresarial (SDD §15, pilar 1). Roles granulares dentro de
+// una empresa; sin sedes creadas el modelo se comporta como antes (un solo
+// admin_empresa ve toda su empresa).
+export interface Sede {
+  id: number;
+  empresaId: number;
+  nombre: string;
+  _count: { empleados: number; analistas: number };
+}
+
+export interface StaffEmpresa {
+  id: string;
+  email: string | null;
+  nombre: string;
+  rol: "analista_rrhh" | "auditor";
+  sedeIds: number[];
+}
+
+export function listarSedes(): Promise<Sede[]> {
+  return autenticado("/empresa/sedes");
+}
+export function crearSede(nombre: string): Promise<Sede> {
+  return autenticado("/empresa/sedes", { method: "POST", body: JSON.stringify({ nombre }) });
+}
+export function eliminarSede(id: number): Promise<{ ok: true }> {
+  return autenticado(`/empresa/sedes/${id}`, { method: "DELETE" });
+}
+export function listarStaff(): Promise<StaffEmpresa[]> {
+  return autenticado("/empresa/staff");
+}
+export function asignarStaff(datos: {
+  email: string;
+  rol: "analista_rrhh" | "auditor";
+  sedeIds: number[];
+}): Promise<{ id: string }> {
+  return autenticado("/empresa/staff", { method: "POST", body: JSON.stringify(datos) });
+}
+export function quitarStaff(id: string): Promise<{ ok: true }> {
+  return autenticado(`/empresa/staff/${id}`, { method: "DELETE" });
 }

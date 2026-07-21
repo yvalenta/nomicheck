@@ -9,9 +9,11 @@ import {
   invitarEmpleado,
   liquidarFinalEmpleado,
   listarEmpleados,
+  listarSedes,
   retirarEmpleado,
   type DatosEmpleado,
   type Empleado,
+  type Sede,
 } from "../../apiEmpresa";
 import { obtenerParametros, type ParametrosPublicos } from "../../api";
 import PaycheckCard from "../PaycheckCard.tsx";
@@ -444,13 +446,18 @@ function FormEmpleado({
   const [fechaIngreso, setFechaIngreso] = useState(inicial?.fechaIngreso.slice(0, 10) ?? "");
   const [tipoContrato, setTipoContrato] = useState<Empleado["tipoContrato"]>(inicial?.tipoContrato ?? "indefinido");
   const [claseRiesgoArl, setClaseRiesgoArl] = useState<Empleado["claseRiesgoArl"]>(inicial?.claseRiesgoArl ?? 1);
+  const [sedeId, setSedeId] = useState<number | null>(inicial?.sedeId ?? null);
+  const [sedes, setSedes] = useState<Sede[]>([]);
+  useEffect(() => {
+    listarSedes().then(setSedes).catch(() => setSedes([]));
+  }, []);
 
   return (
     <PaycheckCard titulo={inicial ? `Editar a ${inicial.nombre}` : "Nuevo colaborador"} className={inicial ? "mx-3 mb-2" : ""}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso, tipoContrato, claseRiesgoArl });
+          onGuardar({ nombre, documento, salarioBase: Number(salarioBase), tipoNomina, auxilioTransporte, fechaIngreso, tipoContrato, claseRiesgoArl, sedeId });
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
@@ -512,6 +519,21 @@ function FormEmpleado({
             <option value={5}>V — riesgo máximo</option>
           </select>
         </label>
+        {sedes.length > 0 && (
+          <label className="flex flex-col gap-1 text-sm text-ink">
+            Sede (opcional — controla el alcance de los analistas de RR.HH.)
+            <select
+              value={sedeId ?? ""}
+              onChange={(e) => setSedeId(e.target.value === "" ? null : Number(e.target.value))}
+              className={inputCls}
+            >
+              <option value="">Sin sede asignada</option>
+              {sedes.map((s) => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"

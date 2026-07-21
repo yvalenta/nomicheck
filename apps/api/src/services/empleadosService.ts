@@ -5,8 +5,26 @@ import type { z } from "zod";
 
 // Todo query filtrada por empresaId en código — RLS es la defensa adicional,
 // no la única (SDD.md §05, doble capa de autorización).
-export function listarEmpleados(empresaId: number) {
-  return prisma.empleado.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } });
+// `sedes` = scoping por sede del analista_rrhh (SDD §15, pilar 1). null =
+// sin scoping (admin_empresa/auditor/analista sin sedes) — ver auth.ts.
+export function listarEmpleados(empresaId: number, sedes: number[] | null = null) {
+  return prisma.empleado.findMany({
+    where: { empresaId, ...(sedes ? { sedeId: { in: sedes } } : {}) },
+    orderBy: { nombre: "asc" },
+  });
+}
+
+// Verifica que un empleado exista, sea de la empresa y — si el usuario es
+// un analista_rrhh con sedes — que caiga dentro de sus sedes asignadas.
+// Cambio de bloque: analistas escoped no pueden tocar empleados fuera de
+// su alcance.
+async function empleadoAccesible(empresaId: number, empleadoId: number, sedes: number[] | null) {
+  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
+  if (!empleado) throw new Error("Empleado no encontrado");
+  if (sedes && (empleado.sedeId === null || !sedes.includes(empleado.sedeId))) {
+    throw new Error("Este colaborador está fuera de las sedes asignadas a tu usuario");
+  }
+  return empleado;
 }
 
 export async function crearEmpleado(empresaId: number, datos: z.infer<typeof empleadoSchema>) {
@@ -27,10 +45,10 @@ export async function crearEmpleado(empresaId: number, datos: z.infer<typeof emp
 export async function actualizarEmpleado(
   empresaId: number,
   empleadoId: number,
-  datos: z.infer<typeof empleadoUpdateSchema>
+  datos: z.infer<typeof empleadoUpdateSchema>,
+  sedes: number[] | null = null
 ) {
-  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
-  if (!empleado) throw new Error("Empleado no encontrado");
+  await empleadoAccesible(empresaId, empleadoId, sedes);
   return prisma.empleado.update({ where: { id: empleadoId }, data: datos });
 }
 
@@ -40,9 +58,8 @@ export async function actualizarEmpleado(
 // (soft-retire). Los FK Restrict del schema son la red de seguridad final.
 export class ErrorConflicto extends Error {}
 
-export async function eliminarEmpleado(empresaId: number, empleadoId: number) {
-  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
-  if (!empleado) throw new Error("Empleado no encontrado");
+export async function eliminarEmpleado(empresaId: number, empleadoId: number, sedes: number[] | null = null) {
+  await empleadoAccesible(empresaId, empleadoId, sedes);
 
   const [recibos, turnos] = await Promise.all([
     prisma.reciboPago.count({ where: { empleadoId } }),
@@ -62,10 +79,10 @@ export async function eliminarEmpleado(empresaId: number, empleadoId: number) {
 export async function retirarEmpleado(
   empresaId: number,
   empleadoId: number,
-  datos: z.infer<typeof retiroSchema>
+  datos: z.infer<typeof retiroSchema>,
+  sedes: number[] | null = null
 ) {
-  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
-  if (!empleado) throw new Error("Empleado no encontrado");
+  const empleado = await empleadoAccesible(empresaId, empleadoId, sedes);
   if (datos.fechaRetiro < empleado.fechaIngreso) {
     throw new Error("La fecha de retiro no puede ser anterior a la fecha de ingreso");
   }
