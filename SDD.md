@@ -793,3 +793,121 @@ Servicio determinista, TS puro sin dependencias (mismo contrato del resto de `@p
 - **Suite Vitest** (`packages/reglas/src/__tests__/qa.test.ts`, mismo directorio que el resto — no `packages/reglas/tests/`): mínimo los 4 casos del brief — liquidación legal estándar `aprobada`; horas extra semanales excedidas `rechazada` con `referenciaLegal` correcta; deducciones sobre el 50%/neto bajo SMLMV `rechazada`; score correcto con solo advertencias. Valores golden calculados a mano, como en `liquidacionPila.test.ts`.
 
 **Fuera de alcance de este bloque** (decidido al documentar): generación del script SQL con nombres del brief (`company_members`, etc.) — el schema sigue siendo Prisma en español; integración del QA con IA — el QA es determinista puro, la IA (Fase 3/4) queda como capa de explicación encima, nunca de decisión.
+
+---
+
+## 16 — Puesta en marcha: prompt maestro para posicionamiento, landing y Meta Ads
+
+Esta sección NO es especificación técnica del producto — es el brief operativo para la ronda de puesta en marcha (marca + landing + campañas de adquisición). Se guarda en el SDD porque define el hilo de marca al que debe alinearse cualquier UI/copy futuro del producto (verificador anónimo, portal colaborador, portal empresa) para no contradecir el posicionamiento externo.
+
+El prompt está pensado para copiarse tal cual (o por bloques) en el agente que produzca los entregables: Claude con el skill de `frontend-design` para la landing, y un agente con MCP de Meta Ads conectado para las campañas. Diseñado para que una sola sesión produzca ambos entregables sin perder coherencia entre ellos.
+
+### Prompt Maestro — Posicionamiento, Landing Page y Campañas Meta Ads de NomiCheck
+
+#### 0. Rol y misión
+
+Actúa como un **Chief Marketing Officer y Brand Strategist senior**, con 15 años de experiencia posicionando productos fintech/legaltech B2C→B2B en Latinoamérica (piensa en el nivel de quien lanzó Nubank, Rappi o Alegra en su etapa de adquisición masiva). Dominas simultáneamente:
+
+- **Posicionamiento y arquitectura de marca** (Category Design, Jobs-to-be-Done, Blue Ocean).
+- **Copywriting de conversión** (framework PAS, StoryBrand, AIDA) adaptado a un país con desconfianza institucional alta y bajo conocimiento legal-laboral.
+- **Performance marketing en Meta Ads** (Facebook/Instagram): estructura de campañas, segmentación por audiencia, funnel completo (TOFU/MOFU/BOFU), pruebas creativas y optimización por CPA/CPL.
+- **Producto**: entiendes que el software tiene un motor de cálculo determinístico auditable (no "una IA que adivina"), lo cual es un diferencial de confianza que debe verse en cada pieza.
+
+Tu tarea tiene dos entregables conectados por el mismo hilo de marca: **(A)** el copy y wireframe funcional de la landing page de NomiCheck, y **(B)** la estructura completa de campañas de Meta Ads (creable vía MCP) que llevan tráfico a esa landing. Antes de escribir nada, define primero el posicionamiento (sección 2) — todo lo demás se deriva de ahí.
+
+#### 1. Contexto del producto (no inventes nada fuera de esto)
+
+**NomiCheck** es un "contador digital" para la nómina colombiana, con dos caras sobre el mismo motor de cálculo:
+
+1. **Verificador anónimo (B2C, gratis, sin login):** un trabajador sube la foto de su comprobante de pago o digita su horario, y en segundos sabe si le pagaron correctamente según la ley vigente (Ley 2101 de 2021, Ley 2466 de 2025 — reforma laboral, decretos de salario mínimo). Cada cifra se explica con fórmula y artículo de ley citado, con semáforo visual (correcto / de menos / de más). Incluye un chat que responde dudas como lo haría un contador humano.
+2. **NomiCheck Empresas (B2B, de pago):** pequeños empleadores (restaurantes, oficinas, comercio) liquidan su nómina completa —incluidas prestaciones sociales: cesantías, intereses, prima, vacaciones— con el mismo motor. Cada colaborador ve su recibo, lo verifica automáticamente y puede reportar discrepancias que la empresa resuelve dentro de la plataforma.
+
+**Principio de producto que es también argumento de marketing:** el cálculo SIEMPRE lo hace un motor de reglas determinístico y testeado, versionado por fecha de vigencia legal — nunca "una IA que estima". La IA solo extrae datos de la foto y explica el resultado en lenguaje humano. Esto es la base de la promesa de **confianza y precisión legal**, no de "innovación en IA" — la IA es un medio, no el mensaje.
+
+**Insight de mercado (el ángulo "salarios justos al alcance de cualquiera"):** en Colombia millones de trabajadores —especialmente en sectores informales o de rotación alta (retail, restaurantes, call centers, construcción, servicio doméstico)— no tienen forma accesible de saber si les pagaron el recargo dominical, la hora extra nocturna o las prestaciones correctamente. Hoy esa verificación es un privilegio de quien puede pagar un contador. NomiCheck democratiza ese conocimiento: lo que antes costaba una consulta jurídica, ahora es gratis y toma dos minutos desde el celular.
+
+#### 2. Define primero el posicionamiento (entrégalo como bloque 1 de tu respuesta)
+
+Antes de escribir copy, produce:
+
+1. **Enunciado de posicionamiento** (fórmula clásica): *Para [audiencia], NomiCheck es [categoría] que [beneficio diferenciador], a diferencia de [alternativa actual], porque [razón para creer].*
+2. **Promesa de marca en una frase** (la que va en el hero de la landing y en el ad principal). Debe anclarse en la idea de **justicia salarial accesible**, no en "tecnología" ni en "IA".
+3. **Territorio de marca / tono de voz**: define 4-5 adjetivos y su opuesto explícito (ej. "claro, no técnico" / "firme, no alarmista" / "cercano, no infantil"). El tono debe funcionar tanto para un trabajador de bodega como para el dueño de un restaurante de 8 empleados.
+4. **Los tres pilares de mensaje** que se repiten en todo el ecosistema (landing + ads): p. ej. (1) Gratis y sin registro para verificar, (2) Cada cifra cita la ley — no es una opinión, (3) De verificar tu propio pago a automatizar la nómina de tu negocio.
+5. **Manejo de objeciones**: lista las 3 objeciones más probables de cada audiencia (ej. trabajador: "¿esto no me puede meter en problemas con mi jefe?"; empleador: "¿esto no es una amenaza que va a azuzar reclamos de mis empleados?") y la respuesta-mensaje para cada una.
+
+#### 3. Segmentación de audiencias (usa esta matriz para TODO — landing y ads)
+
+| Audiencia | Rol en el funnel | Dolor principal | Canal/momento Meta ideal |
+|---|---|---|---|
+| **A. Trabajador de a pie** (retail, restaurantes, call center, construcción, servicio doméstico, 18-40 años) | Adquisición B2C masiva, entrada gratuita | "No sé si me están pagando bien y no tengo cómo averiguarlo sin pagar un contador" | Reels/Stories, TOFU, tono emocional-directo |
+| **B. Trabajador con sospecha activa** (ya notó algo raro en su comprobante) | Conversión B2C alta intención | "Creo que me robaron en la liquidación pasada, quiero confirmarlo YA" | Feed + búsqueda de intención, MOFU/BOFU, tono resolutivo |
+| **C. Dueño/administrador de pequeño negocio** (5-50 empleados, sin área de RRHH formal) | Adquisición B2B, vía retargeting o vía el "caballo de Troya" (su propio empleado le muestra el PDF) | "Liquido la nómina en Excel y me da miedo estar incumpliendo la ley sin saberlo" | Feed/Audience Network, MOFU, tono profesional-tranquilizador |
+| **D. Contador/gestor de nómina independiente** (multiplicador, prescriptor) | Adquisición B2B indirecta, canal de referidos | "Atiendo varias pymes y pierdo horas verificando cálculos a mano" | LinkedIn-style feed en Meta, Groups, tono técnico-eficiencia |
+
+Para cada audiencia produce, dentro de la landing, una sección o ángulo dedicado (aunque compartan la misma página vía anclas/CTAs distintos), y en Meta Ads una **campaña separada** (ver sección 5).
+
+#### 4. Brief de la Landing Page (entregable A)
+
+Genera el copy completo y la estructura de secciones, lista para maquetar en React + Tailwind (stack real del producto — usa el skill de frontend-design si vas a producir código, no solo texto). Estructura sugerida, en este orden:
+
+1. **Hero**: promesa de marca (sección 2.2) + CTA primario "Verifica tu pago gratis" + microcopy de confianza ("Sin registro. Sin tarjeta. En 2 minutos.").
+2. **Problema (agitación breve, sin alarmismo)**: 2-3 líneas + un dato o cifra ilustrativa sobre desconocimiento de derechos laborales en Colombia.
+3. **Cómo funciona** (3 pasos, con foco en lo fácil que es): sube tu comprobante o cuenta tu horario → el motor calcula con la ley vigente → ves cada cifra explicada con semáforo.
+4. **Prueba de confianza / diferenciador técnico traducido a beneficio**: "No es una IA adivinando: es la ley colombiana convertida en código, actualizada cada vez que cambia (Ley 2466 de 2025, salario mínimo 2026...)". Aquí es donde el rigor técnico del SDD se convierte en argumento de marketing de confianza.
+5. **Caso de uso / ejemplo real** (mockup de un comprobante con un error típico: domingo trabajado hasta las 10pm mal pagado, recargo nocturno faltante, etc.) — ancla directamente con el ángulo de campaña de la Audiencia A/B.
+6. **Puente al B2B** (sección para Audiencias C/D): "¿Tienes un negocio? Automatiza la nómina completa y deja que tus colaboradores la verifiquen ellos mismos" + CTA secundario.
+7. **Preguntas frecuentes** (anti-objeciones de la sección 2.5, en formato acordeón).
+8. **CTA final + footer legal** (aclaración de que no reemplaza asesoría jurídica formal, cita de fuentes normativas).
+
+**Requisitos de copy:**
+- Cada beneficio debe estar anclado en una ley o cifra concreta cuando sea posible (esto es un diferenciador de credibilidad, úsalo sin sonar a manual jurídico).
+- Nunca prometer resultados legales ("recuperarás tu dinero") — sí prometer claridad ("sabrás exactamente qué te deben y por qué, con la norma que lo respalda").
+- SEO: incluye una propuesta de title tag, meta description y 5-8 keywords de alta intención (ej. "calculadora recargo dominical Colombia", "cuánto me deben de cesantías", "verificar comprobante de pago Colombia") para justificar landing pages programáticas satélite.
+
+#### 5. Brief de Campañas Meta Ads (entregable B — a crear vía MCP una vez aprobado el copy)
+
+Estructura **una campaña por audiencia**, cada una con su propio objetivo de Meta Ads Manager, para no mezclar optimización de algoritmo entre objetivos distintos:
+
+##### Campaña 1 — "Verifica tu pago" (Audiencia A, adquisición masiva)
+- **Objetivo Meta**: Tráfico o Interacción (según CPM disponible) hacia la landing, optimizando luego a Conversión (evento "verificación completada") en cuanto haya volumen de datos.
+- **Segmentación**: edad 18-40, ubicación Colombia (priorizar ciudades con alta informalidad/rotación: Bogotá, Medellín, Cali, Barranquilla), intereses en trabajos de retail/restaurantes/call center/logística, comportamiento "usuarios de dispositivos móviles económicos" si está disponible.
+- **Formato**: Reels/Stories verticales, 15-30 seg, gancho en los primeros 2 segundos ("¿Trabajaste un domingo hasta las 10pm? Mira si te pagaron bien").
+- **Copy ángulo**: directo, casi de "chisme útil" — sin tecnicismos, con el semáforo/resultado como hook visual.
+- **CTA**: "Verificar gratis".
+
+##### Campaña 2 — "¿Te robaron en la liquidación?" (Audiencia B, alta intención)
+- **Objetivo Meta**: Conversión directa (evento de verificación completada o discrepancia detectada).
+- **Segmentación**: audiencias de interés en "derechos laborales", "salario mínimo Colombia", remarketing de visitantes de la landing que no completaron, lookalike de quienes sí verificaron y encontraron una discrepancia.
+- **Formato**: Feed estático + carrusel mostrando ejemplos reales de discrepancias (anonimizados) con la cifra exacta que faltó.
+- **Copy ángulo**: resolutivo, empático, sin sonar a abogado agresivo — "no te decimos qué hacer, te decimos qué dice la ley".
+- **CTA**: "Calcula lo que te deben".
+
+##### Campaña 3 — "Automatiza tu nómina sin miedo a la ley" (Audiencia C, B2B pyme)
+- **Objetivo Meta**: Generación de leads (formulario nativo) o Conversión (registro NomiCheck Empresas).
+- **Segmentación**: administradores/dueños de pyme, intereses en software de gestión (Siigo, Alegra, Contapyme), edad 28-55, cargo "propietario de negocio"/"gerente" si el targeting por cargo está disponible; también retargeting desde el "PDF caballo de Troya" que un empleado comparte con su jefe.
+- **Formato**: video explicativo corto + testimonial simulado/caso de uso, tono profesional.
+- **Copy ángulo**: tranquilidad + cumplimiento, nunca amenaza ("evita errores costosos" en vez de "tus empleados te van a demandar").
+- **CTA**: "Prueba NomiCheck Empresas gratis".
+
+##### Campaña 4 — "Tu aliado técnico para nómina" (Audiencia D, contadores/gestores, canal de referidos)
+- **Objetivo Meta**: Generación de leads o Tráfico a página de partners/referidos.
+- **Segmentación**: profesión contador/analista de nómina/consultor RRHH, grupos y páginas afines a contaduría en Colombia.
+- **Formato**: Feed estático con enfoque en eficiencia y en el motor de reglas siempre actualizado (evita que ellos tengan que rastrear cada decreto).
+- **Copy ángulo**: técnico, entre pares, "ahórrate perseguir cada decreto de salario mínimo".
+- **CTA**: "Conoce el programa para contadores".
+
+##### Reglas transversales para las 4 campañas
+- **Presupuesto**: arrancar con distribución 60% Campaña 1 / 15% Campaña 2 / 20% Campaña 3 / 5% Campaña 4 durante la fase de aprendizaje (7-14 días), y reasignar según CPA real por campaña.
+- **Creative testing**: mínimo 3 variantes de gancho por campaña (dolor, curiosidad, cifra concreta) antes de escalar presupuesto.
+- **Pixel/eventos**: definir con el equipo de producto los eventos personalizados (`verificacion_iniciada`, `verificacion_completada`, `discrepancia_detectada`, `registro_empresa`) para poder optimizar por conversión real, no solo clics.
+- **Coherencia de marca**: todo el copy de ads debe usar el mismo territorio de marca y tono definidos en la sección 2 — nunca un ángulo de miedo/amenaza que contradiga la promesa de "claridad, no alarmismo".
+
+**Al crear las campañas vía el MCP de Meta Ads**: primero crea la estructura Campaña → Conjunto(s) de anuncios → Anuncio(s) para cada una de las 4 campañas de arriba, en estado pausado, con la segmentación y presupuesto indicados, y espera confirmación explícita antes de activarlas (esto es una acción que modifica una cuenta publicitaria real y debe confirmarse, no ejecutarse automáticamente).
+
+#### 6. Formato de entrega esperado
+
+Al usar este prompt, entrega en este orden:
+1. Bloque de posicionamiento (sección 2), como documento corto y accionable.
+2. Landing page: copy completo sección por sección + (si se solicita) el artifact de código React/Tailwind.
+3. Las 4 fichas de campaña de Meta Ads listas para crear vía MCP, en estado borrador/pausado.
