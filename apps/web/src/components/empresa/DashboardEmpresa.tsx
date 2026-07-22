@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { LogOut, Mail, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { LogOut, Mail, Pencil, Plus, Trash2, UserRound } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { supabase } from "../../lib/supabase";
 import {
@@ -13,6 +13,7 @@ import {
   retirarEmpleado,
   type DatosEmpleado,
   type Empleado,
+  type RespuestaPaginada,
   type Sede,
 } from "../../apiEmpresa";
 import { obtenerParametros, type ParametrosPublicos } from "../../api";
@@ -22,6 +23,10 @@ import DateField from "../DateField.tsx";
 import EmptyState from "../EmptyState.tsx";
 import Skeleton from "../Skeleton.tsx";
 import Combobox from "../Combobox.tsx";
+import CampoBusqueda from "../filtros/CampoBusqueda.tsx";
+import SelectFiltro from "../filtros/SelectFiltro.tsx";
+import Paginador from "../filtros/Paginador.tsx";
+import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -36,47 +41,67 @@ const TIPO_CONTRATO_OPCIONES: { value: Empleado["tipoContrato"]; label: string }
 ];
 
 type FiltroEstado = "activos" | "retirados" | "todos";
+type Filtros = { q: string; estado: FiltroEstado; sedeId: number; page: number };
+const DEFAULTS: Filtros = { q: "", estado: "activos", sedeId: 0, page: 1 };
 
 // Acción inline abierta sobre una fila (reemplaza los window.prompt/alert
 // que había antes: todo se captura y confirma dentro de la propia fila).
 type AccionFila = { id: number; tipo: "invitar" | "retirar" | "eliminar" } | null;
 
 export default function DashboardEmpresa() {
-  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [filtros, setFiltros] = useFiltrosUrl<Filtros>(DEFAULTS);
+  const [respuesta, setRespuesta] = useState<RespuestaPaginada<Empleado> | null>(null);
+  const [totalActivos, setTotalActivos] = useState<number>(0);
+  const [totalRetirados, setTotalRetirados] = useState<number>(0);
+  const [sedes, setSedes] = useState<Sede[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [accion, setAccion] = useState<AccionFila>(null);
-  const [filtro, setFiltro] = useState<FiltroEstado>("activos");
-  const [busqueda, setBusqueda] = useState("");
 
   const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
 
   function recargar() {
-    listarEmpleados({ limit: 200 })
-      .then((r) => setEmpleados(r.items))
+    setCargando(true);
+    // El filtro `estado` mapea a activo (boolean|undefined) en el server.
+    const activo = filtros.estado === "activos" ? true : filtros.estado === "retirados" ? false : undefined;
+    Promise.all([
+      listarEmpleados({
+        q: filtros.q || undefined,
+        activo,
+        sedeId: filtros.sedeId || undefined,
+        page: filtros.page,
+        limit: 25,
+      }),
+      // Conteos por estado — dos llamadas ligeras (limit:1) que solo leen total.
+      // Alternativa sería un endpoint de resumen; por ahora este patrón es
+      // simple y suficiente hasta que la nómina sea muy grande.
+      listarEmpleados({ activo: true, limit: 1 }),
+      listarEmpleados({ activo: false, limit: 1 }),
+    ])
+      .then(([r, act, ret]) => {
+        setRespuesta(r);
+        setTotalActivos(act.total);
+        setTotalRetirados(ret.total);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
   }
 
+  useEffect(recargar, [filtros.q, filtros.estado, filtros.sedeId, filtros.page]);
+
   useEffect(() => {
-    recargar();
     obtenerParametros().then(setParametros);
+    listarSedes().then(setSedes).catch(() => setSedes([]));
   }, []);
 
-  const visibles = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    return empleados
-      .filter((e) =>
-        filtro === "activos" ? e.activo : filtro === "retirados" ? !e.activo : true
-      )
-      .filter((e) => !q || e.nombre.toLowerCase().includes(q) || e.documento.toLowerCase().includes(q));
-  }, [empleados, filtro, busqueda]);
+  function cambiarFiltro(patch: Partial<Filtros>) {
+    setFiltros({ ...patch, page: 1 });
+  }
 
-  const activos = empleados.filter((e) => e.activo);
-  const nominaMensual = activos.reduce((s, e) => s + e.salarioBase, 0);
+  const visibles = respuesta?.items ?? [];
 
   function notificar(mensaje: string) {
     setExito(mensaje);
@@ -178,11 +203,10 @@ export default function DashboardEmpresa() {
         </div>
       </div>
 
-      {/* Resumen compacto */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Stat etiqueta="Colaboradores activos" valor={String(activos.length)} />
-        <Stat etiqueta="Nómina base mensual" valor={formatCOP(nominaMensual)} />
-        <Stat etiqueta="Retirados" valor={String(empleados.length - activos.length)} />
+      {/* Resumen compacto — vienen del server (total real, no de la página) */}
+      <div className="grid grid-cols-2 gap-3">
+        <Stat etiqueta="Colaboradores activos" valor={String(totalActivos)} />
+        <Stat etiqueta="Retirados" valor={String(totalRetirados)} />
       </div>
 
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
@@ -190,26 +214,30 @@ export default function DashboardEmpresa() {
 
       {mostrarForm && <FormEmpleado smlmv={parametros?.smlmv} onGuardar={agregar} />}
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      {/* Filtros (todos van al URL — SPA §15) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
         <SegmentedControl<FiltroEstado>
           opciones={[
             { valor: "activos", etiqueta: "Activos" },
             { valor: "retirados", etiqueta: "Retirados" },
             { valor: "todos", etiqueta: "Todos" },
           ]}
-          activo={filtro}
-          onCambio={setFiltro}
+          activo={filtros.estado}
+          onCambio={(estado) => cambiarFiltro({ estado })}
         />
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre o documento…"
-            className={`${inputCls} w-full pl-9`}
+        <CampoBusqueda
+          value={filtros.q}
+          onChange={(q) => cambiarFiltro({ q })}
+          placeholder="Buscar por nombre o documento…"
+        />
+        {sedes.length > 0 && (
+          <SelectFiltro
+            value={filtros.sedeId ? String(filtros.sedeId) : ""}
+            onChange={(v) => cambiarFiltro({ sedeId: v ? Number(v) : 0 })}
+            todasLabel="Todas las sedes"
+            opciones={sedes.map((s) => ({ valor: String(s.id), etiqueta: s.nombre }))}
           />
-        </div>
+        )}
       </div>
 
       <PaycheckCard>
@@ -217,8 +245,8 @@ export default function DashboardEmpresa() {
         {!cargando && visibles.length === 0 && (
           <EmptyState
             icon={UserRound}
-            titulo={empleados.length === 0 ? "Aún no tienes colaboradores" : "Sin resultados para este filtro"}
-            descripcion={empleados.length === 0 ? "Agrega tu primer colaborador con el botón de arriba." : undefined}
+            titulo={totalActivos + totalRetirados === 0 ? "Aún no tienes colaboradores" : "Sin resultados para este filtro"}
+            descripcion={totalActivos + totalRetirados === 0 ? "Agrega tu primer colaborador con el botón de arriba." : undefined}
           />
         )}
         <div className="flex flex-col">
@@ -328,6 +356,14 @@ export default function DashboardEmpresa() {
           ))}
         </div>
       </PaycheckCard>
+      {respuesta && (
+        <Paginador
+          page={respuesta.page}
+          total={respuesta.total}
+          limit={respuesta.limit}
+          onCambio={(page) => setFiltros({ page })}
+        />
+      )}
     </div>
   );
 }

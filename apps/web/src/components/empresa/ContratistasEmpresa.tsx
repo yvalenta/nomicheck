@@ -7,17 +7,27 @@ import {
   eliminarContratista,
   listarContratistas,
   type Contratista,
+  type RespuestaPaginada,
 } from "../../apiEmpresa";
 import { obtenerParametros, type ParametrosPublicos } from "../../api";
 import PaycheckCard from "../PaycheckCard.tsx";
 import EmptyState from "../EmptyState.tsx";
 import Skeleton from "../Skeleton.tsx";
+import CampoBusqueda from "../filtros/CampoBusqueda.tsx";
+import SegmentedControl from "../SegmentedControl.tsx";
+import Paginador from "../filtros/Paginador.tsx";
+import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
+type FiltroEstado = "activos" | "inactivos" | "todos";
+type Filtros = { q: string; estado: FiltroEstado; page: number };
+const DEFAULTS: Filtros = { q: "", estado: "activos", page: 1 };
+
 export default function ContratistasEmpresa() {
-  const [contratistas, setContratistas] = useState<Contratista[]>([]);
+  const [filtros, setFiltros] = useFiltrosUrl<Filtros>(DEFAULTS);
+  const [respuesta, setRespuesta] = useState<RespuestaPaginada<Contratista> | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
@@ -27,19 +37,25 @@ export default function ContratistasEmpresa() {
   const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
 
   function recargar() {
-    // Vista sin filtros por ahora (siguiente commit los cablea); traemos
-    // hasta 200 para no cortar listas medianas. El paginado real llega
-    // cuando se aplique el patrón de AuditoriaEmpresa.
-    listarContratistas({ limit: 200 })
-      .then((r) => setContratistas(r.items))
+    setCargando(true);
+    const activo = filtros.estado === "activos" ? true : filtros.estado === "inactivos" ? false : undefined;
+    listarContratistas({ q: filtros.q || undefined, activo, page: filtros.page, limit: 25 })
+      .then(setRespuesta)
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
   }
 
+  useEffect(recargar, [filtros.q, filtros.estado, filtros.page]);
+
   useEffect(() => {
-    recargar();
     obtenerParametros().then(setParametros);
   }, []);
+
+  function cambiarFiltro(patch: Partial<Filtros>) {
+    setFiltros({ ...patch, page: 1 });
+  }
+
+  const contratistas = respuesta?.items ?? [];
 
   function notificar(mensaje: string) {
     setExito(mensaje);
@@ -104,10 +120,27 @@ export default function ContratistasEmpresa() {
 
       {mostrarForm && <FormContratista smlmv={parametros?.smlmv} onGuardar={agregar} />}
 
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
+        <SegmentedControl<FiltroEstado>
+          opciones={[
+            { valor: "activos", etiqueta: "Activos" },
+            { valor: "inactivos", etiqueta: "Inactivos" },
+            { valor: "todos", etiqueta: "Todos" },
+          ]}
+          activo={filtros.estado}
+          onCambio={(estado) => cambiarFiltro({ estado })}
+        />
+        <CampoBusqueda
+          value={filtros.q}
+          onChange={(q) => cambiarFiltro({ q })}
+          placeholder="Buscar por nombre o documento…"
+        />
+      </div>
+
       <PaycheckCard>
         {cargando && <Skeleton filas={2} />}
         {!cargando && contratistas.length === 0 && (
-          <EmptyState icon={Briefcase} titulo="Aún no tienes contratistas" />
+          <EmptyState icon={Briefcase} titulo="Sin contratistas para este filtro" />
         )}
         <div className="flex flex-col">
           {contratistas.map((c) => (
@@ -168,6 +201,14 @@ export default function ContratistasEmpresa() {
           ))}
         </div>
       </PaycheckCard>
+      {respuesta && (
+        <Paginador
+          page={respuesta.page}
+          total={respuesta.total}
+          limit={respuesta.limit}
+          onCambio={(page) => setFiltros({ page })}
+        />
+      )}
     </div>
   );
 }

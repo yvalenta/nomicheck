@@ -34,8 +34,12 @@ import {
   type Periodo,
   type Recibo,
   type RechazoQA,
+  type RespuestaPaginada,
   type Turno,
 } from "../../apiEmpresa";
+import SelectFiltro from "../filtros/SelectFiltro.tsx";
+import Paginador from "../filtros/Paginador.tsx";
+import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
 import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
 import ComprobanteNomina from "../ComprobanteNomina.tsx";
@@ -84,19 +88,34 @@ function horasDelTurno(t: Turno): number {
   return minutos / 60;
 }
 
+type EstadoPeriodo = "" | "borrador" | "liquidado" | "pagado";
+type FiltrosPeriodos = { estado: EstadoPeriodo; desde: string; hasta: string; page: number };
+const DEFAULTS_PERIODOS: FiltrosPeriodos = { estado: "", desde: "", hasta: "", page: 1 };
+
 export default function PeriodosEmpresa() {
-  const [periodos, setPeriodos] = useState<Periodo[]>([]);
+  const [filtros, setFiltros] = useFiltrosUrl<FiltrosPeriodos>(DEFAULTS_PERIODOS);
+  const [respuesta, setRespuesta] = useState<RespuestaPaginada<Periodo> | null>(null);
   const [seleccionado, setSeleccionado] = useState<Periodo | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function recargar() {
-    listarPeriodos({ limit: 200 })
-      .then((r) => setPeriodos(r.items))
+    listarPeriodos({
+      estado: filtros.estado || undefined,
+      desde: filtros.desde || undefined,
+      hasta: filtros.hasta || undefined,
+      page: filtros.page,
+      limit: 25,
+    })
+      .then(setRespuesta)
       .catch((e) => setError(e.message));
   }
 
-  useEffect(recargar, []);
+  useEffect(recargar, [filtros.estado, filtros.desde, filtros.hasta, filtros.page]);
+
+  function cambiarFiltro(patch: Partial<FiltrosPeriodos>) {
+    setFiltros({ ...patch, page: 1 });
+  }
 
   if (seleccionado) {
     return (
@@ -110,6 +129,8 @@ export default function PeriodosEmpresa() {
       />
     );
   }
+
+  const periodos = respuesta?.items ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -127,16 +148,57 @@ export default function PeriodosEmpresa() {
 
       {mostrarForm && (
         <FormPeriodo
-          onCreado={(p) => {
+          onCreado={() => {
             setMostrarForm(false);
-            setPeriodos((prev) => [p, ...prev]);
+            recargar();
           }}
         />
       )}
 
+      {/* Filtros: estado + rango de fechas (URL-driven, SPA §15). */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <SelectFiltro<Exclude<EstadoPeriodo, "">>
+          value={filtros.estado}
+          onChange={(v) => cambiarFiltro({ estado: v })}
+          todasLabel="Todos los estados"
+          opciones={[
+            { valor: "borrador", etiqueta: "Borrador" },
+            { valor: "liquidado", etiqueta: "Liquidado" },
+            { valor: "pagado", etiqueta: "Pagado" },
+          ]}
+        />
+        <label className="flex items-center gap-1.5 text-xs text-muted">
+          Desde
+          <input
+            type="date"
+            value={filtros.desde}
+            onChange={(e) => cambiarFiltro({ desde: e.target.value })}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-muted">
+          Hasta
+          <input
+            type="date"
+            value={filtros.hasta}
+            onChange={(e) => cambiarFiltro({ hasta: e.target.value })}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+          />
+        </label>
+        {(filtros.estado || filtros.desde || filtros.hasta) && (
+          <button onClick={() => setFiltros(DEFAULTS_PERIODOS)} className="text-xs text-mint-dark hover:underline ml-auto">
+            Limpiar
+          </button>
+        )}
+      </div>
+
       <PaycheckCard>
         {periodos.length === 0 && (
-          <p className="text-sm text-muted px-3 py-6 text-center">Aún no tienes periodos creados.</p>
+          <p className="text-sm text-muted px-3 py-6 text-center">
+            {filtros.estado || filtros.desde || filtros.hasta
+              ? "Sin periodos que coincidan con estos filtros."
+              : "Aún no tienes periodos creados."}
+          </p>
         )}
         <div className="flex flex-col">
           {periodos.map((p) => (
@@ -161,6 +223,14 @@ export default function PeriodosEmpresa() {
           ))}
         </div>
       </PaycheckCard>
+      {respuesta && (
+        <Paginador
+          page={respuesta.page}
+          total={respuesta.total}
+          limit={respuesta.limit}
+          onCambio={(page) => setFiltros({ page })}
+        />
+      )}
     </div>
   );
 }
