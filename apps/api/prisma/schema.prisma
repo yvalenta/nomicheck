@@ -210,7 +210,17 @@ model PeriodoNomina {
   empresa     Empresa  @relation(fields: [empresaId], references: [id])
   fechaInicio String // YYYY-MM-DD
   fechaFin    String // YYYY-MM-DD
-  estado      String   @default("borrador") // borrador | liquidado | pagado
+  // borrador | liquidando | liquidado | liquidado_con_rechazos | fallido | pagado
+  // Máquina de estados (SDD §15, escalabilidad enterprise):
+  //   borrador → liquidando → (liquidado | liquidado_con_rechazos | fallido)
+  //   liquidado / liquidado_con_rechazos ↔ borrador (revertirABorrador)
+  //   liquidado → pagado (transición futura, no implementada aún)
+  // `liquidando` bloquea toda edición mientras el worker procesa lotes.
+  // `liquidado_con_rechazos` = liquidación parcial: los empleados que pasaron
+  // QA quedaron con recibo; los rechazados quedan reportados en
+  // `erroresLiquidacion` sin recibo — permite revisar y volver a intentar
+  // solo esos, en vez de bloquear al resto del payroll a esta escala.
+  estado      String   @default("borrador")
   creadoEn    DateTime @default(now())
   // Rastro de auditoría de la última edición de fechas (solo se permite en
   // borrador — un periodo liquidado se revierte primero). Null = nunca editado.
@@ -219,8 +229,20 @@ model PeriodoNomina {
   // Concurrencia optimista: cada write bumpea version. liquidarPeriodo /
   // revertirABorrador exigen where {id, version: X} y capturan P2025 como
   // ErrorConflicto (HTTP 409) — evita que dos analistas pisen el mismo
-  // periodo simultáneamente.
+  // periodo simultáneamente. Los updates de PROGRESO del worker asincrónico
+  // NO usan version (son escritura de sistema monótona, protegida por el
+  // hecho de que solo el job dueño de jobId escribe mientras estado='liquidando');
+  // las TRANSICIONES de estado (→liquidando, →liquidado*, →fallido) sí van con
+  // version para detectar ediciones concurrentes reales.
   version     Int      @default(0)
+  // Liquidación asíncrona (SDD §15, escalabilidad enterprise). Null cuando el
+  // periodo nunca se encoló; se rellena al transicionar a `liquidando`.
+  jobId       String?
+  progreso    Int      @default(0)
+  // Cuando el periodo termina en `liquidado_con_rechazos` o `fallido`, aquí
+  // queda el detalle tipado — { empleadoId, nombre, issues[] } para rechazos
+  // por-empleado (QA), o { mensaje, contexto } para fallo catastrófico.
+  erroresLiquidacion Json?
 
   turnos  Turno[]
   recibos ReciboPago[]

@@ -275,13 +275,42 @@ export function obtenerCumplimiento(): Promise<SemaforoCumplimiento> {
   return autenticado("/empresa/cumplimiento");
 }
 
+// Máquina de estados (SDD §15, escalabilidad enterprise) — espejo del set
+// canónico del backend en apps/api/src/lib/estados.ts. `liquidando` es el
+// estado transitorio que activa el polling; `liquidado_con_rechazos` es
+// terminal (parcial: algunos empleados fallaron QA, quedan en erroresLiquidacion).
+export type EstadoPeriodo =
+  | "borrador"
+  | "liquidando"
+  | "liquidado"
+  | "liquidado_con_rechazos"
+  | "fallido"
+  | "pagado";
+
 export interface Periodo {
   id: number;
   fechaInicio: string;
   fechaFin: string;
-  estado: "borrador" | "liquidado" | "pagado";
+  estado: EstadoPeriodo;
   notaEdicion: string | null;
   editadoEn: string | null;
+  version: number;
+  jobId: string | null;
+  progreso: number;
+  erroresLiquidacion: RechazoQA[] | ErrorCatastrofico | null;
+}
+
+// Formato tipado del campo erroresLiquidacion — dos formas posibles:
+// (a) Array de rechazos por-empleado cuando estado='liquidado_con_rechazos'.
+// (b) Detalle del error catastrófico cuando estado='fallido'.
+export interface RechazoQA {
+  empleadoId: number;
+  nombre: string;
+  issues: IssueQA[];
+}
+export interface ErrorCatastrofico {
+  mensaje: string;
+  contexto?: string;
 }
 
 export interface Turno {
@@ -320,7 +349,7 @@ export interface Recibo {
 }
 
 export interface FiltrosPeriodosCliente {
-  estado?: "borrador" | "liquidado" | "pagado";
+  estado?: EstadoPeriodo;
   desde?: string;
   hasta?: string;
   page?: number;

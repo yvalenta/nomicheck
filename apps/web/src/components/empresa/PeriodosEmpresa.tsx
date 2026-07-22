@@ -88,8 +88,11 @@ function horasDelTurno(t: Turno): number {
   return minutos / 60;
 }
 
-type EstadoPeriodo = "" | "borrador" | "liquidado" | "pagado";
-type FiltrosPeriodos = { estado: EstadoPeriodo; desde: string; hasta: string; page: number };
+// Solo los estados sobre los que el filtro tiene sentido — 'liquidando' es
+// transitorio (no vale filtrarlo, dura segundos) y 'fallido' se colapsa con
+// 'borrador' en la UX de filtro (queda esperando reintento).
+type FiltroEstadoPeriodo = "" | "borrador" | "liquidado" | "liquidado_con_rechazos" | "pagado";
+type FiltrosPeriodos = { estado: FiltroEstadoPeriodo; desde: string; hasta: string; page: number };
 const DEFAULTS_PERIODOS: FiltrosPeriodos = { estado: "", desde: "", hasta: "", page: 1 };
 
 export default function PeriodosEmpresa() {

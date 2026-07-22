@@ -1,12 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { ErrorConflicto } from "./empleadosService.js";
+import type { EstadoPeriodo } from "../lib/estados.js";
 import type { editarPeriodoSchema, empleadosPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
 import type { z } from "zod";
 import type { RespuestaPaginada } from "../lib/paginacion.js";
 
 export interface FiltrosPeriodos {
-  estado?: "borrador" | "liquidado" | "pagado";
+  estado?: EstadoPeriodo;
   desde?: string;   // recorta por fechaInicio ≥ desde
   hasta?: string;   // recorta por fechaFin ≤ hasta
   page: number;

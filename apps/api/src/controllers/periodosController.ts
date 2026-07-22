@@ -12,15 +12,14 @@ import {
 import { liquidarPeriodo, listarRecibos, QaRechazadaError, revertirABorrador } from "../services/liquidacionService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
 import { paginacionDeQuery, stringOpt } from "../lib/paginacion.js";
-
-const ESTADOS = new Set(["borrador", "liquidado", "pagado"]);
+import { esEstadoPeriodo } from "../lib/estados.js";
 
 export async function listar(req: Request, res: Response) {
   const pag = paginacionDeQuery(req, 25);
   const estado = stringOpt(req.query.estado);
   res.json(await listarPeriodos(req.usuario!.empresaId!, {
     ...pag,
-    estado: estado && ESTADOS.has(estado) ? (estado as "borrador" | "liquidado" | "pagado") : undefined,
+    estado: esEstadoPeriodo(estado) ? estado : undefined,
     desde: stringOpt(req.query.desde),
     hasta: stringOpt(req.query.hasta),
   }));
