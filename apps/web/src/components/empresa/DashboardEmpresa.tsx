@@ -55,8 +55,8 @@ export default function DashboardEmpresa() {
   const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
 
   function recargar() {
-    listarEmpleados()
-      .then(setEmpleados)
+    listarEmpleados({ limit: 200 })
+      .then((r) => setEmpleados(r.items))
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
   }

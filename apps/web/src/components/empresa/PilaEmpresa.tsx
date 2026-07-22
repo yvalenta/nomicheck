@@ -18,8 +18,11 @@ export default function PilaEmpresa() {
   const [abiertoId, setAbiertoId] = useState<number | null>(null);
 
   useEffect(() => {
-    listarPeriodos().then((ps) => {
-      const liquidados = ps.filter((p) => p.estado !== "borrador");
+    // PILA solo tiene sentido sobre periodos ya liquidados — pedimos ese
+    // filtro al backend y un límite generoso (200) para no meter paginación
+    // acá; si una empresa acumula más de 200, ya deberíamos rebanar por año.
+    listarPeriodos({ limit: 200 }).then((r) => {
+      const liquidados = r.items.filter((p) => p.estado !== "borrador");
       setPeriodos(liquidados);
       if (liquidados.length > 0) setPeriodoId(liquidados[0].id);
     });

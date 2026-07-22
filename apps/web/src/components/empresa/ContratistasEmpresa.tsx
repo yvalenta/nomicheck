@@ -27,8 +27,11 @@ export default function ContratistasEmpresa() {
   const [parametros, setParametros] = useState<ParametrosPublicos | null>(null);
 
   function recargar() {
-    listarContratistas()
-      .then(setContratistas)
+    // Vista sin filtros por ahora (siguiente commit los cablea); traemos
+    // hasta 200 para no cortar listas medianas. El paginado real llega
+    // cuando se aplique el patrón de AuditoriaEmpresa.
+    listarContratistas({ limit: 200 })
+      .then((r) => setContratistas(r.items))
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
   }

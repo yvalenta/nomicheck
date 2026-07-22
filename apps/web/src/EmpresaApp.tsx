@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import HeaderProfile from "./components/HeaderProfile.tsx";
@@ -19,9 +20,20 @@ import { irAPortalSegunRol } from "./lib/irAPortal.ts";
 
 type Seccion = "colaboradores" | "contratistas" | "periodos" | "discrepancias" | "costos" | "pila" | "cumplimiento" | "sedes" | "auditoria";
 
+const OPCIONES: { valor: Seccion; etiqueta: string }[] = [
+  { valor: "colaboradores", etiqueta: "Colaboradores" },
+  { valor: "contratistas", etiqueta: "Contratistas" },
+  { valor: "periodos", etiqueta: "Periodos" },
+  { valor: "discrepancias", etiqueta: "Discrepancias" },
+  { valor: "costos", etiqueta: "Costos" },
+  { valor: "pila", etiqueta: "PILA" },
+  { valor: "cumplimiento", etiqueta: "Cumplimiento" },
+  { valor: "sedes", etiqueta: "Sedes" },
+  { valor: "auditoria", etiqueta: "Auditoría" },
+];
+
 export default function EmpresaApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [seccion, setSeccion] = useState<Seccion>("colaboradores");
   const [recuperando, setRecuperando] = useState(false);
   // undefined = sin verificar, true = es admin_empresa, false = rebotando a
   // su portal real (ver irAPortalSegunRol) — evita mostrar este dashboard a
@@ -60,36 +72,7 @@ export default function EmpresaApp() {
         {!recuperando && session && rolOk === undefined && (
           <p className="text-sm text-muted text-center">Cargando…</p>
         )}
-        {!recuperando && session && rolOk && (
-          <div className="flex flex-col gap-5">
-            <div className="flex justify-center">
-              <SegmentedControl<Seccion>
-                opciones={[
-                  { valor: "colaboradores", etiqueta: "Colaboradores" },
-                  { valor: "contratistas", etiqueta: "Contratistas" },
-                  { valor: "periodos", etiqueta: "Periodos" },
-                  { valor: "discrepancias", etiqueta: "Discrepancias" },
-                  { valor: "costos", etiqueta: "Costos" },
-                  { valor: "pila", etiqueta: "PILA" },
-                  { valor: "cumplimiento", etiqueta: "Cumplimiento" },
-                  { valor: "sedes", etiqueta: "Sedes" },
-                  { valor: "auditoria", etiqueta: "Auditoría" },
-                ]}
-                activo={seccion}
-                onCambio={setSeccion}
-              />
-            </div>
-            {seccion === "colaboradores" && <DashboardEmpresa />}
-            {seccion === "contratistas" && <ContratistasEmpresa />}
-            {seccion === "periodos" && <PeriodosEmpresa />}
-            {seccion === "discrepancias" && <DiscrepanciasEmpresa />}
-            {seccion === "costos" && <CostosEmpresa />}
-            {seccion === "pila" && <PilaEmpresa />}
-            {seccion === "cumplimiento" && <CumplimientoEmpresa />}
-            {seccion === "sedes" && <SedesEmpresa />}
-            {seccion === "auditoria" && <AuditoriaEmpresa />}
-          </div>
-        )}
+        {!recuperando && session && rolOk && <PanelConRutas />}
       </main>
       <footer className="text-center text-xs text-muted py-4 px-6 flex flex-col gap-1.5">
         <span>
@@ -98,6 +81,40 @@ export default function EmpresaApp() {
         </span>
         <span className="font-display text-[9px] font-medium uppercase tracking-[0.2em] text-base-content/25">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
+    </div>
+  );
+}
+
+// SPA: la sección activa vive en la URL (SDD §15). SegmentedControl navega
+// con react-router y NavLink resalta la activa automáticamente. Deep-link a
+// una sección o incluso a /periodos/:id (via PeriodosEmpresa interno)
+// funciona porque BrowserRouter usa /empresa como basename (ver main.tsx).
+function PanelConRutas() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const seccionActiva = (location.pathname.split("/")[1] || "colaboradores") as Seccion;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex justify-center">
+        <SegmentedControl<Seccion>
+          opciones={OPCIONES}
+          activo={seccionActiva}
+          onCambio={(v) => navigate(`/${v}`)}
+        />
+      </div>
+      <Routes>
+        <Route path="/" element={<Navigate to="/colaboradores" replace />} />
+        <Route path="/colaboradores" element={<DashboardEmpresa />} />
+        <Route path="/contratistas" element={<ContratistasEmpresa />} />
+        <Route path="/periodos/*" element={<PeriodosEmpresa />} />
+        <Route path="/discrepancias" element={<DiscrepanciasEmpresa />} />
+        <Route path="/costos" element={<CostosEmpresa />} />
+        <Route path="/pila" element={<PilaEmpresa />} />
+        <Route path="/cumplimiento" element={<CumplimientoEmpresa />} />
+        <Route path="/sedes" element={<SedesEmpresa />} />
+        <Route path="/auditoria" element={<AuditoriaEmpresa />} />
+      </Routes>
     </div>
   );
 }

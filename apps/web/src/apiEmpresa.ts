@@ -84,8 +84,37 @@ export function registrarEmpresa(datos: DatosRegistro) {
   return autenticado("/auth/registro", { method: "POST", body: JSON.stringify(datos) });
 }
 
-export function listarEmpleados(): Promise<Empleado[]> {
-  return autenticado("/empresa/empleados");
+// Formato uniforme de listados paginados (SDD §15). Ver apps/api/src/lib/paginacion.ts.
+export interface RespuestaPaginada<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// Helper para armar querystrings desde un objeto — omite undefined/null/""
+// para no ensuciar la URL con params vacíos.
+function qs(params: Record<string, unknown>): string {
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === "") continue;
+    search.set(k, String(v));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : "";
+}
+
+export interface FiltrosEmpleadosCliente {
+  q?: string;
+  sedeId?: number;
+  activo?: boolean;
+  tipoContrato?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function listarEmpleados(f: FiltrosEmpleadosCliente = {}): Promise<RespuestaPaginada<Empleado>> {
+  return autenticado(`/empresa/empleados${qs({ ...f, limit: f.limit ?? 25 })}`);
 }
 
 // Campos que captura el formulario — el resto (id, activo, fechaRetiro y el
@@ -131,8 +160,15 @@ export interface Contratista {
   activo: boolean;
 }
 
-export function listarContratistas(): Promise<Contratista[]> {
-  return autenticado("/empresa/contratistas");
+export interface FiltrosContratistasCliente {
+  q?: string;
+  activo?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export function listarContratistas(f: FiltrosContratistasCliente = {}): Promise<RespuestaPaginada<Contratista>> {
+  return autenticado(`/empresa/contratistas${qs({ ...f, limit: f.limit ?? 25 })}`);
 }
 
 export function crearContratista(datos: Omit<Contratista, "id" | "activo">): Promise<Contratista> {
@@ -283,8 +319,16 @@ export interface Recibo {
   qaIssues: IssueQA[] | null;
 }
 
-export function listarPeriodos(): Promise<Periodo[]> {
-  return autenticado("/empresa/periodos");
+export interface FiltrosPeriodosCliente {
+  estado?: "borrador" | "liquidado" | "pagado";
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function listarPeriodos(f: FiltrosPeriodosCliente = {}): Promise<RespuestaPaginada<Periodo>> {
+  return autenticado(`/empresa/periodos${qs({ ...f, limit: f.limit ?? 25 })}`);
 }
 
 export function crearPeriodo(datos: { fechaInicio: string; fechaFin: string }): Promise<Periodo> {
@@ -412,6 +456,16 @@ export interface EntradaAuditoria {
   valoresNuevos: Record<string, unknown> | null;
 }
 
-export function listarAuditoria(limit = 100): Promise<EntradaAuditoria[]> {
-  return autenticado(`/empresa/auditoria?limit=${limit}`);
+export interface FiltrosAuditoriaCliente {
+  q?: string;
+  tabla?: "ReciboPago" | "PeriodoNomina" | "Empleado";
+  accion?: "INSERT" | "UPDATE" | "DELETE";
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function listarAuditoria(f: FiltrosAuditoriaCliente = {}): Promise<RespuestaPaginada<EntradaAuditoria>> {
+  return autenticado(`/empresa/auditoria${qs({ ...f, limit: f.limit ?? 25 })}`);
 }

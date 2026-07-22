@@ -91,8 +91,8 @@ export default function PeriodosEmpresa() {
   const [error, setError] = useState<string | null>(null);
 
   function recargar() {
-    listarPeriodos()
-      .then(setPeriodos)
+    listarPeriodos({ limit: 200 })
+      .then((r) => setPeriodos(r.items))
       .catch((e) => setError(e.message));
   }
 
@@ -318,7 +318,7 @@ function DetallePeriodo({
   const [guardandoIncluidos, setGuardandoIncluidos] = useState(false);
 
   useEffect(() => {
-    listarEmpleados().then(setEmpleados);
+    listarEmpleados({ limit: 200 }).then((r) => setEmpleados(r.items));
     listarFestivos().then(setFestivos);
     if (periodo.estado === "borrador") {
       obtenerTurnos(periodo.id).then(setTurnos);
