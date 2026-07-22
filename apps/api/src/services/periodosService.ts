@@ -1,5 +1,6 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { ErrorConflicto } from "./empleadosService.js";
 import type { editarPeriodoSchema, empleadosPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
 import type { z } from "zod";
 import type { RespuestaPaginada } from "../lib/paginacion.js";
@@ -62,7 +63,7 @@ export async function editarEmpleadosPeriodo(
   }
 
   const ids = [...new Set(empleadoIds)];
-  const validos = await prisma.empleado.count({ where: { id: { in: ids }, empresaId } });
+  const validos = await prisma.empleado.count({ where: { id: { in: ids }, empresaId, eliminadoEn: null } });
   if (validos !== ids.length) {
     throw new Error("Uno o más empleados no pertenecen a esta empresa");
   }
@@ -93,15 +94,25 @@ export async function editarPeriodo(
   if (periodo.estado !== "borrador") {
     throw new Error(`El periodo está en estado "${periodo.estado}" — revierte a borrador antes de editar las fechas`);
   }
-  return prisma.periodoNomina.update({
-    where: { id: periodoId },
-    data: {
-      fechaInicio: datos.fechaInicio,
-      fechaFin: datos.fechaFin,
-      notaEdicion: datos.nota,
-      editadoEn: new Date(),
-    },
-  });
+  try {
+    return await prisma.periodoNomina.update({
+      where: { id: periodoId, version: periodo.version },
+      data: {
+        fechaInicio: datos.fechaInicio,
+        fechaFin: datos.fechaFin,
+        notaEdicion: datos.nota,
+        editadoEn: new Date(),
+        version: { increment: 1 },
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      throw new ErrorConflicto(
+        "Otro usuario modificó este periodo mientras trabajabas en él. Actualiza la página y vuelve a intentarlo."
+      );
+    }
+    throw err;
+  }
 }
 
 export function listarTurnos(periodoId: number) {
@@ -124,7 +135,7 @@ export async function reemplazarTurnos(
 
   const empleadoIds = [...new Set(turnos.map((t) => t.empleadoId))];
   const empleadosValidos = await prisma.empleado.count({
-    where: { id: { in: empleadoIds }, empresaId },
+    where: { id: { in: empleadoIds }, empresaId, eliminadoEn: null },
   });
   if (empleadosValidos !== empleadoIds.length) {
     throw new Error("Uno o más empleados no pertenecen a esta empresa");

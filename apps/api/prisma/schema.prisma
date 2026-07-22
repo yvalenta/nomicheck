@@ -170,6 +170,11 @@ model Empleado {
   sedeId            Int?
   sede              Sede?    @relation(fields: [sedeId], references: [id])
   activo            Boolean @default(true)
+  // Soft delete: `activo=false` es "retirado" (con fecha legal), `eliminadoEn`
+  // es "creado por error, ocultar" — se conserva la fila para no romper FKs
+  // de recibos/turnos históricos. Todas las lecturas filtran eliminadoEn IS NULL
+  // por default (empleadosService.listar + empleadoAccesible).
+  eliminadoEn       DateTime?
   creadoEn          DateTime @default(now())
 
   turnos  Turno[]
@@ -211,6 +216,11 @@ model PeriodoNomina {
   // borrador — un periodo liquidado se revierte primero). Null = nunca editado.
   notaEdicion String?
   editadoEn   DateTime?
+  // Concurrencia optimista: cada write bumpea version. liquidarPeriodo /
+  // revertirABorrador exigen where {id, version: X} y capturan P2025 como
+  // ErrorConflicto (HTTP 409) — evita que dos analistas pisen el mismo
+  // periodo simultáneamente.
+  version     Int      @default(0)
 
   turnos  Turno[]
   recibos ReciboPago[]

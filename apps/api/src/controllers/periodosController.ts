@@ -10,6 +10,7 @@ import {
   reemplazarTurnos,
 } from "../services/periodosService.js";
 import { liquidarPeriodo, listarRecibos, QaRechazadaError, revertirABorrador } from "../services/liquidacionService.js";
+import { ErrorConflicto } from "../services/empleadosService.js";
 import { paginacionDeQuery, stringOpt } from "../lib/paginacion.js";
 
 const ESTADOS = new Set(["borrador", "liquidado", "pagado"]);
@@ -45,6 +46,10 @@ export async function editar(req: Request, res: Response) {
     const periodo = await editarPeriodo(req.usuario!.empresaId!, Number(req.params.id), parseo.data);
     res.json(periodo);
   } catch (err) {
+    if (err instanceof ErrorConflicto) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo editar el periodo" });
   }
 }
@@ -95,6 +100,10 @@ export async function liquidar(req: Request, res: Response) {
       res.status(422).json({ error: err.message, rechazos: err.rechazos });
       return;
     }
+    if (err instanceof ErrorConflicto) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo liquidar" });
   }
 }
@@ -104,6 +113,10 @@ export async function revertir(req: Request, res: Response) {
     await revertirABorrador(req.usuario!.empresaId!, Number(req.params.id), req.usuario!.id);
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof ErrorConflicto) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo revertir el periodo" });
   }
 }

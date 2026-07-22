@@ -12,11 +12,38 @@ import {
   type ResultadoQA,
   type TipoContrato,
 } from "@pv/reglas";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { conAuditoria } from "../lib/auditoria.js";
+import { ErrorConflicto } from "./empleadosService.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
 import { obtenerPeriodo } from "./periodosService.js";
+
+// Concurrencia optimista sobre PeriodoNomina.version: si dos analistas
+// intentan liquidar/revertir el mismo periodo, el segundo update no
+// matchea (where {id, version: X} con X ya incrementado) y Prisma lanza
+// P2025 — lo traducimos a ErrorConflicto → HTTP 409 con mensaje que el
+// frontend puede mostrar como "actualiza la página y reintenta".
+async function actualizarPeriodoConVersion(
+  tx: Prisma.TransactionClient,
+  periodoId: number,
+  versionActual: number,
+  data: Prisma.PeriodoNominaUpdateInput
+) {
+  try {
+    return await tx.periodoNomina.update({
+      where: { id: periodoId, version: versionActual },
+      data: { ...data, version: { increment: 1 } },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      throw new ErrorConflicto(
+        "Otro usuario modificó este periodo mientras trabajabas en él. Actualiza la página y vuelve a intentarlo."
+      );
+    }
+    throw err;
+  }
+}
 
 /** Error especializado: la respuesta HTTP no es solo un mensaje — expone al
  * frontend la lista tipada de issues para poder mostrarlos con código+ley. */
@@ -65,7 +92,12 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
 
   const resolutor = crearResolutorReglas(reglas);
 
-  const resumenPorEmpleado: { empleadoId: number; nombre: string; resultado: ResultadoNomina }[] = [];
+  const resumenPorEmpleado: {
+    empleadoId: number;
+    nombre: string;
+    resultado: ResultadoNomina;
+    novedades?: { fecha: string; trabajo: boolean; remunerada?: boolean }[];
+  }[] = [];
   const recibos = empleados.map((empleado) => {
     const tipoContrato = empleado.tipoContrato as TipoContrato;
     const resultado =
@@ -126,7 +158,12 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
           ];
         })();
 
-    resumenPorEmpleado.push({ empleadoId: empleado.id, nombre: empleado.nombre, resultado });
+    const novedades = empleado.tipoNomina === "turnos"
+      ? turnos
+          .filter((t) => t.empleadoId === empleado.id)
+          .map((t) => ({ fecha: t.fecha, trabajo: true as const }))
+      : undefined;
+    resumenPorEmpleado.push({ empleadoId: empleado.id, nombre: empleado.nombre, resultado, novedades });
     return {
       empleadoId: empleado.id,
       periodoId,
@@ -145,7 +182,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
   // algún recibo cae en `rechazada`, aborta ANTES de persistir con la lista
   // de issues por empleado. Los `con_advertencias` liquidan pero quedan con
   // sus issues persistidos en ReciboPago.qaIssues para auditoría.
-  const veredictos: ResultadoQA[] = resumenPorEmpleado.map(({ resultado }) =>
+  const veredictos: ResultadoQA[] = resumenPorEmpleado.map(({ resultado, novedades }) =>
     evaluarQA(
       {
         fecha: periodo.fechaFin,
@@ -156,6 +193,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
         netoPagado: resultado.netoEsperado,
         ibcPeriodo: ibcDeLineas(resultado.lineas),
         issuesMotor: resultado.issues,
+        novedades,
       },
       resolutor
     )
@@ -203,7 +241,7 @@ export async function liquidarPeriodo(empresaId: number, periodoId: number, usua
 
   await conAuditoria(usuarioId, async (tx) => {
     await tx.reciboPago.createMany({ data: [...recibos, ...recibosContratistas] });
-    await tx.periodoNomina.update({ where: { id: periodoId }, data: { estado: "liquidado" } });
+    await actualizarPeriodoConVersion(tx, periodoId, periodo.version, { estado: "liquidado" });
   });
 
   return prisma.reciboPago.findMany({ where: { periodoId }, include: { empleado: true, contratista: true } });
@@ -228,6 +266,6 @@ export async function revertirABorrador(empresaId: number, periodoId: number, us
   // lo cual es correcto: no se debe borrar si el empleado ya reportó un problema.
   await conAuditoria(usuarioId, async (tx) => {
     await tx.reciboPago.deleteMany({ where: { periodoId } });
-    await tx.periodoNomina.update({ where: { id: periodoId }, data: { estado: "borrador" } });
+    await actualizarPeriodoConVersion(tx, periodoId, periodo.version, { estado: "borrador" });
   });
 }

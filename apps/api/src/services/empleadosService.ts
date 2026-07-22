@@ -24,7 +24,7 @@ export async function listarEmpleados(
   sedes: number[] | null = null,
   f: FiltrosEmpleados = { page: 1, limit: 25, skip: 0 }
 ): Promise<RespuestaPaginada<Awaited<ReturnType<typeof prisma.empleado.findFirst>>>> {
-  const where: Prisma.EmpleadoWhereInput = { empresaId };
+  const where: Prisma.EmpleadoWhereInput = { empresaId, eliminadoEn: null };
   if (sedes) where.sedeId = { in: sedes };
   if (f.sedeId !== undefined) where.sedeId = f.sedeId;
   if (f.activo !== undefined) where.activo = f.activo;
@@ -47,7 +47,7 @@ export async function listarEmpleados(
 // Cambio de bloque: analistas escoped no pueden tocar empleados fuera de
 // su alcance.
 async function empleadoAccesible(empresaId: number, empleadoId: number, sedes: number[] | null) {
-  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
+  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId, eliminadoEn: null } });
   if (!empleado) throw new Error("Empleado no encontrado");
   if (sedes && (empleado.sedeId === null || !sedes.includes(empleado.sedeId))) {
     throw new Error("Este colaborador está fuera de las sedes asignadas a tu usuario");
@@ -85,10 +85,14 @@ export async function actualizarEmpleado(
   return conAuditoria(usuarioId, (tx) => tx.empleado.update({ where: { id: empleadoId }, data: datos }));
 }
 
-// El borrado físico solo procede si el empleado no tiene NINGÚN historial
-// de nómina (caso "creado por error"): los registros de nómina deben
-// conservarse legalmente, así que con historial el camino es "retirar"
-// (soft-retire). Los FK Restrict del schema son la red de seguridad final.
+// "Eliminar" es soft: marca eliminadoEn=now (registro invisible para todas las
+// lecturas por default) en vez de DELETE físico. Con historial (recibos/turnos)
+// seguimos rechazando con 409 y direccionando a "Retirar" — un empleado con
+// historial que se elimine por error debería tener causal de retiro registrada,
+// no ocultarse silenciosamente. Sin historial (caso "creado por error"), el
+// soft delete lo saca de las listas y del @@unique(empresaId, documento) de
+// facto (el unique sigue reservando el documento, pero el UI ya no lo muestra
+// como conflicto).
 export class ErrorConflicto extends Error {}
 
 export async function eliminarEmpleado(
@@ -108,7 +112,9 @@ export async function eliminarEmpleado(
       "El empleado tiene historial de nómina (recibos o turnos registrados) y no puede eliminarse: los registros de nómina deben conservarse. Usa 'Retirar' para desactivarlo conservando el historial."
     );
   }
-  return conAuditoria(usuarioId, (tx) => tx.empleado.delete({ where: { id: empleadoId } }));
+  return conAuditoria(usuarioId, (tx) =>
+    tx.empleado.update({ where: { id: empleadoId }, data: { eliminadoEn: new Date(), activo: false } })
+  );
 }
 
 // Marca el retiro: el empleado deja de aparecer en periodos futuros

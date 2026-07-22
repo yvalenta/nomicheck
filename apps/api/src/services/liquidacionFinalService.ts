@@ -23,7 +23,7 @@ function diaSiguiente(fecha: string): string {
 // liquidado y la fecha de retiro, y lo convierte en un ReciboPago de cierre
 // con esas 4 líneas como devengo real (dinero que el colaborador recibe).
 export async function liquidarFinal(empresaId: number, empleadoId: number) {
-  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
+  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId, eliminadoEn: null } });
   if (!empleado) throw new Error("Empleado no encontrado");
   if (!empleado.fechaRetiro) {
     throw new Error("El empleado no tiene fecha de retiro registrada — usa /retirar primero");
