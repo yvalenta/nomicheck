@@ -112,4 +112,52 @@ describe("evaluarQA", () => {
     expect(r.issues.some((i) => i.codigo === "IBC_FUERA_DE_RANGO")).toBe(false);
     expect(r.issues.some((i) => i.codigo === "NETO_BAJO_MINIMO")).toBe(false);
   });
+
+  it("choque novedades vs tiempo (incapacidad + horas trabajadas mismo día) → rechazada con INCOMPATIBILIDAD_NOVEDAD_TIEMPO", () => {
+    // Guardarraíl defensivo: NovedadDia solo debe tener un estado por fecha.
+    // Aquí simulamos que el input llegó con 3 días de incapacidad (trabajo:false,
+    // remunerada:false) Y turnos trabajados en las mismas fechas — la matriz
+    // de turnos quedó inconsistente y el motor no puede decidir cuál gana.
+    const dias = ["2026-07-10", "2026-07-11", "2026-07-12"];
+    const novedades = [
+      ...dias.map((f) => ({ fecha: f, trabajo: false, remunerada: false })),
+      ...dias.map((f) => ({ fecha: f, trabajo: true })),
+    ];
+    const r = evaluarQA({ ...baseLegal(), novedades }, REGLAS_JUL_2026);
+    expect(r.estado).toBe("rechazada");
+    const choques = r.issues.filter((i) => i.codigo === "INCOMPATIBILIDAD_NOVEDAD_TIEMPO");
+    expect(choques).toHaveLength(3);
+    expect(choques.map((i) => i.detalles.contexto).sort()).toEqual(dias);
+  });
+
+  it("novedades sin choque (una por fecha) → sin issue de incompatibilidad", () => {
+    const novedades = [
+      { fecha: "2026-07-10", trabajo: false, remunerada: false },
+      { fecha: "2026-07-11", trabajo: true },
+    ];
+    const r = evaluarQA({ ...baseLegal(), novedades }, REGLAS_JUL_2026);
+    expect(r.issues.some((i) => i.codigo === "INCOMPATIBILIDAD_NOVEDAD_TIEMPO")).toBe(false);
+  });
+
+  it("decimales en totales → con_advertencias con DECIMALES_DETECTADOS_PILA", () => {
+    // Los operadores PILA (SOI, Arus) rechazan planillas con centavos. La
+    // regla es defensiva: el motor ya redondea con redondearPeso en cada
+    // línea, pero si un total llega sucio (bug futuro, dato exógeno), lo
+    // visibilizamos como advertencia.
+    const r = evaluarQA(
+      { ...baseLegal(), totalDeducciones: 160_000.5, netoPagado: 1_839_999.5 },
+      REGLAS_JUL_2026
+    );
+    expect(r.estado).toBe("con_advertencias");
+    const decimales = r.issues.filter((i) => i.codigo === "DECIMALES_DETECTADOS_PILA");
+    expect(decimales).toHaveLength(1);
+    expect(decimales[0].severidad).toBe("advertencia");
+    expect(decimales[0].mensaje).toContain("totalDeducciones");
+    expect(decimales[0].mensaje).toContain("netoPagado");
+  });
+
+  it("todos los totales enteros → sin issue de decimales", () => {
+    const r = evaluarQA(baseLegal(), REGLAS_JUL_2026);
+    expect(r.issues.some((i) => i.codigo === "DECIMALES_DETECTADOS_PILA")).toBe(false);
+  });
 });

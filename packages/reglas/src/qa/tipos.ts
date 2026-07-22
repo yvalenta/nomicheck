@@ -13,7 +13,9 @@ export type CodigoIssueQA =
   | "HORAS_EXTRA_EXCEDIDAS_SEMANA"
   | "TOPE_DEDUCCIONES_SUPERADO"
   | "NETO_BAJO_MINIMO"
-  | "IBC_FUERA_DE_RANGO";
+  | "IBC_FUERA_DE_RANGO"
+  | "INCOMPATIBILIDAD_NOVEDAD_TIEMPO"
+  | "DECIMALES_DETECTADOS_PILA";
 
 export type SeveridadQA = "error" | "advertencia";
 
@@ -55,4 +57,10 @@ export interface DatosQA {
    * tope del art. 149…). El QA los incluye tal cual en su ResultadoQA y
    * agrega los que dependen de la vista global del recibo (IBC, neto). */
   issuesMotor?: IssueQA[];
+  /** Novedades del periodo — se usan como guardarraíl defensivo: dos novedades
+   * con la misma fecha (p. ej. la UI mandó ausentismo Y horas trabajadas para
+   * el mismo día) rompen la premisa "un solo estado por día" del motor, y ese
+   * choque se reporta como INCOMPATIBILIDAD_NOVEDAD_TIEMPO. Opcional: si no se
+   * pasa, esta regla no corre. */
+  novedades?: { fecha: string; trabajo: boolean; remunerada?: boolean }[];
 }
