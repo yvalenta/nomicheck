@@ -7,9 +7,15 @@ import {
   listarContratistas,
 } from "../services/contratistasService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
+import { booleanoOpt, paginacionDeQuery, stringOpt } from "../lib/paginacion.js";
 
 export async function listar(req: Request, res: Response) {
-  res.json(await listarContratistas(req.usuario!.empresaId!));
+  const pag = paginacionDeQuery(req, 25);
+  res.json(await listarContratistas(req.usuario!.empresaId!, {
+    ...pag,
+    q: stringOpt(req.query.q),
+    activo: booleanoOpt(req.query.activo),
+  }));
 }
 
 export async function crear(req: Request, res: Response) {

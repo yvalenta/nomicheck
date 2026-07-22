@@ -1,18 +1,45 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { conAuditoria } from "../lib/auditoria.js";
+import type { RespuestaPaginada } from "../lib/paginacion.js";
 import type { empleadoSchema, empleadoUpdateSchema, retiroSchema } from "../validation/empresa.js";
 import type { z } from "zod";
+
+export interface FiltrosEmpleados {
+  q?: string;
+  sedeId?: number;
+  activo?: boolean;
+  tipoContrato?: string;
+  page: number;
+  limit: number;
+  skip: number;
+}
 
 // Todo query filtrada por empresaId en código — RLS es la defensa adicional,
 // no la única (SDD.md §05, doble capa de autorización).
 // `sedes` = scoping por sede del analista_rrhh (SDD §15, pilar 1). null =
 // sin scoping (admin_empresa/auditor/analista sin sedes) — ver auth.ts.
-export function listarEmpleados(empresaId: number, sedes: number[] | null = null) {
-  return prisma.empleado.findMany({
-    where: { empresaId, ...(sedes ? { sedeId: { in: sedes } } : {}) },
-    orderBy: { nombre: "asc" },
-  });
+export async function listarEmpleados(
+  empresaId: number,
+  sedes: number[] | null = null,
+  f: FiltrosEmpleados = { page: 1, limit: 25, skip: 0 }
+): Promise<RespuestaPaginada<Awaited<ReturnType<typeof prisma.empleado.findFirst>>>> {
+  const where: Prisma.EmpleadoWhereInput = { empresaId };
+  if (sedes) where.sedeId = { in: sedes };
+  if (f.sedeId !== undefined) where.sedeId = f.sedeId;
+  if (f.activo !== undefined) where.activo = f.activo;
+  if (f.tipoContrato) where.tipoContrato = f.tipoContrato;
+  if (f.q) {
+    where.OR = [
+      { nombre: { contains: f.q, mode: "insensitive" } },
+      { documento: { contains: f.q, mode: "insensitive" } },
+    ];
+  }
+  const [total, items] = await Promise.all([
+    prisma.empleado.count({ where }),
+    prisma.empleado.findMany({ where, orderBy: { nombre: "asc" }, skip: f.skip, take: f.limit }),
+  ]);
+  return { items, total, page: f.page, limit: f.limit };
 }
 
 // Verifica que un empleado exista, sea de la empresa y — si el usuario es

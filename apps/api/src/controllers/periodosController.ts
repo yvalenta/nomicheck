@@ -10,9 +10,19 @@ import {
   reemplazarTurnos,
 } from "../services/periodosService.js";
 import { liquidarPeriodo, listarRecibos, QaRechazadaError, revertirABorrador } from "../services/liquidacionService.js";
+import { paginacionDeQuery, stringOpt } from "../lib/paginacion.js";
+
+const ESTADOS = new Set(["borrador", "liquidado", "pagado"]);
 
 export async function listar(req: Request, res: Response) {
-  res.json(await listarPeriodos(req.usuario!.empresaId!));
+  const pag = paginacionDeQuery(req, 25);
+  const estado = stringOpt(req.query.estado);
+  res.json(await listarPeriodos(req.usuario!.empresaId!, {
+    ...pag,
+    estado: estado && ESTADOS.has(estado) ? (estado as "borrador" | "liquidado" | "pagado") : undefined,
+    desde: stringOpt(req.query.desde),
+    hasta: stringOpt(req.query.hasta),
+  }));
 }
 
 export async function crear(req: Request, res: Response) {

@@ -10,10 +10,19 @@ import {
 } from "../services/empleadosService.js";
 import { liquidarFinal } from "../services/liquidacionFinalService.js";
 import { sedesDelUsuario } from "../middleware/auth.js";
+import { booleanoOpt, paginacionDeQuery, stringOpt } from "../lib/paginacion.js";
 
 export async function listar(req: Request, res: Response) {
   const sedes = await sedesDelUsuario(req.usuario!);
-  const empleados = await listarEmpleados(req.usuario!.empresaId!, sedes);
+  const pag = paginacionDeQuery(req, 25);
+  const sedeIdParam = req.query.sedeId ? Number(req.query.sedeId) : undefined;
+  const empleados = await listarEmpleados(req.usuario!.empresaId!, sedes, {
+    ...pag,
+    q: stringOpt(req.query.q),
+    activo: booleanoOpt(req.query.activo),
+    tipoContrato: stringOpt(req.query.tipoContrato),
+    sedeId: Number.isFinite(sedeIdParam) ? sedeIdParam : undefined,
+  });
   res.json(empleados);
 }
 

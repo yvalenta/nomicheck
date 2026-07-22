@@ -1,12 +1,37 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { contratistaSchema, contratistaUpdateSchema } from "../validation/empresa.js";
 import type { z } from "zod";
 import { ErrorConflicto } from "./empleadosService.js";
+import type { RespuestaPaginada } from "../lib/paginacion.js";
+
+export interface FiltrosContratistas {
+  q?: string;
+  activo?: boolean;
+  page: number;
+  limit: number;
+  skip: number;
+}
 
 // Mismo patrón que empleadosService.ts — todo query filtrado por empresaId
 // en código (RLS es la defensa adicional, SDD.md §05).
-export function listarContratistas(empresaId: number) {
-  return prisma.contratista.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } });
+export async function listarContratistas(
+  empresaId: number,
+  f: FiltrosContratistas = { page: 1, limit: 25, skip: 0 }
+): Promise<RespuestaPaginada<Awaited<ReturnType<typeof prisma.contratista.findFirst>>>> {
+  const where: Prisma.ContratistaWhereInput = { empresaId };
+  if (f.activo !== undefined) where.activo = f.activo;
+  if (f.q) {
+    where.OR = [
+      { nombre: { contains: f.q, mode: "insensitive" } },
+      { documento: { contains: f.q, mode: "insensitive" } },
+    ];
+  }
+  const [total, items] = await Promise.all([
+    prisma.contratista.count({ where }),
+    prisma.contratista.findMany({ where, orderBy: { nombre: "asc" }, skip: f.skip, take: f.limit }),
+  ]);
+  return { items, total, page: f.page, limit: f.limit };
 }
 
 export function crearContratista(empresaId: number, datos: z.infer<typeof contratistaSchema>) {

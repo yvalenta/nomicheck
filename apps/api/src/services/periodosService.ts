@@ -1,12 +1,31 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { editarPeriodoSchema, empleadosPeriodoSchema, periodoSchema, turnosSchema } from "../validation/periodo.js";
 import type { z } from "zod";
+import type { RespuestaPaginada } from "../lib/paginacion.js";
 
-export function listarPeriodos(empresaId: number) {
-  return prisma.periodoNomina.findMany({
-    where: { empresaId },
-    orderBy: { fechaInicio: "desc" },
-  });
+export interface FiltrosPeriodos {
+  estado?: "borrador" | "liquidado" | "pagado";
+  desde?: string;   // recorta por fechaInicio ≥ desde
+  hasta?: string;   // recorta por fechaFin ≤ hasta
+  page: number;
+  limit: number;
+  skip: number;
+}
+
+export async function listarPeriodos(
+  empresaId: number,
+  f: FiltrosPeriodos = { page: 1, limit: 25, skip: 0 }
+): Promise<RespuestaPaginada<Awaited<ReturnType<typeof prisma.periodoNomina.findFirst>>>> {
+  const where: Prisma.PeriodoNominaWhereInput = { empresaId };
+  if (f.estado) where.estado = f.estado;
+  if (f.desde) where.fechaInicio = { gte: f.desde };
+  if (f.hasta) where.fechaFin = { lte: f.hasta };
+  const [total, items] = await Promise.all([
+    prisma.periodoNomina.count({ where }),
+    prisma.periodoNomina.findMany({ where, orderBy: { fechaInicio: "desc" }, skip: f.skip, take: f.limit }),
+  ]);
+  return { items, total, page: f.page, limit: f.limit };
 }
 
 // Se autopuebla con los empleados activos de la empresa al momento de crear
