@@ -54,6 +54,11 @@ const reglas = [
   { clave: "limite_deduccion_dependientes_uvt_mes", valor: 32, vigenteDesde: "2016-01-01", fuente: "E.T. art. 387, par. 2 (Ley 1819 de 2016)" },
   { clave: "limite_deduccion_salud_uvt_mes", valor: 16, vigenteDesde: "2016-01-01", fuente: "E.T. art. 387, par. 1 (Ley 1819 de 2016)" },
   { clave: "ibc_tope_smlmv", valor: 25, vigenteDesde: "2003-01-29", fuente: "Ley 100 de 1993, art. 18 mod. Ley 797 de 2003, art. 5" },
+  // Pago on-chain (SDD §17). Los knobs numéricos viven aquí con vigencias;
+  // la config técnica (red/token/tokenAddress) vive en lib/pagosConfig.ts —
+  // no es regla legal, es infraestructura.
+  { clave: "pago_onchain_prima_pct", valor: 0, vigenteDesde: "2026-07-01", fuente: "Política NomiCheck — prima sobre TRM oficial para cubrir spread P2P COP→USDC" },
+  { clave: "pago_onchain_ventana_horas", valor: 6, vigenteDesde: "2026-07-01", fuente: "Política NomiCheck — validez del snapshot de tasa antes de exigir regeneración del lote" },
 ];
 
 // Festivos Colombia 2026 (Ley Emiliani)

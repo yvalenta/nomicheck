@@ -227,13 +227,21 @@ function FormContratista({
   const [honorariosMensuales, setHonorariosMensuales] = useState(
     inicial ? String(inicial.honorariosMensuales) : ""
   );
+  const [walletAddress, setWalletAddress] = useState(inicial?.walletAddress ?? "");
+  const walletValida = walletAddress === "" || /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
 
   return (
     <PaycheckCard titulo={inicial ? `Editar a ${inicial.nombre}` : "Nuevo contratista"} className={inicial ? "mx-3 mb-2" : ""}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onGuardar({ nombre, documento, honorariosMensuales: Number(honorariosMensuales) });
+          if (!walletValida) return;
+          onGuardar({
+            nombre,
+            documento,
+            honorariosMensuales: Number(honorariosMensuales),
+            walletAddress: walletAddress || null,
+          });
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
@@ -261,6 +269,19 @@ function FormContratista({
               Autocompletar salario mínimo vigente ({formatCOP(smlmv)})
             </label>
           )}
+        </div>
+        <div className="flex flex-col gap-1">
+          <input
+            placeholder="Wallet USDC (opcional) — 0x…"
+            value={walletAddress}
+            onChange={(e) => setWalletAddress(e.target.value.trim())}
+            className={`${inputCls} font-mono text-xs ${!walletValida ? "border-coral" : ""}`}
+          />
+          <p className={`text-[11px] ${walletValida ? "text-muted" : "text-coral"}`}>
+            {walletValida
+              ? "Dirección EVM en Base para recibir honorarios en USDC (pago on-chain, opcional)."
+              : "Dirección inválida — debe ser 0x seguido de 40 caracteres hexadecimales."}
+          </p>
         </div>
         <button
           type="submit"

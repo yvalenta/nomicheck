@@ -76,6 +76,12 @@ export const contratistaSchema = z.object({
   nombre: z.string().min(1),
   documento: z.string().min(1),
   honorariosMensuales: z.number().positive(),
+  // Pago on-chain (SDD §17): dirección EVM donde recibe USDC. Opt-in.
+  walletAddress: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, "Dirección EVM inválida — formato 0x + 40 caracteres hexadecimales")
+    .nullish()
+    .transform((v) => v ?? null),
 });
 
 export const contratistaUpdateSchema = contratistaSchema.partial().extend({

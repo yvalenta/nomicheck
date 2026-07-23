@@ -31,6 +31,7 @@ import {
 } from "../controllers/contratistasController.js";
 import { costos } from "../controllers/costosController.js";
 import { pilaPeriodo } from "../controllers/pilaController.js";
+import { generarBatch, obtenerBatch, verificarBatch } from "../controllers/pagosController.js";
 import { cumplimiento } from "../controllers/cumplimientoController.js";
 import {
   listar as listarPeriodos,
@@ -195,6 +196,12 @@ router.post("/empresa/periodos/:id/revertir", ...soloAdminEmpresa, revertir);
 // PILA exacta por periodo ya liquidado (SDD §14): IBC real de cada recibo,
 // no un salario mensual estimado — ver pilaService.ts.
 router.get("/empresa/periodos/:id/pila", ...empresaLectura, pilaPeriodo);
+// Pago on-chain no-custodial (SDD §17): generar lote USDC (solo admin —
+// mueve dinero real aunque la firma sea del empleador), leer lote vigente
+// (los 3 roles), verificar txHash y transicionar a `pagado` (solo admin).
+router.post("/empresa/periodos/:id/batch-pago", ...soloAdminEmpresa, generarBatch);
+router.get("/empresa/periodos/:id/batch-pago", ...empresaLectura, obtenerBatch);
+router.post("/empresa/batches/:batchId/verificar", ...soloAdminEmpresa, verificarBatch);
 router.get("/empresa/recibos", ...empresaLectura, recibos);
 router.get("/empresa/discrepancias", ...empresaLectura, listarDiscrepancias);
 router.put("/empresa/discrepancias/:id", ...empresaEdicion, responderDiscrepancia);

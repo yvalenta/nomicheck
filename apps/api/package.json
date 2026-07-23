@@ -25,6 +25,7 @@
     "multer": "^2.2.0",
     "pg-boss": "^12.26.2",
     "prisma": "^5.19.1",
+    "viem": "^2.55.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {

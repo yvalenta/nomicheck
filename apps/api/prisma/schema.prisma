@@ -94,6 +94,10 @@ model Empresa {
   // admin_empresa y colaboradores de esta empresa — admin_plataforma sigue
   // viendo/reactivando la empresa sin problema (SDD.md §03 Módulo D).
   activa   Boolean @default(true)
+  // Pago on-chain (SDD §17): dirección EVM desde la que la empresa firma los
+  // lotes de USDC. REFERENCIAL — NomiCheck nunca controla esta wallet ni sus
+  // fondos (modelo no-custodial); se usa para verificar el `from` del tx.
+  walletPagadora String?
 
   usuarios     Usuario[]
   empleados    Empleado[]
@@ -170,6 +174,11 @@ model Empleado {
   sedeId            Int?
   sede              Sede?    @relation(fields: [sedeId], references: [id])
   activo            Boolean @default(true)
+  // Pago on-chain (SDD §17): SOLO constancia complementaria — el salario
+  // legal SIEMPRE se paga en COP (CST art. 134-136, moneda legal). Esta
+  // wallet nunca entra a un BatchPago en fase 1; queda para registro
+  // voluntario de pagos extralegales cuando la regulación lo permita.
+  walletAddress     String?
   // Soft delete: `activo=false` es "retirado" (con fecha legal), `eliminadoEn`
   // es "creado por error, ocultar" — se conserva la fila para no romper FKs
   // de recibos/turnos históricos. Todas las lecturas filtran eliminadoEn IS NULL
@@ -195,6 +204,9 @@ model Contratista {
   nombre              String
   documento           String
   honorariosMensuales Float
+  // Pago on-chain (SDD §17): dirección EVM 0x… donde recibe USDC. Opt-in —
+  // null = el contratista se paga por fuera y no entra a los lotes.
+  walletAddress       String?
   activo              Boolean  @default(true)
   creadoEn            DateTime @default(now())
 
@@ -247,6 +259,7 @@ model PeriodoNomina {
   turnos  Turno[]
   recibos ReciboPago[]
   empleadosIncluidos PeriodoNominaEmpleado[]
+  batchesPago BatchPago[]
 
   @@index([empresaId])
 }
@@ -349,4 +362,54 @@ model ReporteDiscrepancia {
   creadoEn         DateTime   @default(now())
 
   @@index([reciboId])
+}
+
+// Lote de pago on-chain NO-CUSTODIAL (SDD §17): NomiCheck calcula el lote
+// (contratistas con wallet + netos convertidos a USDC con tasa congelada) y
+// genera los artefactos de firma (links EIP-681 + Safe batch JSON); el
+// EMPLEADOR firma desde su propia wallet — el servidor jamás tiene llaves
+// privadas ni toca fondos. La verificación del txHash contra el RPC de Base
+// (logs Transfer del contrato USDC) cierra el ciclo: batch `verificado` →
+// periodo `pagado`. Fase 1: SOLO contratistas (Ley 1819/2016 — pago
+// comercial); los salarios de Empleado se pagan en COP (CST art. 134-136).
+model BatchPago {
+  id           Int           @id @default(autoincrement())
+  empresaId    Int
+  periodoId    Int
+  periodo      PeriodoNomina @relation(fields: [periodoId], references: [id])
+  // generado | expirado | verificado | fallido_verificacion
+  estado       String        @default("generado")
+  // Red/token modelados desde día 1 aunque fase 1 solo acepte
+  // { red: "base", token: "USDC" } (validación estricta en pagosService).
+  // tokenAddress = USDC NATIVO de Circle en Base (no USDbC bridged).
+  red          String
+  token        String
+  tokenAddress String
+  // { trm, fuente, fechaTrm, primaPct, tasaEfectiva, hash } — el hash sha256
+  // del snapshot canónico se cita en el export para trazabilidad de la tasa.
+  tasaSnapshot Json
+  totalCop     Float
+  totalUsdc    Float // 6 decimales USDC
+  txHash       String?
+  generadoEn   DateTime      @default(now())
+  // La tasa congelada solo vale durante la ventana (pago_onchain_ventana_horas,
+  // default 6h) — un lote vencido se regenera con tasa fresca, nunca se firma.
+  expiraEn     DateTime
+  verificadoEn DateTime?
+  items        PagoItem[]
+
+  @@index([empresaId])
+  @@index([periodoId])
+}
+
+model PagoItem {
+  id            Int       @id @default(autoincrement())
+  batchId       Int
+  batch         BatchPago @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  reciboId      Int // ReciboPago del contratista que origina este pago
+  destinoWallet String
+  montoCop      Float
+  montoUsdc     Float // 6 decimales
+
+  @@index([batchId])
 }

@@ -157,6 +157,9 @@ export interface Contratista {
   nombre: string;
   documento: string;
   honorariosMensuales: number;
+  // Dirección EVM 0x… donde recibe USDC (pago on-chain, SDD §17). null =
+  // no participa en lotes de pago.
+  walletAddress: string | null;
   activo: boolean;
 }
 
@@ -415,6 +418,76 @@ export interface EstadoLiquidacion {
 
 export function obtenerEstadoLiquidacion(periodoId: number): Promise<EstadoLiquidacion> {
   return autenticado(`/empresa/periodos/${periodoId}/estado`);
+}
+
+// ——— Pago on-chain no-custodial (SDD §17) ———
+
+export interface TasaSnapshot {
+  trm: number;
+  fuente: string;
+  fechaTrm: string;
+  primaPct: number;
+  tasaEfectiva: number;
+  capturadoEn: string;
+  hash: string;
+}
+
+export interface ItemBatchPago {
+  contratista: string;
+  destinoWallet: string;
+  montoCop: number;
+  montoUsdc: number;
+  linkEip681: string;
+}
+
+export interface BatchPagoGenerado {
+  batchId: number;
+  estado: string;
+  red: string;
+  token: string;
+  tokenAddress: string;
+  tasaSnapshot: TasaSnapshot;
+  totalCop: number;
+  totalUsdc: number;
+  expiraEn: string;
+  disclaimer: string;
+  items: ItemBatchPago[];
+  excluidosSinWallet: string[];
+  safeBatch: object;
+}
+
+export interface BatchPagoVigente {
+  id: number;
+  estado: string; // generado | expirado | verificado | fallido_verificacion
+  red: string;
+  token: string;
+  tokenAddress: string;
+  tasaSnapshot: TasaSnapshot;
+  totalCop: number;
+  totalUsdc: number;
+  txHash: string | null;
+  expiraEn: string;
+  verificadoEn: string | null;
+  disclaimer: string;
+  items: { id: number; destinoWallet: string; montoCop: number; montoUsdc: number }[];
+}
+
+export function generarBatchPago(periodoId: number): Promise<BatchPagoGenerado> {
+  return autenticado(`/empresa/periodos/${periodoId}/batch-pago`, { method: "POST" });
+}
+
+export function obtenerBatchPago(periodoId: number): Promise<BatchPagoVigente> {
+  return autenticado(`/empresa/periodos/${periodoId}/batch-pago`);
+}
+
+export function verificarBatchPago(
+  batchId: number,
+  txHash: string
+): Promise<{ estado: string; detalle: { destinoWallet: string; montoUsdc: number; confirmado: boolean }[] }> {
+  return autenticado(`/empresa/batches/${batchId}/verificar`, {
+    method: "POST",
+    body: JSON.stringify({ txHash }),
+  });
 }
 
 export function revertirPeriodo(periodoId: number): Promise<{ ok: true }> {

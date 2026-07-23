@@ -37,6 +37,7 @@ import {
   type Turno,
 } from "../../apiEmpresa";
 import PanelLiquidacion from "./PanelLiquidacion.tsx";
+import PanelPagoOnChain from "./PanelPagoOnChain.tsx";
 import { usePeriodoEstado } from "./usePeriodoEstado.ts";
 import SelectFiltro from "../filtros/SelectFiltro.tsx";
 import Paginador from "../filtros/Paginador.tsx";
@@ -648,6 +649,12 @@ function DetallePeriodo({
 
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
       {estadoLiq && estadoLiq.estado !== "borrador" && <PanelLiquidacion estado={estadoLiq} />}
+      {(periodo.estado === "liquidado" || periodo.estado === "liquidado_con_rechazos" || periodo.estado === "pagado") && (
+        <PanelPagoOnChain
+          periodoId={periodo.id}
+          onPagado={() => onCambio({ ...periodo, estado: "pagado" })}
+        />
+      )}
       {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
 
       {editandoFechas && (

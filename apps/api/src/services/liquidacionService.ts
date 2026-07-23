@@ -16,7 +16,8 @@ import { COLA_LIQUIDACION, getBoss, type DatosJobLiquidacion } from "../lib/boss
 // Concurrencia optimista sobre PeriodoNomina.version: si dos analistas
 // intentan liquidar/revertir el mismo periodo, el segundo update no
 // matchea y Prisma lanza P2025 → ErrorConflicto → HTTP 409.
-async function actualizarPeriodoConVersion(
+// Exportada: pagosService la reusa para la transición liquidado → pagado.
+export async function actualizarPeriodoConVersion(
   tx: Prisma.TransactionClient,
   periodoId: number,
   versionActual: number,
