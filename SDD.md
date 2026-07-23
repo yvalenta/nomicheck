@@ -656,7 +656,7 @@ Cada fase entrega algo usable de punta a punta.
 | Decisión | Detalle |
 |---|---|
 | El cálculo es determinístico | La IA nunca calcula ni contradice al motor. Extrae y explica, nada más |
-| Reglas legales = datos versionados | Nunca constantes en código; vigencias por fecha, sin solapes, con fuente |
+| Reglas legales = datos versionados | Nunca constantes en código; vigencias por fecha, sin solapes, con fuente. El **spec humano** vive en `sdd/vault/` (baúl markdown con reglas estables en 01–04 y 06, y tabla maestra ÚNICA de valores actualizables en `05_Valores_Actualizables.md`); el catálogo `ReglaLegal` es la implementación de ese spec — deben coincidir en cada revisión. `REGLAS_VERIFICADAS_AL` en `batchPublicoService.ts` cita la fecha de última revisión y viaja en cada output del wrapper stateless |
 | Flujo anónimo sin persistencia | Ni archivo, ni datos, ni resultado. Privacidad por diseño |
 | Un solo motor para ambos modos | Liquidar (empresa) y verificar (anónimo/colaborador) usan las mismas calculadoras |
 | El recibo es snapshot; la verificación es en vivo | El recibo no se recalcula al cambiar reglas; la verificación sí — la diferencia es información |

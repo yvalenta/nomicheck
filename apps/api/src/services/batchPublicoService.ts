@@ -24,10 +24,15 @@ import type {
   RechazoBatch,
 } from "../validation/batchPublico.js";
 
-// Fecha de última verificación manual del catálogo legal contra fuentes
-// oficiales (SMLMV, UVT, Ley 2466/2025, Ley 2101/2021, tarifas EPS/AFP,
-// festivos). Actualizar en cada revisión — se cita en cada output para
-// que el buyer tenga trazabilidad temporal. Ver RUMBO §2.4.
+// Fecha de última verificación del catálogo legal contra fuentes oficiales.
+// El spec humano vive en `sdd/vault/` (fuente de verdad verificable): las
+// reglas estables en 01-04 y 06, y TODOS los valores actualizables (SMLMV,
+// auxilio, UVT, %-recargos de la transición Ley 2101/2021, tarifas Fondo
+// Solidaridad, etc.) en `05_Valores_Actualizables.md` como tabla maestra
+// única. El catálogo `ReglaLegal` (Prisma) es la IMPLEMENTACIÓN de ese spec
+// — deben coincidir en cada revisión. Actualizar esta fecha cuando se
+// revise el vault + se re-siembre el catálogo. Se cita en cada output para
+// darle al buyer trazabilidad temporal (RUMBO §2.4).
 export const REGLAS_VERIFICADAS_AL = "2026-07-16";
 
 const DISCLAIMER =
