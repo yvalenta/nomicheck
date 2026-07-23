@@ -9,7 +9,12 @@ import {
   listarTurnos,
   reemplazarTurnos,
 } from "../services/periodosService.js";
-import { liquidarPeriodo, listarRecibos, QaRechazadaError, revertirABorrador } from "../services/liquidacionService.js";
+import {
+  encolarLiquidacion,
+  listarRecibos,
+  obtenerEstadoLiquidacion,
+  revertirABorrador,
+} from "../services/liquidacionService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
 import { paginacionDeQuery, stringOpt } from "../lib/paginacion.js";
 import { esEstadoPeriodo } from "../lib/estados.js";
@@ -90,20 +95,31 @@ export async function guardarTurnos(req: Request, res: Response) {
   }
 }
 
+// SDD §15, escalabilidad enterprise: liquidar deja de ser síncrono. Responde
+// 202 con { jobId } al encolar; el frontend hace polling a /estado hasta que
+// estado sea terminal (liquidado, liquidado_con_rechazos o fallido).
 export async function liquidar(req: Request, res: Response) {
   try {
-    const recibos = await liquidarPeriodo(req.usuario!.empresaId!, Number(req.params.id), req.usuario!.id);
-    res.json(recibos);
+    const { jobId } = await encolarLiquidacion(
+      req.usuario!.empresaId!,
+      Number(req.params.id),
+      req.usuario!.id
+    );
+    res.status(202).json({ jobId, estado: "liquidando" });
   } catch (err) {
-    if (err instanceof QaRechazadaError) {
-      res.status(422).json({ error: err.message, rechazos: err.rechazos });
-      return;
-    }
     if (err instanceof ErrorConflicto) {
       res.status(409).json({ error: err.message });
       return;
     }
-    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo liquidar" });
+    res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo encolar la liquidación" });
+  }
+}
+
+export async function estadoLiquidacion(req: Request, res: Response) {
+  try {
+    res.json(await obtenerEstadoLiquidacion(req.usuario!.empresaId!, Number(req.params.id)));
+  } catch (err) {
+    res.status(404).json({ error: err instanceof Error ? err.message : "Periodo no encontrado" });
   }
 }
 

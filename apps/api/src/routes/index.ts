@@ -43,6 +43,7 @@ import {
   liquidar,
   revertir,
   recibos,
+  estadoLiquidacion,
 } from "../controllers/periodosController.js";
 import {
   aceptar,
@@ -187,6 +188,9 @@ router.put("/empresa/periodos/:id/turnos", ...empresaEdicion, guardarTurnos);
 router.get("/empresa/periodos/:id/empleados", ...empresaLectura, empleadosIncluidos);
 router.put("/empresa/periodos/:id/empleados", ...empresaEdicion, guardarEmpleadosIncluidos);
 router.post("/empresa/periodos/:id/liquidar", ...empresaEdicion, liquidar);
+// Polling desde la UI mientras estado='liquidando' — respuesta ligera con
+// solo { estado, progreso, jobId, erroresLiquidacion, version }.
+router.get("/empresa/periodos/:id/estado", ...empresaLectura, estadoLiquidacion);
 router.post("/empresa/periodos/:id/revertir", ...soloAdminEmpresa, revertir);
 // PILA exacta por periodo ya liquidado (SDD §14): IBC real de cada recibo,
 // no un salario mensual estimado — ver pilaService.ts.
