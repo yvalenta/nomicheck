@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Fuentes de la LANDING solamente (sdd/marketing/posicionamiento.md) —
+ * el resto del producto sigue con Inter. Preload aquí porque son parte
+ * del signature de marca de /lanzamiento y bajar de nivel en la carga
+ * arruinaría el hero. */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap");
+
 @theme {
   /* NomiCheck — FinTech design tokens (SDD §06) */
   --color-surface: #f8fafc; /* fondo de página            */
@@ -11,7 +17,21 @@
   --color-ink: #0f172a; /* texto principal            */
   --color-muted: #64748b; /* texto secundario slate-500 */
 
+  /* Semáforo del motor — los tres estados de calidad de una línea del
+   * cálculo. En la LANDING son el hilo visual: aparecen en hero, caso
+   * de uso y FAQ. Nunca decorativos — cada uno representa un veredicto. */
+  --color-verde: #0d9488; /* correcto — teal profundo (más serio que mint) */
+  --color-ambar: #f59e0b; /* advertencia                                    */
+  --color-coral-fuerte: #e11d48; /* discrepancia — rojo rosé, no bermellón   */
+
+  /* Fondo tipo papel del comprobante — evita el default cream+serif de AI
+   * porque el body es sans grotesque y las cifras son mono. */
+  --color-papel: #faf7f0;
+  --color-papel-2: #f2ede0; /* variante para bordes/celdas del recibo */
+
   --font-sans: "Inter", "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 body {
