@@ -1,0 +1,34 @@
+{
+  "_comentario": "Batch demo del listing 8b (RUMBO §3.5). Antes de correr contra el endpoint on-chain real (POST /empresa/periodos/:id/batch-pago), reemplazar EMBEDDED-DEMO-WALLET-01/02 por dos direcciones EVM en Base que TÚ controles (dos cuentas de tu MetaMask, por ejemplo). Los honorarios de $30.000 y $40.000 COP producen ~0.01 USDC cada uno con la TRM del día. Este archivo también sirve como test del wrapper stateless: POST /api/batch/liquidar acepta la misma forma (sin walletAddress on-chain).",
+  "version": "1",
+  "buyer": {
+    "noExternalLlm": true
+  },
+  "empresa": {
+    "nombre": "NomiCheck Demo (fase 1)",
+    "nit": "900-DEMO-0001",
+    "sector": "servicios"
+  },
+  "periodo": {
+    "fechaInicio": "2026-07-01",
+    "fechaFin": "2026-07-15"
+  },
+  "empleados": [],
+  "contratistas": [
+    {
+      "externalId": "Demo-01",
+      "nombre": "Demo Contratista Uno",
+      "documento": "1111111111",
+      "honorariosMensuales": 30000,
+      "walletAddress": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "externalId": "Demo-02",
+      "nombre": "Demo Contratista Dos",
+      "documento": "2222222222",
+      "honorariosMensuales": 40000,
+      "walletAddress": "0x2222222222222222222222222222222222222222"
+    }
+  ],
+  "turnos": []
+}

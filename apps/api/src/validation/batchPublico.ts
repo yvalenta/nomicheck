@@ -112,11 +112,21 @@ export interface RechazoBatch {
   issues: unknown[];
 }
 
+export interface HabeasDataConstancia {
+  norma: string;
+  procesado: true;
+  descartado: true;
+  persistidoEnBd: false;
+  procesadoPorLlmExterno: false;
+}
+
 export interface BatchLiquidarOutput {
   version: "1";
   generadoEn: string;
   reglasVerificadasAl: string;
+  reglasHash: string;
   disclaimer: string;
+  habeasData: HabeasDataConstancia;
   empresa: BatchLiquidarInput["empresa"];
   periodo: BatchLiquidarInput["periodo"];
   recibos: ReciboBatch[];

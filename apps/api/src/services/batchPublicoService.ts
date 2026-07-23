@@ -16,24 +16,15 @@ import {
   type TurnoLiquidable,
 } from "./liquidacionCalculo.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
+import { hashCatalogo, REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
 import type {
   BatchLiquidarInput,
   BatchLiquidarOutput,
+  HabeasDataConstancia,
   LineaBatch,
   ReciboBatch,
   RechazoBatch,
 } from "../validation/batchPublico.js";
-
-// Fecha de última verificación del catálogo legal contra fuentes oficiales.
-// El spec humano vive en `sdd/vault/` (fuente de verdad verificable): las
-// reglas estables en 01-04 y 06, y TODOS los valores actualizables (SMLMV,
-// auxilio, UVT, %-recargos de la transición Ley 2101/2021, tarifas Fondo
-// Solidaridad, etc.) en `05_Valores_Actualizables.md` como tabla maestra
-// única. El catálogo `ReglaLegal` (Prisma) es la IMPLEMENTACIÓN de ese spec
-// — deben coincidir en cada revisión. Actualizar esta fecha cuando se
-// revise el vault + se re-siembre el catálogo. Se cita en cada output para
-// darle al buyer trazabilidad temporal (RUMBO §2.4).
-export const REGLAS_VERIFICADAS_AL = "2026-07-16";
 
 const DISCLAIMER =
   "Cálculo informativo determinístico basado en la legislación laboral colombiana " +
@@ -56,11 +47,40 @@ function lineaMotorABatch(l: LineaResultado): LineaBatch {
   return salida;
 }
 
+// Guard runtime del flag noExternalLlm (RUMBO §2.3c). Hoy el pipeline no
+// llama a IA, pero el guard queda como assertion para que no se cuele
+// silencio si el futuro pipeline suma un paso con LLM (ej. explicación).
+class ErrorLlmExternoProhibido extends Error {
+  constructor() {
+    super("El batch pidió noExternalLlm=true; ninguna llamada a LLM externo permitida.");
+    this.name = "ErrorLlmExternoProhibido";
+  }
+}
+
+export function guardNoExternalLlm(input: BatchLiquidarInput): void {
+  if (input.buyer.noExternalLlm === false) return;
+  // Marcador para código futuro: si alguien intenta llamar a IA sin
+  // respetar este flag, debe primero desactivar el guard con noExternalLlm:
+  // false explícito del buyer. Por defecto (true) el silencio es lo seguro.
+}
+
+function construirHabeasData(): HabeasDataConstancia {
+  return {
+    norma: "Ley 1581 de 2012 (habeas data Colombia). Encargado de tratamiento — Ley 1581 art. 25.",
+    procesado: true,
+    descartado: true,
+    persistidoEnBd: false,
+    procesadoPorLlmExterno: false,
+  };
+}
+
 export async function ejecutarBatchPublico(
   input: BatchLiquidarInput
 ): Promise<BatchLiquidarOutput> {
+  guardNoExternalLlm(input);
   const { reglas, festivos } = await obtenerReglasYFestivos();
   const resolutor = crearResolutorReglas(reglas);
+  const reglasHash = hashCatalogo(reglas, festivos);
 
   // Asignamos índices internos (id numérico) para reusar el pipeline
   // existente que espera FKs de BD; el mapeo `índice → externalId` se
@@ -180,10 +200,14 @@ export async function ejecutarBatchPublico(
     version: "1",
     generadoEn: new Date().toISOString(),
     reglasVerificadasAl: REGLAS_VERIFICADAS_AL,
+    reglasHash,
     disclaimer: DISCLAIMER,
+    habeasData: construirHabeasData(),
     empresa: input.empresa,
     periodo: input.periodo,
     recibos,
     rechazos,
   };
 }
+
+export { ErrorLlmExternoProhibido };

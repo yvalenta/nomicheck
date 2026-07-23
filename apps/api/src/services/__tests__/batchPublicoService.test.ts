@@ -2,7 +2,10 @@
 // del buyer — usan `obtenerReglasYFestivos` que lee el catálogo público
 // cacheado (no es tenant, es el mismo set del verificador anónimo).
 import { describe, expect, it } from "vitest";
-import { ejecutarBatchPublico, REGLAS_VERIFICADAS_AL } from "../batchPublicoService.js";
+import { ejecutarBatchPublico } from "../batchPublicoService.js";
+import { hashCatalogo, obtenerLedgerReglas, REGLAS_VERIFICADAS_AL } from "../reglasVerificadasService.js";
+import { batchToCsv } from "../batchCsvService.js";
+import { obtenerReglasYFestivos } from "../nominaService.js";
 import type { BatchLiquidarInput } from "../../validation/batchPublico.js";
 
 function baseInput(): BatchLiquidarInput {
@@ -22,8 +25,12 @@ describe("ejecutarBatchPublico", () => {
     const salida = await ejecutarBatchPublico(baseInput());
     expect(salida.version).toBe("1");
     expect(salida.reglasVerificadasAl).toBe(REGLAS_VERIFICADAS_AL);
+    expect(salida.reglasHash).toMatch(/^[0-9a-f]{64}$/);
     expect(salida.disclaimer).toContain("informativo");
     expect(salida.disclaimer).toContain("Ley 1581");
+    expect(salida.habeasData.persistidoEnBd).toBe(false);
+    expect(salida.habeasData.procesadoPorLlmExterno).toBe(false);
+    expect(salida.habeasData.norma).toContain("Ley 1581");
     expect(salida.recibos).toEqual([]);
     expect(salida.rechazos).toEqual([]);
   });
@@ -100,6 +107,41 @@ describe("ejecutarBatchPublico", () => {
     expect(salida.rechazos).toHaveLength(1);
     expect(salida.rechazos[0]!.externalId).toBe("BAD-1");
     expect(salida.rechazos[0]!.issues.length).toBeGreaterThan(0);
+  });
+
+  it("el reglasHash es determinista y coincide con el del ledger público", async () => {
+    const { reglas, festivos } = await obtenerReglasYFestivos();
+    const a = hashCatalogo(reglas, festivos);
+    const b = hashCatalogo(reglas, festivos);
+    expect(a).toBe(b);
+    const ledger = await obtenerLedgerReglas();
+    expect(ledger.hash).toBe(a);
+    expect(ledger.fecha).toBe(REGLAS_VERIFICADAS_AL);
+    expect(ledger.totalReglas).toBeGreaterThan(0);
+    const salida = await ejecutarBatchPublico(baseInput());
+    expect(salida.reglasHash).toBe(a);
+  });
+
+  it("batchToCsv incluye cabecera con hash, disclaimer y filas por línea", async () => {
+    const input = baseInput();
+    input.empleados = [
+      {
+        externalId: "E-CSV",
+        nombre: "Ana CSV",
+        documento: "1000",
+        salarioBase: 2_000_000,
+        tipoNomina: "fijo",
+        tipoContrato: "indefinido",
+        auxilioTransporte: true,
+        claseRiesgoArl: 1,
+      },
+    ];
+    const salida = await ejecutarBatchPublico(input);
+    const csv = batchToCsv(salida);
+    expect(csv).toContain(`# reglas_hash: ${salida.reglasHash}`);
+    expect(csv).toContain("# habeas_data: Ley 1581");
+    expect(csv).toContain("external_id,tipo,nombre,documento,concepto");
+    expect(csv).toContain("E-CSV,empleado,Ana CSV,1000,");
   });
 
   it("no ligada a Prisma: procesa el mismo input dos veces con salida idéntica en montos", async () => {

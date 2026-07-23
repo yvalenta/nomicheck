@@ -11,7 +11,7 @@ import {
   calcularRetencion,
 } from "../controllers/calculadorasController.js";
 import { listarFestivos } from "../controllers/festivosController.js";
-import { parametrosPublicos } from "../controllers/reglasController.js";
+import { parametrosPublicos, reglasVerificadasAl } from "../controllers/reglasController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
 import { registro, registroIndividual, invitar, perfilIndividual, whoami } from "../controllers/authController.js";
@@ -125,6 +125,10 @@ router.post("/retencion/calcular", limitadorCalculo, calcularRetencion);
 router.use("/batch", limitadorCalculo, batchPublicoRouter);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
+// Ledger de reglas verificadas (RUMBO §2.4): fecha + hash sha256 canónico
+// del catálogo ReglaLegal. Sin rate-limit — es lectura constante barata,
+// pensada para ser citada por buyers del marketplace y auditores.
+router.get("/reglas/verificadas-al", reglasVerificadasAl);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
 // Chat contador (Fase 4, SDD §03 Módulo E): disponible sobre cualquier
 // ResultadoNomina ya calculado — anónimo o del portal colaborador, mismo
