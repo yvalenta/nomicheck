@@ -84,11 +84,12 @@ export type BatchLiquidarInput = z.infer<typeof batchLiquidarSchema>;
 // NomiCheck).
 export interface LineaBatch {
   concepto: string;
-  tipo: "devengado" | "deducido" | "provision" | "informativo";
-  formula: string;
-  referenciaLegal: string;
-  cantidad?: number;
+  tipo: "devengo" | "deduccion" | "provision";
   valor: number;
+  referenciaLegal?: string;
+  horas?: number;
+  base?: number;
+  recargoPct?: number;
 }
 
 export interface ReciboBatch {
@@ -97,9 +98,18 @@ export interface ReciboBatch {
   documento: string;
   tipo: "empleado" | "contratista";
   lineas: LineaBatch[];
+  advertencias: string[];
+  qaIssues?: unknown[];
   totalDevengado: number;
   totalDeducido: number;
   neto: number;
+}
+
+export interface RechazoBatch {
+  externalId: string;
+  nombre: string;
+  documento: string;
+  issues: unknown[];
 }
 
 export interface BatchLiquidarOutput {
@@ -110,5 +120,5 @@ export interface BatchLiquidarOutput {
   empresa: BatchLiquidarInput["empresa"];
   periodo: BatchLiquidarInput["periodo"];
   recibos: ReciboBatch[];
-  advertencias: string[];
+  rechazos: RechazoBatch[];
 }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { calcular } from "../controllers/nominaController.js";
+import { batchPublicoRouter } from "./batchPublico.js";
 import { calcular as calcularIndemnizacion } from "../controllers/indemnizacionController.js";
 import {
   calcularCesantias,
@@ -118,6 +119,10 @@ router.post("/prima/calcular", limitadorCalculo, calcularPrima);
 router.post("/cesantias/calcular", limitadorCalculo, calcularCesantias);
 router.post("/recargos/calcular", limitadorCalculo, calcularRecargos);
 router.post("/retencion/calcular", limitadorCalculo, calcularRetencion);
+// Wrapper stateless para Execution Market (listings 5/6/8a/8b, RUMBO §3.4):
+// entra JSON, sale JSON, cero persistencia. Mismo rate-limit que las
+// calculadoras anónimas — el pago del marketplace ya autoriza el acceso.
+router.use("/batch", limitadorCalculo, batchPublicoRouter);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);

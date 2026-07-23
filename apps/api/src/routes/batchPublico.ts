@@ -9,22 +9,23 @@
 // (el pago del marketplace ya autoriza), y `noExternalLlm` respetado a
 // nivel de runtime (no solo copy).
 import { Router, Request, Response } from "express";
-import { batchLiquidarSchema, type BatchLiquidarOutput } from "../validation/batchPublico.js";
+import { batchLiquidarSchema } from "../validation/batchPublico.js";
+import { ejecutarBatchPublico } from "../services/batchPublicoService.js";
 
 export const batchPublicoRouter = Router();
 
-batchPublicoRouter.post("/liquidar", (req: Request, res: Response) => {
+batchPublicoRouter.post("/liquidar", async (req: Request, res: Response) => {
   const parsed = batchLiquidarSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "invalid_input", detalle: parsed.error.flatten() });
   }
-  return res.status(501).json({
-    error: "not_implemented",
-    mensaje:
-      "Endpoint reservado — schema v1 fijado; el pipeline entra en un commit siguiente (reusa calcularReciboLote + calcularRecibosContratistas sin Prisma).",
-  } satisfies { error: string; mensaje: string });
+  try {
+    const salida = await ejecutarBatchPublico(parsed.data);
+    return res.status(200).json(salida);
+  } catch (e) {
+    return res.status(500).json({
+      error: "internal_error",
+      mensaje: e instanceof Error ? e.message : "Error inesperado",
+    });
+  }
 });
-
-// Firma tipada del handler futuro — se conserva aquí para que el compilador
-// obligue a que la implementación la respete cuando entre.
-export type BatchLiquidarHandler = (input: unknown) => Promise<BatchLiquidarOutput>;
