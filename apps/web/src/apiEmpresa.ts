@@ -396,8 +396,25 @@ export function guardarEmpleadosIncluidos(periodoId: number, empleadoIds: number
   });
 }
 
-export function liquidarPeriodo(periodoId: number): Promise<Recibo[]> {
+// Encola la liquidación asíncrona (SDD §15). Responde 202 { jobId, estado }
+// — el resultado real llega vía polling a obtenerEstadoLiquidacion.
+export function encolarLiquidacion(
+  periodoId: number
+): Promise<{ jobId: string; estado: "liquidando" }> {
   return autenticado(`/empresa/periodos/${periodoId}/liquidar`, { method: "POST" });
+}
+
+export interface EstadoLiquidacion {
+  id: number;
+  estado: EstadoPeriodo;
+  progreso: number;
+  jobId: string | null;
+  erroresLiquidacion: RechazoQA[] | ErrorCatastrofico | null;
+  version: number;
+}
+
+export function obtenerEstadoLiquidacion(periodoId: number): Promise<EstadoLiquidacion> {
+  return autenticado(`/empresa/periodos/${periodoId}/estado`);
 }
 
 export function revertirPeriodo(periodoId: number): Promise<{ ok: true }> {

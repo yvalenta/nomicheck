@@ -22,7 +22,7 @@ import {
   editarPeriodo,
   guardarEmpleadosIncluidos,
   guardarTurnos,
-  liquidarPeriodo,
+  encolarLiquidacion,
   listarEmpleados,
   listarPeriodos,
   listarRecibos,
@@ -33,10 +33,11 @@ import {
   type IssueQA,
   type Periodo,
   type Recibo,
-  type RechazoQA,
   type RespuestaPaginada,
   type Turno,
 } from "../../apiEmpresa";
+import PanelLiquidacion from "./PanelLiquidacion.tsx";
+import { usePeriodoEstado } from "./usePeriodoEstado.ts";
 import SelectFiltro from "../filtros/SelectFiltro.tsx";
 import Paginador from "../filtros/Paginador.tsx";
 import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
@@ -52,12 +53,18 @@ const inputCls =
 
 const ESTADO_ETIQUETA: Record<Periodo["estado"], string> = {
   borrador: "Borrador",
+  liquidando: "Liquidando…",
   liquidado: "Liquidado",
+  liquidado_con_rechazos: "Con rechazos",
+  fallido: "Falló",
   pagado: "Pagado",
 };
 const ESTADO_CLASE: Record<Periodo["estado"], string> = {
   borrador: "bg-slate-100 text-muted",
+  liquidando: "bg-mint-light/60 text-mint-dark",
   liquidado: "bg-emerald-50 text-mint-dark",
+  liquidado_con_rechazos: "bg-amber-50 text-amber-800",
+  fallido: "bg-red-50 text-coral",
   pagado: "bg-blue-50 text-blue-600",
 };
 
@@ -368,8 +375,21 @@ function DetallePeriodo({
   const [recibos, setRecibos] = useState<Recibo[]>([]);
   const [festivos, setFestivos] = useState<Festivo[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [rechazosQA, setRechazosQA] = useState<RechazoQA[] | null>(null);
   const [exito, setExito] = useState<string | null>(null);
+  // Polling del pipeline de liquidación asíncrona (SDD §15). Activo solo
+  // cuando el periodo NO está en borrador — evita N pollings paralelos si
+  // la empresa tuviera varios periodos expandidos.
+  const { estado: estadoLiq } = usePeriodoEstado(periodo.id, periodo.estado !== "borrador");
+  // Cuando el polling detecta un estado terminal distinto al que ya tenemos
+  // en memoria, propagamos hacia arriba para refrescar la lista + recibos.
+  useEffect(() => {
+    if (estadoLiq && estadoLiq.estado !== periodo.estado) {
+      onCambio({ ...periodo, estado: estadoLiq.estado });
+      if (estadoLiq.estado === "liquidado" || estadoLiq.estado === "liquidado_con_rechazos") {
+        listarRecibos(periodo.id).then(setRecibos).catch(() => {});
+      }
+    }
+  }, [estadoLiq?.estado]);
   const [liquidando, setLiquidando] = useState(false);
   const [revertiendo, setRevertiendo] = useState(false);
   const [editandoFechas, setEditandoFechas] = useState(false);
@@ -552,23 +572,14 @@ function DetallePeriodo({
   async function liquidar() {
     setLiquidando(true);
     setError(null);
-    setRechazosQA(null);
     try {
       await guardarTurnos(periodo.id, turnos);
-      const nuevos = await liquidarPeriodo(periodo.id);
-      setRecibos(nuevos);
-      onCambio({ ...periodo, estado: "liquidado" });
+      const { estado } = await encolarLiquidacion(periodo.id);
+      // El servidor ya movió el periodo a 'liquidando' — propagamos ese
+      // estado para que el hook de polling arranque y bloquee ediciones.
+      onCambio({ ...periodo, estado });
     } catch (e) {
-      // El motor de QA (SDD §15) devuelve 422 con { error, rechazos: [{empleadoId, nombre, issues}] }
-      // cuando alguna validación legal falla — mostrar el detalle es mucho más útil
-      // que un mensaje suelto: el usuario sabe qué colaborador y qué ley se infringió.
-      const body = (e as { body?: { rechazos?: RechazoQA[] } })?.body;
-      if (body?.rechazos && body.rechazos.length > 0) {
-        setRechazosQA(body.rechazos);
-        setError(e instanceof Error ? e.message : null);
-      } else {
-        setError(e instanceof Error ? e.message : "No se pudo liquidar el periodo");
-      }
+      setError(e instanceof Error ? e.message : "No se pudo encolar la liquidación");
     } finally {
       setLiquidando(false);
     }
@@ -620,7 +631,9 @@ function DetallePeriodo({
               <Pencil size={16} />
             </button>
           )}
-          {periodo.estado === "liquidado" && (
+          {(periodo.estado === "liquidado" ||
+            periodo.estado === "liquidado_con_rechazos" ||
+            periodo.estado === "fallido") && (
             <button
               onClick={revertir}
               disabled={revertiendo}
@@ -634,7 +647,7 @@ function DetallePeriodo({
       </div>
 
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
-      {rechazosQA && <PanelRechazosQA rechazos={rechazosQA} />}
+      {estadoLiq && estadoLiq.estado !== "borrador" && <PanelLiquidacion estado={estadoLiq} />}
       {exito && <p className="rounded-xl bg-emerald-50 text-mint-dark text-sm p-3">{exito}</p>}
 
       {editandoFechas && (
@@ -862,30 +875,3 @@ function DetallePeriodo({
   );
 }
 
-// Rechazos del motor de QA (SDD §15): agrupados por colaborador con el detalle
-// de cada infracción — código estable, mensaje y ley citada. Bloquea la
-// liquidación; el usuario debe corregir turnos/salario y volver a intentar.
-function PanelRechazosQA({ rechazos }: { rechazos: RechazoQA[] }) {
-  return (
-    <div className="rounded-2xl border border-red-100 bg-red-50 p-3 flex flex-col gap-2">
-      <p className="text-sm font-bold text-coral flex items-center gap-2">
-        <AlertTriangle size={16} /> La liquidación no pasó las validaciones legales
-      </p>
-      <p className="text-xs text-coral/80">
-        Corrige los siguientes puntos y vuelve a intentar — el sistema no persiste liquidaciones con estos errores.
-      </p>
-      {rechazos.map((r) => (
-        <div key={r.empleadoId} className="rounded-xl bg-white p-3 flex flex-col gap-1.5">
-          <p className="text-sm font-medium text-ink">{r.nombre}</p>
-          {r.issues.map((i: IssueQA, idx: number) => (
-            <div key={idx} className="text-xs text-ink border-l-2 border-coral/40 pl-2">
-              <p className="font-medium">{i.codigo}</p>
-              <p>{i.mensaje}</p>
-              <p className="opacity-70">{i.referenciaLegal}</p>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
