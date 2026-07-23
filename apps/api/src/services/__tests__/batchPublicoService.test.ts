@@ -6,6 +6,7 @@ import { ejecutarBatchPublico } from "../batchPublicoService.js";
 import { hashCatalogo, obtenerLedgerReglas, REGLAS_VERIFICADAS_AL } from "../reglasVerificadasService.js";
 import { batchToCsv } from "../batchCsvService.js";
 import { obtenerReglasYFestivos } from "../nominaService.js";
+import { canonicalJson, obtenerPublicKeyPem, verificarFirma } from "../batchSignatureService.js";
 import type { BatchLiquidarInput } from "../../validation/batchPublico.js";
 
 function baseInput(): BatchLiquidarInput {
@@ -142,6 +143,42 @@ describe("ejecutarBatchPublico", () => {
     expect(csv).toContain("# habeas_data: Ley 1581");
     expect(csv).toContain("external_id,tipo,nombre,documento,concepto");
     expect(csv).toContain("E-CSV,empleado,Ana CSV,1000,");
+  });
+
+  it("firma Ed25519 el output y verifica con la llave pública propia", async () => {
+    const salida = await ejecutarBatchPublico(baseInput());
+    expect(salida.signature.algo).toBe("ed25519");
+    expect(salida.signature.valor).toMatch(/^[A-Za-z0-9+/=]+$/);
+    expect(salida.signature.publicKeyId).toMatch(/^[0-9a-f]{32}$/);
+    expect(verificarFirma(salida, salida.signature)).toBe(true);
+    // Adulteración del payload invalida la firma.
+    const adulterado = { ...salida, generadoEn: "1999-01-01T00:00:00.000Z" };
+    expect(verificarFirma(adulterado, salida.signature)).toBe(false);
+  });
+
+  it("un buyer con solo la llave pública PEM verifica sin acceso al servidor", async () => {
+    const salida = await ejecutarBatchPublico(baseInput());
+    const pem = obtenerPublicKeyPem();
+    expect(pem).toContain("BEGIN PUBLIC KEY");
+    expect(verificarFirma(salida, salida.signature, pem)).toBe(true);
+  });
+
+  it("canonicalJson ignora orden de claves y campo signature", async () => {
+    const salida = await ejecutarBatchPublico(baseInput());
+    const reord = {
+      signature: { adulterado: true },
+      rechazos: salida.rechazos,
+      recibos: salida.recibos,
+      periodo: salida.periodo,
+      empresa: salida.empresa,
+      habeasData: salida.habeasData,
+      disclaimer: salida.disclaimer,
+      reglasHash: salida.reglasHash,
+      reglasVerificadasAl: salida.reglasVerificadasAl,
+      generadoEn: salida.generadoEn,
+      version: salida.version,
+    };
+    expect(canonicalJson(reord)).toBe(canonicalJson(salida));
   });
 
   it("no ligada a Prisma: procesa el mismo input dos veces con salida idéntica en montos", async () => {

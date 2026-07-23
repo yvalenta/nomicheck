@@ -17,6 +17,7 @@ import {
 } from "./liquidacionCalculo.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
 import { hashCatalogo, REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
+import { firmarPayload } from "./batchSignatureService.js";
 import type {
   BatchLiquidarInput,
   BatchLiquidarOutput,
@@ -196,8 +197,8 @@ export async function ejecutarBatchPublico(
     };
   });
 
-  return {
-    version: "1",
+  const sinFirma = {
+    version: "1" as const,
     generadoEn: new Date().toISOString(),
     reglasVerificadasAl: REGLAS_VERIFICADAS_AL,
     reglasHash,
@@ -208,6 +209,7 @@ export async function ejecutarBatchPublico(
     recibos,
     rechazos,
   };
+  return { ...sinFirma, signature: firmarPayload(sinFirma) };
 }
 
 export { ErrorLlmExternoProhibido };

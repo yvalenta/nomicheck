@@ -13,6 +13,8 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { batchLiquidarSchema } from "../validation/batchPublico.js";
 import { ejecutarBatchPublico } from "../services/batchPublicoService.js";
 import { batchToCsv } from "../services/batchCsvService.js";
+import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
+import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
 
 export const batchPublicoRouter = Router();
 
@@ -30,6 +32,45 @@ const jsonSchemaCache = zodToJsonSchema(batchLiquidarSchema, {
 batchPublicoRouter.get("/schema/v1.json", (_req: Request, res: Response) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
   return res.status(200).json(jsonSchemaCache);
+});
+
+// Llave pública Ed25519 con la que se firma cada output (RUMBO §M). El
+// buyer la descarga UNA vez y verifica offline todos los outputs contra
+// esta llave — típico caso IPFS: el output vive sin el servidor y sigue
+// siendo verificable con la llave pinneada.
+batchPublicoRouter.get("/publickey", (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  return res.status(200).json({
+    algo: "ed25519",
+    publicKeyId: obtenerPublicKeyId(),
+    publicKeyPem: obtenerPublicKeyPem(),
+    verificacionEjemplo:
+      'node: const {verify,createPublicKey}=require("crypto"); const pk=createPublicKey({key:pubPem,format:"pem"}); ' +
+      'verify(null, Buffer.from(canonicalJson(out),"utf8"), pk, Buffer.from(out.signature.valor,"base64"))',
+  });
+});
+
+// Healthcheck del wrapper (RUMBO §O). Contrato: si el buyer llama antes
+// de POST, obtiene lo mínimo para confirmar que hablamos el mismo motor
+// (reglasHash) y con la misma llave (publicKeyId). Sin este endpoint el
+// buyer necesitaría un batch real para descubrir esos valores.
+batchPublicoRouter.get("/health", async (_req: Request, res: Response) => {
+  const ledger = await obtenerLedgerReglas();
+  return res.status(200).json({
+    ok: true,
+    version: "1",
+    ledger,
+    signature: {
+      algo: "ed25519",
+      publicKeyId: obtenerPublicKeyId(),
+    },
+    guardsActivos: {
+      noExternalLlm: true,
+      habeasDataConstancia: true,
+      persistenciaBd: false,
+    },
+    ts: new Date().toISOString(),
+  });
 });
 
 // Ejemplo canónico input+output para que un buyer copie-pegue y verifique

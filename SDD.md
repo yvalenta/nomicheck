@@ -582,6 +582,8 @@ propio colaborador vía RLS, solo por servicio o `admin_plataforma`).
 | `POST /api/batch/liquidar/csv` | — | Mismo input, salida CSV con cabecera `#` (version, hash, habeas, disclaimer). Filename dinámico por rango de periodo |
 | `GET /api/batch/schema/v1.json` | — | JSON Schema Draft 7 del contrato de intake, generado desde el zod. Cache 1h. Un LLM buyer o auditor lo lee sin humanos |
 | `GET /api/batch/ejemplo` | — | Ejemplo canónico `{instrucciones, input, output}` (Ana empleado + Bob contratista) para copy-paste. Cache 5min |
+| `GET /api/batch/publickey` | — | Llave pública **Ed25519** con la que se firma cada output (RUMBO §M). El buyer la descarga una vez y verifica offline — típico para outputs pinneados en IPFS que sobreviven al servidor. Cache 24h |
+| `GET /api/batch/health` | — | Healthcheck del wrapper (RUMBO §O): `{ok, version, ledger, signature.publicKeyId, guardsActivos, ts}`. Permite al buyer confirmar `reglasHash` + `publicKeyId` antes de POST sin gastar un batch real |
 | `GET /api/reglas/verificadas-al` | — | **Ledger de reglas** (RUMBO §2.4). `{fecha, hash, totalReglas, totalFestivos, fuente: sdd/vault/}`. Mismo `hash` viaja en cada output del wrapper — prueba objetiva de que el motor no se salió del carril |
 | `POST /api/chat/explicar` | — | `ResultadoNomina` + pregunta → explicación |
 | `POST /api/auth/registro` | — | Crea usuario en Supabase Auth + `Empresa` + perfil `Usuario(rol: admin_empresa)` en una transacción |

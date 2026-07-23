@@ -22,6 +22,9 @@ export function batchToCsv(salida: BatchLiquidarOutput): string {
     `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
     `# reglas_hash: ${salida.reglasHash}`,
     `# habeas_data: ${salida.habeasData.norma}`,
+    `# signature_algo: ${salida.signature.algo}`,
+    `# signature_public_key_id: ${salida.signature.publicKeyId}`,
+    `# signature_value: ${salida.signature.valor}`,
     `# disclaimer: ${salida.disclaimer}`,
   ].join("\n");
 

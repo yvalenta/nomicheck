@@ -120,6 +120,14 @@ export interface HabeasDataConstancia {
   procesadoPorLlmExterno: false;
 }
 
+export interface FirmaOutput {
+  algo: "ed25519";
+  valor: string;
+  publicKeyId: string;
+  cubreCampos: "todos_menos_signature";
+  canonical: "sorted_keys_utf8_json";
+}
+
 export interface BatchLiquidarOutput {
   version: "1";
   generadoEn: string;
@@ -131,4 +139,5 @@ export interface BatchLiquidarOutput {
   periodo: BatchLiquidarInput["periodo"];
   recibos: ReciboBatch[];
   rechazos: RechazoBatch[];
+  signature: FirmaOutput;
 }
