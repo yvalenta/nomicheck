@@ -28,7 +28,11 @@ import {
 } from "../services/liquidacionCalculo.js";
 import { COLA_LIQUIDACION, type DatosJobLiquidacion } from "../lib/boss.js";
 
-const TAMANO_LOTE = 50;
+// Tamaño de lote configurable por env — benchmark en periodos de 600
+// empleados (dev, jul 2026) mostró que 50 es óptimo (ver §13). Valores
+// muy chicos multiplican el overhead de transacción/auditoría; muy
+// grandes acercan la latencia del progreso a la del "todo o nada" antiguo.
+const TAMANO_LOTE = Number(process.env.LOTE_LIQUIDACION) || 50;
 
 async function actualizarProgreso(periodoId: number, progreso: number): Promise<void> {
   // Sin `version` a propósito: solo el job dueño del jobId escribe mientras
