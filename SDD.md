@@ -578,6 +578,11 @@ propio colaborador vía RLS, solo por servicio o `admin_plataforma`).
 | `POST /api/nomina/calcular` | — | Datos + modo → `ResultadoNomina` (verificador anónimo) |
 | `POST /api/indemnizacion/calcular` | — | Calculadora aparte de indemnización por terminación (§13) |
 | `POST /api/prima/calcular` · `/api/cesantias/calcular` · `/api/recargos/calcular` | — | Calculadoras anónimas por concepto: prima, cesantías (+intereses) y recargos/horas extra — informativas, mismo rate-limit que `/nomina/calcular` |
+| `POST /api/batch/liquidar` | — | **Wrapper stateless para Execution Market** (RUMBO §3.4, listings 5/6/8a/8b). Entra JSON schema v1 (`buyer`+`empresa`+`periodo`+`empleados`+`contratistas`+`turnos` con `externalId`), sale JSON con recibos, rechazos, `reglasHash` (sha256 canónico del catálogo), `habeasData` (Ley 1581 art. 25, `persistidoEnBd:false`) y `disclaimer`. CERO persistencia. Rate-limit propio 60/min |
+| `POST /api/batch/liquidar/csv` | — | Mismo input, salida CSV con cabecera `#` (version, hash, habeas, disclaimer). Filename dinámico por rango de periodo |
+| `GET /api/batch/schema/v1.json` | — | JSON Schema Draft 7 del contrato de intake, generado desde el zod. Cache 1h. Un LLM buyer o auditor lo lee sin humanos |
+| `GET /api/batch/ejemplo` | — | Ejemplo canónico `{instrucciones, input, output}` (Ana empleado + Bob contratista) para copy-paste. Cache 5min |
+| `GET /api/reglas/verificadas-al` | — | **Ledger de reglas** (RUMBO §2.4). `{fecha, hash, totalReglas, totalFestivos, fuente: sdd/vault/}`. Mismo `hash` viaja en cada output del wrapper — prueba objetiva de que el motor no se salió del carril |
 | `POST /api/chat/explicar` | — | `ResultadoNomina` + pregunta → explicación |
 | `POST /api/auth/registro` | — | Crea usuario en Supabase Auth + `Empresa` + perfil `Usuario(rol: admin_empresa)` en una transacción |
 | `POST /api/auth/registro-individual` | — | Crea cuenta individual server-side (`email_confirm=true` → login inmediato) + perfil `Usuario(rol: individual)`, sin empresa — flujo delayed auth del verificador anónimo |

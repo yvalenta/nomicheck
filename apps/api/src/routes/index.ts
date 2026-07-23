@@ -103,6 +103,19 @@ const limitadorCalculo = rateLimit({
   message: { error: "Demasiadas solicitudes — intenta de nuevo en un minuto." },
 });
 
+// Wrapper stateless del marketplace (RUMBO §3.4, listing 5/6/8a/8b): el
+// buyer pagó un order y espera ejecución inmediata — 30/min sería un cuello
+// artificial para un agente que quiere reintentar CSV+JSON o pedir el
+// schema/ejemplo antes del POST. 60/min por IP sigue cortando abuso pero
+// no fricciona al buyer legítimo.
+const limitadorBatch = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes al wrapper batch — reintenta en un minuto." },
+});
+
 router.get("/health", (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
@@ -120,9 +133,10 @@ router.post("/cesantias/calcular", limitadorCalculo, calcularCesantias);
 router.post("/recargos/calcular", limitadorCalculo, calcularRecargos);
 router.post("/retencion/calcular", limitadorCalculo, calcularRetencion);
 // Wrapper stateless para Execution Market (listings 5/6/8a/8b, RUMBO §3.4):
-// entra JSON, sale JSON, cero persistencia. Mismo rate-limit que las
-// calculadoras anónimas — el pago del marketplace ya autoriza el acceso.
-router.use("/batch", limitadorCalculo, batchPublicoRouter);
+// entra JSON, sale JSON, cero persistencia. Rate-limit propio más generoso
+// (60/min) — el buyer pagó un order y espera ejecución inmediata + puede
+// pedir schema/ejemplo antes del POST.
+router.use("/batch", limitadorBatch, batchPublicoRouter);
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 // Ledger de reglas verificadas (RUMBO §2.4): fecha + hash sha256 canónico
