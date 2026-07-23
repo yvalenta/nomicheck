@@ -200,11 +200,18 @@ function validarDecimalesPila(datos: DatosQA): IssueQA[] {
  * orden). */
 export function evaluarQA(datos: DatosQA, reglas: ReglaLegal[] | ResolutorReglas): ResultadoQA {
   const r = comoResolutor(reglas);
+  // Aprendiz SENA (Ley 789/2002 art. 30) y contratista de servicios
+  // (Ley 1819/2016 art. 244) están fuera del régimen de mínimo vital
+  // salarial — no aplica IBC_FUERA_DE_RANGO (no tienen piso de 1 SMLMV)
+  // ni NETO_BAJO_MINIMO (el auxilio de sostenimiento / honorarios no son
+  // "salario" en el sentido del art. 149).
+  const validacionesLey = datos.exentoDeCotizacion
+    ? []
+    : [...validarRangoIbc(datos, r), ...validarNetoMinimo(datos, r)];
   const issues: IssueQA[] = [
     ...(datos.issuesMotor ?? []),
     ...validarTopeDeducciones(datos, r),
-    ...validarRangoIbc(datos, r),
-    ...validarNetoMinimo(datos, r),
+    ...validacionesLey,
     ...validarChoqueNovedades(datos),
     ...validarDecimalesPila(datos),
   ];

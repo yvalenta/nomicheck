@@ -163,6 +163,11 @@ export function calcularReciboLote(
       ? turnos.filter((t) => t.empleadoId === empleado.id).map((t) => ({ fecha: t.fecha, trabajo: true as const }))
       : undefined;
 
+    // Aprendices SENA (lectivo y práctico) están fuera del régimen de
+    // mínimo vital salarial (Ley 789/2002 art. 30) — no aplica el gate
+    // de IBC ≥ 1 SMLMV ni neto ≥ SMLMV. Ver DatosQA.exentoDeCotizacion.
+    const exentoDeCotizacion = tipoContrato?.startsWith("aprendizaje_sena") ?? false;
+
     const veredicto: ResultadoQA = evaluarQA(
       {
         fecha: periodo.fechaFin,
@@ -174,6 +179,7 @@ export function calcularReciboLote(
         ibcPeriodo: ibcDeLineas(resultado.lineas),
         issuesMotor: resultado.issues,
         novedades: novedadesQA,
+        exentoDeCotizacion,
       },
       resolutor
     );

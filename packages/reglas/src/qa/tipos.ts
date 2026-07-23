@@ -63,4 +63,12 @@ export interface DatosQA {
    * choque se reporta como INCOMPATIBILIDAD_NOVEDAD_TIEMPO. Opcional: si no se
    * pasa, esta regla no corre. */
   novedades?: { fecha: string; trabajo: boolean; remunerada?: boolean }[];
+  /** Marca contratos que la ley EXIME de aportes a seguridad social
+   * (aprendiz SENA lectivo: Ley 789/2002 art. 30) o donde el IBC se cotiza
+   * sobre un auxilio que puede estar por debajo del SMLMV (aprendiz SENA
+   * práctico: solo salud sobre el auxilio, sin piso de SMLMV; contratistas
+   * de servicios: Ley 1819/2016 art. 244, aportan como independientes).
+   * Cuando `true`, se saltan `IBC_FUERA_DE_RANGO` y `NETO_BAJO_MINIMO` —
+   * el mínimo vital protegido por CST art. 149 no aplica a estas figuras. */
+  exentoDeCotizacion?: boolean;
 }

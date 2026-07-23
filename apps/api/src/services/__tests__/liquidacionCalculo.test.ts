@@ -87,25 +87,40 @@ describe("calcularReciboLote", () => {
     expect(codigos).toContain("HORAS_EXTRA_EXCEDIDAS_SEMANA");
   });
 
-  it("aprendiz SENA lectivo cae en el gate QA por IBC=0 (hallazgo, ver #4)", () => {
-    // Comportamiento actual: deduccionesDeLey(alcance="ninguno") no emite la
-    // línea "Salud (aporte empleado)" → ibcDeLineas devuelve 0 → evaluarQA
-    // dispara IBC_FUERA_DE_RANGO como error. Efecto: el aprendiz nunca liquida.
-    // La ley (789/2002 art. 30) EXIME al aprendiz lectivo de cotizar — el gate
-    // no debería aplicar validación IBC a contratos sin obligación de aportes.
-    // Este test documenta el bug para no perderlo; el fix va en la tarea #4.
+  it("aprendiz SENA lectivo liquida sin líneas de provisión ni gate de IBC (Ley 789/2002 art. 30)", () => {
+    // Aprendiz lectivo: sin aportes (deduccionesDeLey alcance="ninguno") y
+    // sin provisiones. Antes fallaba porque el gate QA aplicaba IBC≥1 SMLMV
+    // aunque la ley exime al aprendiz de cotizar — se corrigió pasando
+    // exentoDeCotizacion=true a evaluarQA cuando tipoContrato inicia con
+    // "aprendizaje_sena". Ver commit del gap #4.
     const emp = empleado({
       id: 20,
       nombre: "Aprendiz Lectivo",
-      salarioBase: 1_750_905, // 1 SMLMV
+      salarioBase: 1_500_000,
       tipoContrato: "aprendizaje_sena_lectiva",
     });
     const { recibos, rechazos } = calcularReciboLote(
       PERIODO_ID, PERIODO, [emp], [], REGLAS_JUL_2026, FESTIVOS_2026, resolutor
     );
-    expect(recibos).toEqual([]);
-    expect(rechazos).toHaveLength(1);
-    expect(rechazos[0].issues.some((i) => i.codigo === "IBC_FUERA_DE_RANGO")).toBe(true);
+    expect(rechazos).toEqual([]);
+    expect(recibos).toHaveLength(1);
+    const lineas = recibos[0].lineas as { concepto: string; tipo?: string }[];
+    expect(lineas.filter((l) => l.tipo === "provision")).toEqual([]);
+  });
+
+  it("aprendiz SENA práctico liquida aunque su IBC quede bajo el SMLMV (cotiza solo salud sobre auxilio, sin piso)", () => {
+    const emp = empleado({
+      id: 21,
+      nombre: "Aprendiz Práctico",
+      salarioBase: 1_500_000, // Menor a 1 SMLMV
+      tipoContrato: "aprendizaje_sena_practica",
+    });
+    const { recibos, rechazos } = calcularReciboLote(
+      PERIODO_ID, PERIODO, [emp], [], REGLAS_JUL_2026, FESTIVOS_2026, resolutor
+    );
+    expect(rechazos).toEqual([]);
+    expect(recibos).toHaveLength(1);
+    expect(recibos[0].qaIssues).toBeUndefined();
   });
 
   it("lote vacío → recibos y rechazos vacíos (worker debe manejar el edge)", () => {
