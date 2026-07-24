@@ -12,6 +12,7 @@ import {
 } from "../controllers/calculadorasController.js";
 import { listarFestivos } from "../controllers/festivosController.js";
 import { parametrosPublicos, reglasVerificadasAl } from "../controllers/reglasController.js";
+import { verificarHashTasa } from "../controllers/tasaController.js";
 import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
 import { registro, registroIndividual, invitar, perfilIndividual, whoami } from "../controllers/authController.js";
@@ -143,6 +144,9 @@ router.get("/reglas/parametros", parametrosPublicos);
 // del catálogo ReglaLegal. Sin rate-limit — es lectura constante barata,
 // pensada para ser citada por buyers del marketplace y auditores.
 router.get("/reglas/verificadas-al", reglasVerificadasAl);
+// Verificación pública de snapshot de tasa (listing 8b): recibe hash sha256
+// y devuelve si coincide con el snapshot almacenado en el batch.
+router.get("/tasa/verify", verificarHashTasa);
 router.post("/comprobantes/extraer", limitadorIA, upload.single("archivo"), extraer);
 // Chat contador (Fase 4, SDD §03 Módulo E): disponible sobre cualquier
 // ResultadoNomina ya calculado — anónimo o del portal colaborador, mismo
