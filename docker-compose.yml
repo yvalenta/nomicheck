@@ -15,6 +15,11 @@ x-env: &app-env
   IA_PROVEEDOR: ${IA_PROVEEDOR:-gemini}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  # `pnpm --filter @pv/api dev` corre con CWD en apps/api/, así que el
+  # `dotenv/config()` de index.ts NUNCA encuentra el .env de la raíz del
+  # repo — solo las variables listadas aquí (que Compose sí resuelve desde
+  # la raíz) llegan al proceso. Ver batchSignatureService.ts.
+  NOMICHECK_BATCH_SIGNING_KEY_PEM: ${NOMICHECK_BATCH_SIGNING_KEY_PEM:-}
   CORS_ORIGIN: http://localhost:5173
   PORT: 3001
   PNPM_STORE_DIR: /pnpm-store

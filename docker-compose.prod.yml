@@ -1,0 +1,87 @@
+# Producción — solo api + db. Sin web frontend (el marketplace llama directo a la API).
+# Puerto externo: 3002 (3001 ocupado por uptime-kuma en la VPS).
+# Túnel Cloudflare en el stack docker-lab apuntará a http://nomicheck-api:3002.
+
+x-env: &env
+  DATABASE_URL: postgres://postgres:${DB_PASSWORD}@db:5432/nomicheck_prod
+  DIRECT_URL: postgres://postgres:${DB_PASSWORD}@db:5432/nomicheck_prod
+  SUPABASE_URL: ${SUPABASE_URL:-}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  JWT_SECRET: ${JWT_SECRET}
+  IA_PROVEEDOR: ${IA_PROVEEDOR:-gemini}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  # `pnpm --filter @pv/api dev` corre con CWD en apps/api/, así que el
+  # `dotenv/config()` de index.ts NUNCA encuentra el .env de la raíz del
+  # repo — solo las variables listadas aquí (que Compose sí resuelve desde
+  # la raíz) llegan al proceso. Sin esto el wrapper firma con un keypair
+  # efímero por sesión y un output firmado hoy deja de verificar tras el
+  # próximo redeploy. Ver batchSignatureService.ts.
+  NOMICHECK_BATCH_SIGNING_KEY_PEM: ${NOMICHECK_BATCH_SIGNING_KEY_PEM:?debe estar en .env — genera con generateKeyPairSync("ed25519")}
+  CORS_ORIGIN: ${CORS_ORIGIN:-https://nomicheck.ynt.codes}
+  PORT: 3002
+  NODE_ENV: production
+  CI: "true"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: nomicheck-api
+    restart: unless-stopped
+    command: sh -c "pnpm --filter @pv/reglas build && pnpm --filter @pv/api dev"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - reglas_node_modules:/app/packages/reglas/node_modules
+      - pnpm_store:/pnpm-store
+    environment: *env
+    # Binding privado: solo localhost del host (para correr los wrappers ahí) y
+    # la red docker (cloudflared llega por nombre: nomicheck-api:3002). NUNCA
+    # 0.0.0.0 — NomiCheck procesa PII de nómina (habeas data, Ley 1581/2012) y
+    # no tiene por qué ser alcanzable desde la LAN/internet sin pasar por el túnel.
+    ports:
+      - "127.0.0.1:3002:3002"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - nomicheck-net
+      - proxy-network
+
+  db:
+    image: postgres:17-alpine
+    container_name: nomicheck-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: nomicheck_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - nomicheck-net
+
+volumes:
+  node_modules:
+  api_node_modules:
+  reglas_node_modules:
+  pnpm_store:
+  postgres_data:
+
+networks:
+  nomicheck-net:
+    driver: bridge
+  proxy-network:
+    external: true
+    name: docker-lab_proxy-network
