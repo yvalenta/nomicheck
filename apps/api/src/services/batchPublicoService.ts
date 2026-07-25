@@ -65,7 +65,11 @@ export function guardNoExternalLlm(input: BatchLiquidarInput): void {
   // false explícito del buyer. Por defecto (true) el silencio es lo seguro.
 }
 
-function construirHabeasData(): HabeasDataConstancia {
+// Exportada para que los otros wrappers stateless (retención listing 6,
+// pago on-chain listing 8b) emitan la MISMA constancia — la promesa de
+// habeas data es idéntica en todos: se procesa, se descarta, no persiste,
+// no pasa por LLM externo.
+export function construirHabeasData(): HabeasDataConstancia {
   return {
     norma: "Ley 1581 de 2012 (habeas data Colombia). Encargado de tratamiento — Ley 1581 art. 25.",
     procesado: true,

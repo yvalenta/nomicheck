@@ -5,6 +5,9 @@
 // verificada + hash del catálogo van como comentarios `#` al inicio para que
 // no se pierdan al pegar el CSV en un correo o adjuntar a una liquidación.
 import type { BatchLiquidarOutput } from "../validation/batchPublico.js";
+import type { BatchRetencionOutput } from "../validation/batchRetencion.js";
+import type { BatchPagoOnchainOutput } from "../validation/batchPagoOnchain.js";
+import type { BatchVerificacionOutput } from "../validation/batchVerificacion.js";
 
 function escaparCampo(v: string | number | undefined | null): string {
   if (v === undefined || v === null) return "";
@@ -120,5 +123,152 @@ export function batchToCsv(salida: BatchLiquidarOutput): string {
     );
   }
 
+  return `${cabecera}\n${filas.join("\n")}\n`;
+}
+
+// ── Retención en la fuente (listing 6) ──────────────────────────────────────
+// Una fila por persona: parámetros derivados de la depuración + la retención
+// mensual. Mismo patrón de cabecera `#` con hash/disclaimer/firma para que el
+// contador lo abra en Excel sin perder la trazabilidad legal.
+export function batchRetencionToCsv(salida: BatchRetencionOutput): string {
+  const cabecera = [
+    `# NomiCheck retención batch export — version ${salida.version}`,
+    `# generado_en: ${salida.generadoEn}`,
+    `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
+    `# reglas_hash: ${salida.reglasHash}`,
+    `# habeas_data: ${salida.habeasData.norma}`,
+    `# signature_algo: ${salida.signature.algo}`,
+    `# signature_public_key_id: ${salida.signature.publicKeyId}`,
+    `# signature_value: ${salida.signature.valor}`,
+    `# disclaimer: ${salida.disclaimer}`,
+  ].join("\n");
+
+  const columnas = [
+    "external_id",
+    "ingreso_laboral_mensual",
+    "ingreso_no_constitutivo",
+    "deduccion_dependientes",
+    "deduccion_medicina_prepagada",
+    "renta_exenta_afc_pension",
+    "renta_exenta_laboral",
+    "total_exento_deducible",
+    "base_gravable",
+    "base_gravable_uvt",
+    "retencion_mensual",
+    "referencia_legal",
+  ];
+
+  const filas: string[] = [columnas.join(",")];
+  for (const r of salida.resultados) {
+    filas.push(
+      [
+        r.externalId,
+        r.ingresoLaboralMensual,
+        r.ingresoNoConstitutivo,
+        r.deduccionDependientes,
+        r.deduccionMedicinaPrepagada,
+        r.rentaExentaAfcYPension,
+        r.rentaExentaLaboral,
+        r.totalExentoYDeducible,
+        r.baseGravable,
+        r.baseGravableUvt,
+        r.retencionMensual,
+        r.referenciaLegal,
+      ]
+        .map(escaparCampo)
+        .join(",")
+    );
+  }
+  return `${cabecera}\n${filas.join("\n")}\n`;
+}
+
+// ── Pago on-chain (listing 8b) ──────────────────────────────────────────────
+// Una fila por item pagable + la tasa/hash en la cabecera. El `linkEip681` va
+// en su columna para que el empleador lo copie a la wallet; el Safe batch JSON
+// NO cabe en CSV (es un objeto anidado) — se obtiene del endpoint JSON.
+export function batchPagoOnchainToCsv(salida: BatchPagoOnchainOutput): string {
+  const cabecera = [
+    `# NomiCheck pago on-chain batch export — version ${salida.version}`,
+    `# generado_en: ${salida.generadoEn}`,
+    `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
+    `# reglas_hash: ${salida.reglasHash}`,
+    `# red: ${salida.red} (chainId ${salida.chainId})`,
+    `# token: ${salida.token} @ ${salida.tokenAddress}`,
+    `# tasa_trm: ${salida.tasaSnapshot.trm} COP/USD (vigencia ${salida.tasaSnapshot.fechaTrm})`,
+    `# tasa_efectiva: ${salida.tasaSnapshot.tasaEfectiva} (prima ${salida.tasaSnapshot.primaPct})`,
+    `# tasa_hash: ${salida.tasaSnapshot.hash}`,
+    `# expira_en: ${salida.expiraEn}`,
+    `# total_cop: ${salida.totalCop} — total_usdc: ${salida.totalUsdc}`,
+    `# excluidos_sin_wallet: ${salida.excluidosSinWallet.join("; ")}`,
+    `# habeas_data: ${salida.habeasData.norma}`,
+    `# signature_algo: ${salida.signature.algo}`,
+    `# signature_public_key_id: ${salida.signature.publicKeyId}`,
+    `# signature_value: ${salida.signature.valor}`,
+    `# disclaimer: ${salida.disclaimer}`,
+  ].join("\n");
+
+  const columnas = ["external_id", "destino_wallet", "monto_cop", "monto_usdc", "link_eip681"];
+  const filas: string[] = [columnas.join(",")];
+  for (const i of salida.items) {
+    filas.push(
+      [i.externalId, i.destinoWallet, i.montoCop, i.montoUsdc, i.linkEip681].map(escaparCampo).join(",")
+    );
+  }
+  return `${cabecera}\n${filas.join("\n")}\n`;
+}
+
+// ── Verificación de comprobante (listing 5) ────────────────────────────────
+// Una fila por línea verificada (declarada vs calculada) por comprobante —
+// incluye las líneas sintéticas "faltante_en_comprobante" y las extralegales
+// sin cálculo, para que el contador vea el detalle completo en Excel.
+export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string {
+  const cabecera = [
+    `# NomiCheck verificación batch export — version ${salida.version}`,
+    `# generado_en: ${salida.generadoEn}`,
+    `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
+    `# reglas_hash: ${salida.reglasHash}`,
+    `# habeas_data: ${salida.habeasData.norma}`,
+    `# signature_algo: ${salida.signature.algo}`,
+    `# signature_public_key_id: ${salida.signature.publicKeyId}`,
+    `# signature_value: ${salida.signature.valor}`,
+    `# disclaimer: ${salida.disclaimer}`,
+  ].join("\n");
+
+  const columnas = [
+    "external_id",
+    "veredicto_comprobante",
+    "delta_neto_estimado",
+    "clave_concepto",
+    "nombre_declarado",
+    "valor_declarado",
+    "valor_calculado",
+    "delta",
+    "impacto_neto",
+    "veredicto_linea",
+    "referencia_legal",
+  ];
+
+  const filas: string[] = [columnas.join(",")];
+  for (const r of salida.resultados) {
+    for (const l of r.lineas) {
+      filas.push(
+        [
+          r.externalId,
+          r.veredicto,
+          r.deltaNetoEstimado,
+          l.claveConcepto,
+          l.nombreDeclarado,
+          l.valorDeclarado,
+          l.valorCalculado,
+          l.delta,
+          l.impactoNeto,
+          l.veredicto,
+          l.referenciaLegal ?? "",
+        ]
+          .map(escaparCampo)
+          .join(",")
+      );
+    }
+  }
   return `${cabecera}\n${filas.join("\n")}\n`;
 }
