@@ -23,24 +23,22 @@ verify(null, Buffer.from(canonicalJson(output), "utf8"), pk, Buffer.from(output.
 // → true
 ```
 
+## Estado
+
+`ejemplo.json` fue regenerado 2026-07-25 contra **prod real** (Supabase,
+BD migrada, llave de firma congelada `publicKeyId=9958654482741c98f4b6caaffcdf8acc`)
+— no es un borrador de dev. Firma verificada offline con la llave pública
+de este mismo directorio.
+
 ## Pendiente antes de pinnear en IPFS
 
-⚠️ Este `ejemplo.json` fue generado contra el stack de **desarrollo**
-(`publicKeyId` distinto al de prod — ver `sdd/marketing/publickey.json` de
-cada entorno). Antes de citarlo en el listing público:
-
-1. Confirmar que prod está corriendo con `NOMICHECK_BATCH_SIGNING_KEY_PEM`
-   fija (congelada 2026-07-25 — ver commits `ecd8d5f`/`7b38d23` en
-   `feat/batch-stateless`) y que la BD de prod tiene las migraciones
-   aplicadas (bloqueante activo — ver nota de la migración RLS/`auth`
-   schema en el chat de la sesión que generó este demo).
-2. Regenerar `ejemplo.json` con `curl https://nomicheck.ynt.codes/api/batch/retencion/ejemplo`
-   (o el dominio que corresponda) para que quede firmado con la llave real
-   de prod.
-3. Pinnear `ejemplo.json` + `publickey.json` (de prod) en IPFS (web3.storage,
-   pinata, o el proveedor que se use para el resto del catálogo).
-4. Citar el CID en el `description` del listing 6 en el dashboard
-   `execution.market`.
+1. Pinnear `ejemplo.json` + `../publickey.json` en IPFS (web3.storage,
+   pinata, o el proveedor que se use para el resto del catálogo) —
+   requiere una cuenta propia, no algo que se resuelva desde acá.
+2. Citar el CID resultante en el `description` del listing 6 en el
+   dashboard `execution.market`.
+3. (Opcional) Configurar el túnel Cloudflare de `nomicheck.ynt.codes` para
+   que el `ejemplo.json` pueda regenerarse por URL pública en vez de SSH.
 
 ## Nota de privacidad
 

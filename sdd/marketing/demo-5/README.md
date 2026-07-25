@@ -30,11 +30,16 @@ motor realmente detecta discrepancias.
 Mismo procedimiento que `../demo-6/README.md` — la firma cubre el output
 completo (`todos_menos_signature`, JSON canónico con claves ordenadas).
 
+## Estado
+
+`ejemplo.json` fue regenerado 2026-07-25 contra **prod real** (Supabase,
+BD migrada, llave de firma congelada) — no es un borrador de dev. Firma
+verificada offline con la llave pública de este mismo directorio.
+
 ## Pendiente antes de pinnear en IPFS
 
-Mismos 4 pasos que `../demo-6/README.md` — regenerar contra prod con la
-llave de firma congelada y la BD migrada antes de citar el CID en el
-listing.
+Mismos pasos que `../demo-6/README.md` — pinnear en IPFS y citar el CID
+en el listing.
 
 ## Nota de privacidad
 
