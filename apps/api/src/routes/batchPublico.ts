@@ -21,6 +21,7 @@ import {
   ErrorLoteSinWallets,
 } from "../services/batchPagoOnchainService.js";
 import { ejecutarBatchVerificacion } from "../services/batchVerificacionService.js";
+import { generarParametrosSnapshot } from "../services/parametrosSnapshotService.js";
 import {
   batchToCsv,
   batchRetencionToCsv,
@@ -47,6 +48,23 @@ const jsonSchemaCache = zodToJsonSchema(batchLiquidarSchema, {
 batchPublicoRouter.get("/schema/v1.json", (_req: Request, res: Response) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
   return res.status(200).json(jsonSchemaCache);
+});
+
+// Snapshot firmado de los parámetros legales vigentes (listing de Fase 1).
+// No recibe input: la salida es idéntica para todos los compradores mientras
+// el catálogo no cambie. Por eso es el único listing publicable como archivo
+// estático en IPFS + borde, sin dependencia de este servidor.
+batchPublicoRouter.get("/parametros", async (_req: Request, res: Response) => {
+  try {
+    const salida = await generarParametrosSnapshot();
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.status(200).json(salida);
+  } catch (err) {
+    return res.status(500).json({
+      error: "parametros_no_disponibles",
+      mensaje: err instanceof Error ? err.message : "error desconocido",
+    });
+  }
 });
 
 // Llave pública Ed25519 con la que se firma cada output (RUMBO §M). El
