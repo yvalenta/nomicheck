@@ -1,3 +1,10 @@
+# ⚠️ DEPRECADO — NO LEVANTAR. Producción corre desde ~/docker-lab/docker-compose.yml
+# (servicios nomicheck-api / nomicheck-db, proyecto compose "docker-lab"). Este archivo
+# usa los mismos container_name, así que `up` choca con "container name already in use",
+# y su volumen postgres_data está VACÍO: el dato vivo está en el bind mount
+# docker-lab/data/nomicheck-postgres. Se conserva solo como referencia de la config
+# de entorno. Para desplegar: ./deploy.sh
+#
 # Producción — solo api + db. Sin web frontend (el marketplace llama directo a la API).
 # Puerto externo: 3002 (3001 ocupado por uptime-kuma en la VPS).
 # Túnel Cloudflare en el stack docker-lab apuntará a http://nomicheck-api:3002.

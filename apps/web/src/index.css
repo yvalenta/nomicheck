@@ -7,15 +7,29 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap");
 
 @theme {
-  /* NomiCheck — FinTech design tokens (SDD §06) */
-  --color-surface: #f8fafc; /* fondo de página            */
-  --color-midnight: #0f172a; /* header corporativo         */
-  --color-midnight-2: #1e293b; /* variante del header        */
-  --color-mint: #10b981; /* acción principal / éxito   */
-  --color-mint-dark: #059669; /* hover del mint             */
-  --color-coral: #ef4444; /* deducciones / alertas      */
-  --color-ink: #0f172a; /* texto principal            */
-  --color-muted: #64748b; /* texto secundario slate-500 */
+  /* NomiCheck — FinTech design tokens (SDD §06)
+   *
+   * Unificación de marca 2026-07: la acción primaria pasa de mint (verde) a
+   * INDIGO, para que el producto (portal) y la entrega del marketplace
+   * (Execution Market) se lean como una sola identidad. El token sigue
+   * llamándose `mint` para no romper las ~decenas de usos `bg-mint`/`text-mint`;
+   * su VALOR es ahora indigo. El "éxito/correcto" real vive en `--color-verde`
+   * (teal), que ya era el veredicto positivo del semáforo. */
+  --color-surface: #f7f8fc; /* fondo de página — leve sesgo índigo         */
+  --color-midnight: #0b1120; /* header corporativo — navy más profundo      */
+  --color-midnight-2: #16203a; /* variante del header                        */
+  --color-mint: #5b50e8; /* acción principal — INDIGO (antes verde mint)  */
+  --color-mint-dark: #4a3fd0; /* hover de la acción                          */
+  --color-coral: #ef4444; /* deducciones / alertas                        */
+  --color-ink: #16203a; /* texto principal                              */
+  --color-muted: #64748b; /* texto secundario slate-500                   */
+
+  /* Marca índigo explícita — para el overview y superficies nuevas que
+   * quieran el acento sin pasar por el alias `mint`. */
+  --color-indigo: #5b50e8;
+  --color-indigo-soft: #eeecfd; /* fondo suave del acento (chips, cards)     */
+  --color-navy: #0b1120;
+  --color-navy-2: #16203a;
 
   /* Semáforo del motor — los tres estados de calidad de una línea del
    * cálculo. En la LANDING son el hilo visual: aparecen en hero, caso

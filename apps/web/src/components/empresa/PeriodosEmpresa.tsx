@@ -30,12 +30,13 @@ import {
   obtenerTurnos,
   revertirPeriodo,
   type Empleado,
-  type IssueQA,
+  type EstadoPeriodo,
   type Periodo,
   type Recibo,
   type RespuestaPaginada,
   type Turno,
 } from "../../apiEmpresa";
+import BadgeEstado from "../ui/BadgeEstado.tsx";
 import PanelLiquidacion from "./PanelLiquidacion.tsx";
 import PanelPagoOnChain from "./PanelPagoOnChain.tsx";
 import { usePeriodoEstado } from "./usePeriodoEstado.ts";
@@ -52,22 +53,6 @@ import HorarioSemanalEditor from "../HorarioSemanalEditor.tsx";
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
-const ESTADO_ETIQUETA: Record<Periodo["estado"], string> = {
-  borrador: "Borrador",
-  liquidando: "Liquidando…",
-  liquidado: "Liquidado",
-  liquidado_con_rechazos: "Con rechazos",
-  fallido: "Falló",
-  pagado: "Pagado",
-};
-const ESTADO_CLASE: Record<Periodo["estado"], string> = {
-  borrador: "bg-slate-100 text-muted",
-  liquidando: "bg-mint-light/60 text-mint-dark",
-  liquidado: "bg-emerald-50 text-mint-dark",
-  liquidado_con_rechazos: "bg-amber-50 text-amber-800",
-  fallido: "bg-red-50 text-coral",
-  pagado: "bg-blue-50 text-blue-600",
-};
 
 // El comprobante imprimible (ComprobanteNomina) trabaja sobre la forma
 // ResultadoNomina del motor — el Recibo de Prisma no la tiene exactamente
@@ -168,7 +153,7 @@ export default function PeriodosEmpresa() {
 
       {/* Filtros: estado + rango de fechas (URL-driven, SPA §15). */}
       <div className="flex flex-wrap gap-2 items-center">
-        <SelectFiltro<Exclude<EstadoPeriodo, "">>
+        <SelectFiltro<Exclude<FiltroEstadoPeriodo, "">>
           value={filtros.estado}
           onChange={(v) => cambiarFiltro({ estado: v })}
           todasLabel="Todos los estados"
@@ -213,24 +198,18 @@ export default function PeriodosEmpresa() {
         )}
         <div className="flex flex-col">
           {periodos.map((p) => (
-            <button
+            <FilaPeriodo
               key={p.id}
-              onClick={() => setSeleccionado(p)}
-              className="flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-slate-50 transition-colors duration-200 text-left"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">
-                  {formatRangoFechas(p.fechaInicio, p.fechaFin)}
-                </p>
-                {p.notaEdicion && (
-                  <p className="text-xs text-muted truncate mt-0.5">✎ Editado — {p.notaEdicion}</p>
-                )}
-              </div>
-              <span className={`text-xs font-semibold rounded-full px-2.5 py-1 shrink-0 ${ESTADO_CLASE[p.estado]}`}>
-                {ESTADO_ETIQUETA[p.estado]}
-              </span>
-              <ChevronRight size={16} className="text-muted shrink-0" />
-            </button>
+              periodo={p}
+              onAbrir={() => setSeleccionado(p)}
+              onEstadoFinal={(estado) =>
+                setRespuesta((prev) =>
+                  prev
+                    ? { ...prev, items: prev.items.map((x) => (x.id === p.id ? { ...x, estado } : x)) }
+                    : prev,
+                )
+              }
+            />
           ))}
         </div>
       </PaycheckCard>
@@ -243,6 +222,48 @@ export default function PeriodosEmpresa() {
         />
       )}
     </div>
+  );
+}
+
+// Fila de la lista. Si el periodo está liquidando, sigue el progreso en vivo:
+// antes el badge decía "Liquidando…" y se quedaba congelado hasta que el
+// usuario abría el periodo (el polling solo existía en el detalle). Solo
+// consulta mientras ese periodo esté en curso — un periodo terminal no genera
+// tráfico.
+function FilaPeriodo({
+  periodo,
+  onAbrir,
+  onEstadoFinal,
+}: {
+  periodo: Periodo;
+  onAbrir: () => void;
+  onEstadoFinal: (estado: EstadoPeriodo) => void;
+}) {
+  const enCurso = periodo.estado === "liquidando";
+  const { estado: vivo } = usePeriodoEstado(periodo.id, enCurso);
+
+  // Al terminar, avisa al padre para que la fila deje de decir "Liquidando…".
+  useEffect(() => {
+    if (vivo && vivo.estado !== periodo.estado) onEstadoFinal(vivo.estado);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vivo?.estado]);
+
+  return (
+    <button
+      onClick={onAbrir}
+      className="flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-slate-50 transition-colors duration-200 text-left"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-ink truncate">
+          {formatRangoFechas(periodo.fechaInicio, periodo.fechaFin)}
+        </p>
+        {periodo.notaEdicion && (
+          <p className="text-xs text-muted truncate mt-0.5">✎ Editado — {periodo.notaEdicion}</p>
+        )}
+      </div>
+      <BadgeEstado estado={periodo.estado} progreso={enCurso ? vivo?.progreso : undefined} />
+      <ChevronRight size={16} className="text-muted shrink-0" />
+    </button>
   );
 }
 
@@ -611,9 +632,10 @@ function DetallePeriodo({
               <h2 className="text-base sm:text-lg font-bold text-ink">
                 {formatRangoFechas(periodo.fechaInicio, periodo.fechaFin)}
               </h2>
-              <span className={`text-xs font-semibold rounded-full px-2.5 py-1 shrink-0 ${ESTADO_CLASE[periodo.estado]}`}>
-                {ESTADO_ETIQUETA[periodo.estado]}
-              </span>
+              <BadgeEstado
+                estado={periodo.estado}
+                progreso={periodo.estado === "liquidando" ? estadoLiq?.progreso : undefined}
+              />
             </div>
             {periodo.notaEdicion && (
               <p className="text-xs text-muted mt-0.5">

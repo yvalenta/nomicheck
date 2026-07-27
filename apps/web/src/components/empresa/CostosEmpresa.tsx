@@ -1,27 +1,26 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Info } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { obtenerCostos, type CostosEmpresa as DatosCostos } from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
+import { useDatos } from "../../hooks/useDatos.ts";
 
 // Panel de costo total empleador (SDD §13): lo que la nómina cuesta DE
 // VERDAD — salario + auxilio + aportes patronales + provisión de
 // prestaciones — con cada línea citando su fuente legal (misma
 // transparencia del verificador anónimo).
 export default function CostosEmpresa() {
-  const [datos, setDatos] = useState<DatosCostos | null>(null);
   const [exonerado, setExonerado] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(true);
   const [abiertoId, setAbiertoId] = useState<number | null>(null);
 
-  useEffect(() => {
-    setCargando(true);
-    obtenerCostos(exonerado)
-      .then(setDatos)
-      .catch((e) => setError(e.message))
-      .finally(() => setCargando(false));
-  }, [exonerado]);
+  // Las dos variantes (con y sin exoneración) se cachean por separado: la
+  // primera vez cada una viaja al motor, y a partir de ahí alternar el toggle
+  // repinta al instante desde memoria mientras revalida por detrás. El cálculo
+  // sigue siendo del backend — aquí no se replica ninguna regla de nómina.
+  const { datos, cargando, error } = useDatos<DatosCostos>(
+    `costos:${exonerado}`,
+    () => obtenerCostos(exonerado),
+  );
 
   const t = datos?.totales;
   const sobrecosto = t ? Math.round((t.factorPromedio - 1) * 1000) / 10 : 0;
