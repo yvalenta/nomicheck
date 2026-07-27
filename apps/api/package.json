@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
+    "@faremeter/middleware": "^0.22.0",
     "@prisma/client": "^5.19.1",
     "@pv/reglas": "workspace:*",
     "@supabase/supabase-js": "^2.110.6",

@@ -17,6 +17,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.111.0
         version: 0.111.0(zod@3.25.76)
+      '@faremeter/middleware':
+        specifier: ^0.22.0
+        version: 0.22.0
       '@prisma/client':
         specifier: ^5.19.1
         version: 5.22.0(prisma@5.22.0)
@@ -168,6 +171,12 @@ packages:
     peerDependenciesMeta:
       zod:
         optional: true
+
+  '@ark/schema@0.56.0':
+    resolution: {integrity: sha512-ECg3hox/6Z/nLajxXqNhgPtNdHWC9zNsDyskwO28WinoFEnWow4IsERNz9AnXRhTZJnYIlAJ4uGn3nlLk65vZA==}
+
+  '@ark/util@0.56.0':
+    resolution: {integrity: sha512-BghfRC8b9pNs3vBoDJhcta0/c1J1rsoS1+HgVUreMFPdhz/CRAKReAu57YEllNaSy98rWAdY1gE+gFup7OXpgA==}
 
   '@babel/runtime@7.29.7':
     resolution: {integrity: sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==}
@@ -475,6 +484,23 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@faremeter/info@0.22.0':
+    resolution: {integrity: sha512-IyAdM/ciHczopFMdZ5NYKrYWVI3xVQPcBMZzWXZh8T1NoR1rQ6NMyeSXXqHiswCU7fsQGPGNuRjiXJVx38lqWA==}
+
+  '@faremeter/logs@0.22.0':
+    resolution: {integrity: sha512-FFI+voKD48BjNEbDm/XvlsPlFEkNV9B6NLoRRwZuJq3np7vgW5PsDbcjIbghvKx3hNXwr2/p7oUrc8SMqoNA5Q==}
+    peerDependencies:
+      '@logtape/logtape': 1.0.4
+    peerDependenciesMeta:
+      '@logtape/logtape':
+        optional: true
+
+  '@faremeter/middleware@0.22.0':
+    resolution: {integrity: sha512-v5u9C/FKeRrafw+/tjjUDP5hDW3UVkGa83AC2bESzJzUMAkQ7IQiZ3Pz6maRdouuNaFP65Hboppd8+Tmk5Qw1w==}
+
+  '@faremeter/types@0.22.0':
+    resolution: {integrity: sha512-OrIw/AIkLzt0W/CZz0RRPQyP5IJfo/bxMUZgyk7DKwFOg0HP/lL7J9p5wMruqVzEhADB9/FAKJ3vaOtlTQ6xhA==}
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -1395,6 +1421,12 @@ packages:
   aria-hidden@1.2.6:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
     engines: {node: '>=10'}
+
+  arkregex@0.0.5:
+    resolution: {integrity: sha512-ncYjBdLlh5/QnVsAA8De16Tc9EqmYM7y/WU9j+236KcyYNUXogpz3sC4ATIZYzzLxwI+0sEOaQLEmLmRleaEXw==}
+
+  arktype@2.2.0:
+    resolution: {integrity: sha512-t54MZ7ti5BhOEvzEkgKnWvqj+UbDfWig+DHr5I34xatymPusKLS0lQpNJd8M6DzmIto2QGszHfNKoFIT8tMCZQ==}
 
   array-flatten@1.1.1:
     resolution: {integrity: sha512-PCVAQswWemu6UdxsDFFX/+gVeYqKAod3D3UVm91jHwynguOwAvYPhx8nNlM++NqRcK6CxxpUafjmhIdKiHibqg==}
@@ -2479,6 +2511,12 @@ snapshots:
     optionalDependencies:
       zod: 3.25.76
 
+  '@ark/schema@0.56.0':
+    dependencies:
+      '@ark/util': 0.56.0
+
+  '@ark/util@0.56.0': {}
+
   '@babel/runtime@7.29.7': {}
 
   '@emnapi/core@1.11.1':
@@ -2643,6 +2681,26 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.1':
     optional: true
+
+  '@faremeter/info@0.22.0':
+    dependencies:
+      '@faremeter/types': 0.22.0
+      arktype: 2.2.0
+
+  '@faremeter/logs@0.22.0': {}
+
+  '@faremeter/middleware@0.22.0':
+    dependencies:
+      '@faremeter/info': 0.22.0
+      '@faremeter/logs': 0.22.0
+      '@faremeter/types': 0.22.0
+      arktype: 2.2.0
+    transitivePeerDependencies:
+      - '@logtape/logtape'
+
+  '@faremeter/types@0.22.0':
+    dependencies:
+      arktype: 2.2.0
 
   '@floating-ui/core@1.8.0':
     dependencies:
@@ -3359,6 +3417,16 @@ snapshots:
   aria-hidden@1.2.6:
     dependencies:
       tslib: 2.8.1
+
+  arkregex@0.0.5:
+    dependencies:
+      '@ark/util': 0.56.0
+
+  arktype@2.2.0:
+    dependencies:
+      '@ark/schema': 0.56.0
+      '@ark/util': 0.56.0
+      arkregex: 0.0.5
 
   array-flatten@1.1.1: {}
 
