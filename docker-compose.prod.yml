@@ -1,10 +1,22 @@
-# ⚠️ DEPRECADO — NO LEVANTAR. Producción corre desde ~/docker-lab/docker-compose.yml
-# (servicios nomicheck-api / nomicheck-db, proyecto compose "docker-lab"). Este archivo
-# usa los mismos container_name, así que `up` choca con "container name already in use",
-# y su volumen postgres_data está VACÍO: el dato vivo está en el bind mount
-# docker-lab/data/nomicheck-postgres. Se conserva solo como referencia de la config
-# de entorno. Para desplegar: ./deploy.sh
-#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ DEPRECADO — NO LEVANTAR. Jul 2026.                                       │
+# │                                                                          │
+# │ En producción nomicheck-api y nomicheck-db los define y los corre el      │
+# │ stack raíz ~/docker-lab/docker-compose.yml (proyecto compose "docker-lab").│
+# │ Este archivo declara los MISMOS container_name desde otro proyecto, así   │
+# │ que `docker compose -f docker-compose.prod.yml up` falla con              │
+# │   Conflict. The container name "/nomicheck-db" is already in use          │
+# │                                                                          │
+# │ Y si se "resuelve" el conflicto borrando los contenedores, rompe la app:  │
+# │ el bloque `environment:` de abajo NO lee apps/nomicheck/.env — construye  │
+# │ DATABASE_URL apuntando al Postgres local (db:5432/nomicheck_prod), que    │
+# │ está vacío (0 filas en todas las tablas de negocio). La API en producción │
+# │ usa Supabase (aws-1-us-east-2.pooler.supabase.com), vía el env_file que   │
+# │ configura el stack raíz.                                                  │
+# │                                                                          │
+# │ Para desplegar:  ./deploy.sh   (opera sobre el stack raíz)                │
+# └──────────────────────────────────────────────────────────────────────────┘
+
 # Producción — solo api + db. Sin web frontend (el marketplace llama directo a la API).
 # Puerto externo: 3002 (3001 ocupado por uptime-kuma en la VPS).
 # Túnel Cloudflare en el stack docker-lab apuntará a http://nomicheck-api:3002.

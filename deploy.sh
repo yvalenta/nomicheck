@@ -1,65 +1,75 @@
 #!/usr/bin/env bash
 # Deploy / actualización de NomiCheck en producción (VPS homelab).
-# Uso: ./deploy.sh [--no-build] [--down]        ← ojo: NO "sh deploy.sh" (es bash)
 #
-# --no-build  Solo hace pull+up, no reconstruye la imagen (más rápido si solo
-#             cambiaron reglas o config, no el Dockerfile/dependencias).
-# --down      Para nomicheck-api y nomicheck-db (mantenimiento). El resto del
-#             stack docker-lab (cloudflared, kuma, rails…) sigue arriba.
+# Uso:  ./deploy.sh [--no-build] [--down]
 #
-# NomiCheck NO tiene stack propio: sus servicios viven en el compose raíz
-# ~/docker-lab/docker-compose.yml junto al resto del homelab, porque comparten
-# proxy-network y el túnel de Cloudflare. Levantar aquí un proyecto compose
-# aparte choca con los container_name fijos de ese stack y, peor, apuntaría a
-# un volumen de Postgres vacío en vez del bind mount ./data/nomicheck-postgres.
-# Ver docker-compose.prod.yml (deprecado, no usar).
+#   --no-build  Solo pull + up, sin reconstruir la imagen (rápido si solo
+#               cambiaron reglas o config, no el Dockerfile/dependencias).
+#   --down      Para nomicheck-api y nomicheck-db (mantenimiento).
+#
+# IMPORTANTE — este script opera sobre el stack raíz ~/docker-lab/docker-compose.yml,
+# que es la ÚNICA fuente de verdad de nomicheck-api y nomicheck-db en producción.
+# apps/nomicheck/docker-compose.prod.yml está deprecado: define los mismos
+# container_name, así que levantarlo choca ("container name already in use") y,
+# peor, su bloque `environment:` sobrescribe DATABASE_URL para apuntar al
+# Postgres local vacío en vez de a Supabase. Ver DEPRECATED-docker-compose.prod.yml.
+
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$DIR"
-
-# Raíz del stack homelab: apps/nomicheck/ → docker-lab/. Override con env var.
-STACK_DIR="${NOMICHECK_STACK_DIR:-$(cd "$DIR/../.." && pwd)}"
-STACK_FILE="$STACK_DIR/docker-compose.yml"
-SERVICES=(nomicheck-api nomicheck-db)
-
-if [[ ! -f "$STACK_FILE" ]]; then
-  echo "ERROR: no encuentro el compose del homelab en $STACK_FILE"
-  echo "       Este script solo corre en la VPS, dentro de docker-lab/apps/nomicheck/."
-  echo "       (o exporta NOMICHECK_STACK_DIR apuntando a docker-lab/)"
+# Guard: el script es bash (usa [[ ]], BASH_SOURCE, pipefail). Con `sh deploy.sh`
+# dash lo ejecuta a medias — DIR queda vacío y los `if` se saltan en silencio.
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "ERROR: ejecuta con bash, no sh:  ./deploy.sh   (o  bash deploy.sh)" >&2
   exit 1
 fi
 
-COMPOSE=(docker compose -f "$STACK_FILE")
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # ~/docker-lab/apps/nomicheck
+LAB_DIR="$(cd "$APP_DIR/../.." && pwd)"                   # ~/docker-lab
+SERVICES=(nomicheck-db nomicheck-api)
 
-# Verificar que .env existe y tiene contraseñas no-placeholder
-if [[ ! -f "$DIR/.env" ]]; then
-  echo "ERROR: $DIR/.env no existe — copia .env.example y rellena los valores"
+COMPOSE=(docker compose -f "$LAB_DIR/docker-compose.yml" --env-file "$LAB_DIR/.env")
+
+# ── Comprobaciones previas ───────────────────────────────────────────────────
+if [[ ! -f "$APP_DIR/.env" ]]; then
+  echo "ERROR: $APP_DIR/.env no existe — cópialo de .env.example y rellénalo" >&2
   exit 1
 fi
-if grep -q 'cambia_esto_ahora' "$DIR/.env" 2>/dev/null; then
-  echo "ERROR: .env aún tiene placeholders — edita DB_PASSWORD y JWT_SECRET"
+if [[ ! -f "$LAB_DIR/.env" ]]; then
+  echo "ERROR: $LAB_DIR/.env no existe (necesario para NOMICHECK_DB_PASSWORD)" >&2
+  exit 1
+fi
+if grep -q 'cambia_esto_ahora' "$APP_DIR/.env"; then
+  echo "ERROR: $APP_DIR/.env aún tiene placeholders — edita DB_PASSWORD y JWT_SECRET" >&2
+  exit 1
+fi
+# El PEM de firma debe venir completo por env_file. Si se pierde, el wrapper
+# firma con un keypair efímero y los outputs dejan de verificar tras el redeploy.
+if ! grep -q 'NOMICHECK_BATCH_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
+  echo "ERROR: falta NOMICHECK_BATCH_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
   exit 1
 fi
 
-# Down explícito (solo los servicios de NomiCheck)
+# ── --down ───────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--down" ]]; then
-  echo "→ Deteniendo NomiCheck (resto del stack intacto)..."
+  echo "→ Deteniendo NomiCheck (api + db)..."
   "${COMPOSE[@]}" stop "${SERVICES[@]}"
   exit 0
 fi
 
+# ── Pull ─────────────────────────────────────────────────────────────────────
 echo "→ Pull de cambios..."
-git -C "$DIR" pull --ff-only
+git -C "$APP_DIR" pull --ff-only
 
 BUILD_FLAG=()
-[[ "${1:-}" != "--no-build" ]] && BUILD_FLAG=(--build)
+[[ "${1:-}" == "--no-build" ]] || BUILD_FLAG=(--build)
 
-echo "→ Levantando servicios (nomicheck-api + nomicheck-db)..."
+# ── Up ───────────────────────────────────────────────────────────────────────
+echo "→ Levantando servicios (${SERVICES[*]})..."
 "${COMPOSE[@]}" up -d "${BUILD_FLAG[@]}" "${SERVICES[@]}"
 
+# ── Healthcheck ──────────────────────────────────────────────────────────────
 echo "→ Esperando healthcheck de la API..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if curl -sf http://localhost:3002/api/health > /dev/null 2>&1; then
     echo "✓ NomiCheck API lista en http://localhost:3002"
     "${COMPOSE[@]}" ps "${SERVICES[@]}"
@@ -68,6 +78,6 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-echo "✗ Timeout — revisando logs:"
+echo "✗ Timeout — últimos logs de la API:" >&2
 "${COMPOSE[@]}" logs nomicheck-api --tail 30
 exit 1
