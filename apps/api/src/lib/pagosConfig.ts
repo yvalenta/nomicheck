@@ -17,6 +17,10 @@ export interface RedPago {
   tokenAddress: `0x${string}`;
   decimales: number;
   rpcUrl: string;
+  // Explorador de bloques público — es POR RED, no global. Va acá y no en el
+  // servicio para que agregar una red traiga su explorador con ella y el
+  // comprobante nunca enlace a un explorador que no conoce esa chain.
+  explorerTxUrl: (txHash: string) => string;
 }
 
 export const REDES_SOPORTADAS: RedPago[] = [
@@ -27,8 +31,16 @@ export const REDES_SOPORTADAS: RedPago[] = [
     tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     decimales: 6,
     rpcUrl: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
+    explorerTxUrl: (txHash) => `https://basescan.org/tx/${txHash}`,
   },
 ];
+
+// Origen público donde vive esta API. Solo se usa para construir URLs de
+// verificación DENTRO del comprobante: el titular tiene que poder auditar
+// la tasa y la llave pública sin que nadie le pase el enlace aparte.
+export function origenPublico(): string {
+  return (process.env.NOMICHECK_PUBLIC_ORIGIN ?? "https://nomicheck.ynt.codes").replace(/\/+$/, "");
+}
 
 export class ErrorRedNoSoportada extends Error {
   constructor(red: string, token: string) {

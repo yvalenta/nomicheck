@@ -30,7 +30,16 @@ import {
 } from "../services/batchCsvService.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
-import { ErrorRedNoSoportada } from "../lib/pagosConfig.js";
+import {
+  emitirComprobantes,
+  ErrorLoteNoAutentico,
+  ErrorPagoNoCoincide,
+  ErrorPagoNoConfirmado,
+  ErrorWalletSinItems,
+} from "../services/comprobanteService.js";
+import { seguirPago } from "../services/seguimientoPagoService.js";
+import { comprobanteSchema, seguimientoQuerySchema } from "../validation/comprobante.js";
+import { ErrorRedNoSoportada, resolverRedPago } from "../lib/pagosConfig.js";
 
 export const batchPublicoRouter = Router();
 
@@ -434,5 +443,94 @@ batchPublicoRouter.post("/pago-onchain/csv", async (req: Request, res: Response)
     return res.status(200).send(csv);
   } catch (e) {
     return responderErrorPagoOnchain(res, e);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Constancia de pago verificable + seguimiento en vivo del pago
+// ---------------------------------------------------------------------------
+
+// Cada error dice de QUIÉN es la culpa, porque el titular necesita saber si
+// espera, si corrige, o si reclama:
+//   422 el lote no es auténtico o la red no se soporta → el input está mal
+//   404 la wallet no está en el lote                   → no hay nada que certificar
+//   409 la cadena todavía no respalda el pago          → esperá y reintentá
+function responderErrorComprobante(res: Response, e: unknown) {
+  if (e instanceof ErrorLoteNoAutentico || e instanceof ErrorRedNoSoportada) {
+    return res.status(422).json({ error: "lote_no_autentico", mensaje: e.message });
+  }
+  if (e instanceof ErrorWalletSinItems) {
+    return res.status(404).json({ error: "sin_items", mensaje: e.message });
+  }
+  if (e instanceof ErrorPagoNoConfirmado || e instanceof ErrorPagoNoCoincide) {
+    return res.status(409).json({ error: "pago_no_acreditado", mensaje: e.message });
+  }
+  return res.status(500).json({
+    error: "internal_error",
+    mensaje: e instanceof Error ? e.message : "Error inesperado",
+  });
+}
+
+batchPublicoRouter.post("/comprobante", async (req: Request, res: Response) => {
+  const parsed = comprobanteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", detalle: parsed.error.flatten() });
+  }
+  try {
+    const comprobantes = await emitirComprobantes(parsed.data.lote, parsed.data.txHash, parsed.data.wallet);
+    // Un recibo de transacción minada es INMUTABLE: la misma consulta va a dar
+    // lo mismo siempre. Se cachea agresivo en el edge para que la segunda
+    // visita no toque el RPC — es la optimización que de verdad rinde acá
+    // (la emisión mide ~385 ms, y casi todo es la ida al RPC de Base).
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    return res.status(200).json({ comprobantes });
+  } catch (e) {
+    return responderErrorComprobante(res, e);
+  }
+});
+
+batchPublicoRouter.get("/pago-onchain/seguir", async (req: Request, res: Response) => {
+  const parsed = seguimientoQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", detalle: parsed.error.flatten() });
+  }
+  let red;
+  try {
+    red = resolverRedPago(parsed.data.red, parsed.data.token);
+  } catch (e) {
+    return responderErrorPagoOnchain(res, e);
+  }
+
+  // `no-transform` es obligatorio: sin él un proxy que comprima el cuerpo
+  // rompe el framing de SSE. `X-Accel-Buffering` desactiva el buffer de nginx,
+  // que si no retiene los eventos hasta cerrar y anula el propósito.
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  // Cerrar la pestaña aborta la espera en vez de dejar un generador
+  // consultando el RPC contra un cliente que ya no existe.
+  const abortador = new AbortController();
+  req.on("close", () => abortador.abort());
+
+  // Cloudflare corta conexiones ociosas cerca de los 100 s. El latido es un
+  // comentario SSE (`:`), que el cliente ignora pero mantiene viva la conexión.
+  const latido = setInterval(() => res.write(": keepalive\n\n"), 15_000);
+
+  try {
+    for await (const evento of seguirPago(red, parsed.data.txHash, {
+      confirmaciones: parsed.data.confirmaciones,
+      senal: abortador.signal,
+    })) {
+      res.write(`event: ${evento.fase}\ndata: ${JSON.stringify(evento)}\n\n`);
+    }
+  } catch (e) {
+    const mensaje = e instanceof Error ? e.message : "Error inesperado";
+    res.write(`event: error\ndata: ${JSON.stringify({ fase: "error", mensaje })}\n\n`);
+  } finally {
+    clearInterval(latido);
+    res.end();
   }
 });
