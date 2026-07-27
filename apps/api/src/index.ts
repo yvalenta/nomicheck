@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import router from "./routes/index.js";
 import { detenerBoss, getBoss } from "./lib/boss.js";
+import { montarMuroX402 } from "./lib/x402Muro.js";
 import { registrarWorkerLiquidacion } from "./workers/liquidacionWorker.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,11 @@ const PORT = process.env.PORT ?? 3001;
 
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? "http://localhost:5173" }));
 app.use(express.json());
+
+// Antes del router: el 402 tiene que salir sin ejecutar el cálculo. Apagado
+// por defecto — sin `X402_ACTIVO=true` no monta nada.
+montarMuroX402(app);
+
 app.use("/api", router);
 
 // En producción, esta misma imagen sirve el build estático de apps/web

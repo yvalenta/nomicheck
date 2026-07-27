@@ -60,6 +60,52 @@ export const PRECIOS_USD: Record<string, number> = {
   "/comprobante": 0.25, // cruza tres capas y hace una llamada RPC
 };
 
+/**
+ * La wallet del executor de Execution Market, cuya clave privada estuvo
+ * expuesta y cuya rotación sigue pendiente.
+ *
+ * NO puede ser `X402_PAY_TO`. Y la buena noticia es que no hace falta que lo
+ * sea: `payTo` es una dirección que RECIBE: el `transferWithAuthorization` del
+ * comprador manda el USDC ahí y nadie firma nada desde este servidor. Una
+ * dirección de cobro no necesita su clave privada acá — solo la necesita quien
+ * después quiera mover los fondos.
+ *
+ * Por eso encender el muro NO depende de rotar: basta una dirección nueva cuya
+ * clave nunca haya tocado esta máquina. Mandar los cobros a la dirección
+ * comprometida sí sería grave, porque en x402 el pago es directo y final: quien
+ * tenga la clave se lleva el saldo y no hay escrow del que rescatarlo.
+ */
+export const WALLET_COMPROMETIDA = "0x5bdad1d8641d8fd71efaddf38a2e0b9854ad05b8";
+
+/**
+ * Descripción publicada en el 402 y en el catálogo del Bazaar.
+ *
+ * ASCII a propósito, y no por gusto: el middleware serializa la respuesta v2
+ * con `btoa`, que solo habla Latin-1. Un guion largo (U+2014) en la
+ * descripción tira `InvalidCharacterError` y el endpoint contesta 500 en vez
+ * de 402 — probado contra el facilitador real. Los acentos no revientan pero
+ * salen mal decodificados del otro lado, así que el catálogo va en inglés,
+ * que además es el idioma del resto del Bazaar. `soloAscii` lo sujeta.
+ */
+export const DESCRIPCIONES: Record<string, string> = {
+  "/liquidar":
+    "NomiCheck payroll liquidation (Colombia). Ed25519-signed output with the legal-rules hash and the date they were verified.",
+  "/retencion":
+    "NomiCheck withholding-tax calculation (Colombia, E.T. art. 383/392). Ed25519-signed output with the legal-rules hash and the date they were verified.",
+  "/verificar":
+    "NomiCheck batch verification. Ed25519-signed output with the legal-rules hash and the date they were verified.",
+  "/pago-onchain":
+    "NomiCheck on-chain payment batch (EIP-681 links + Safe batch). Ed25519-signed output with the legal-rules hash and the date they were verified.",
+  "/comprobante":
+    "NomiCheck payment receipt: cross-checks the liquidation, the frozen FX snapshot and the on-chain transfer. Ed25519-signed output with the legal-rules hash and the date they were verified.",
+};
+
+/** Lo que `btoa` puede serializar sin romperse. */
+export function soloAscii(s: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  return /^[\x20-\x7E]*$/.test(s);
+}
+
 export interface ConfigX402 {
   activo: boolean;
   facilitatorURL: string;
@@ -99,7 +145,7 @@ export function requisitosDePago(cfg: ConfigX402, ruta: string) {
     maxAmountRequired: aMicroUsdc(usd),
     payTo: cfg.payTo,
     resource: `${cfg.origenPublico}/api/batch${ruta}`,
-    description: `NomiCheck ${ruta.slice(1)} — salida firmada Ed25519, con hash del catálogo legal y su fecha de verificación`,
+    description: DESCRIPCIONES[ruta],
     mimeType: "application/json",
     maxTimeoutSeconds: 30,
   };
@@ -119,6 +165,14 @@ export function problemasDeConfig(cfg: ConfigX402): string[] {
   if (!cfg.activo) return p;
   if (!/^0x[0-9a-fA-F]{40}$/.test(cfg.payTo)) {
     p.push("X402_PAY_TO no es una dirección EVM válida");
+  } else if (cfg.payTo.toLowerCase() === WALLET_COMPROMETIDA) {
+    // Comparación en minúsculas: EIP-55 es checksum de mayúsculas, así que la
+    // misma dirección se escribe de dos formas y un `===` crudo deja pasar una.
+    p.push(
+      "X402_PAY_TO es la wallet del executor, cuya clave está expuesta y sin rotar. " +
+        "Usá una dirección de cobro nueva: payTo solo recibe, su clave privada " +
+        "no hace falta en este servidor.",
+    );
   }
   if (!/^https:\/\//.test(cfg.facilitatorURL)) {
     p.push("X402_FACILITATOR debe ser https");

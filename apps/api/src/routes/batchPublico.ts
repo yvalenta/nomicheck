@@ -8,7 +8,7 @@
 // Cuando se cablee: rate limit igual al de `/api/nomina/calcular`, sin auth
 // (el pago del marketplace ya autoriza), y `noExternalLlm` respetado a
 // nivel de runtime (no solo copy).
-import { Router, Request, Response, RequestHandler } from "express";
+import { Router, Request, Response } from "express";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { batchLiquidarSchema } from "../validation/batchPublico.js";
 import { batchRetencionSchema } from "../validation/batchRetencion.js";
@@ -40,78 +40,13 @@ import {
 import { seguirPago } from "../services/seguimientoPagoService.js";
 import { comprobanteSchema, seguimientoQuerySchema } from "../validation/comprobante.js";
 import { ErrorRedNoSoportada, resolverRedPago } from "../lib/pagosConfig.js";
-import {
-  leerConfigX402,
-  problemasDeConfig,
-  requisitosDePago,
-  RUTAS_CON_MURO,
-} from "../lib/x402Config.js";
 
 export const batchPublicoRouter = Router();
 
-// ── Muro de pago x402 ───────────────────────────────────────────────────────
-//
-// Se monta ANTES de los handlers para que el 402 salga sin ejecutar cálculo.
-// Solo cubre los POST de cómputo: los GET (`/schema/v1.json`, `/ejemplo`,
-// `/publickey`, `/parametros`, `/health`) quedan gratis a propósito — son los
-// que permiten integrar antes de pagar y verificar la firma después.
-//
-// Apagado por defecto: sin `X402_ACTIVO=true` no monta nada y el
-// comportamiento es idéntico al de hoy. Eso permite desplegar el código sin
-// cambiar producción y encender el muro cuando se decida.
-// El registro va acá arriba, ANTES de los `.post()`, y no en una función que
-// se llame al arrancar: Express recorre el stack en orden de registro, así que
-// un `use()` agregado después de los handlers nunca llega a interceptar. El
-// muro saldría "montado" en los logs y cobraría cero.
-//
-// Como `createMiddleware` es async y el registro es sincrónico, se monta un
-// envoltorio que resuelve el middleware real una sola vez y delega.
-const cfgX402 = leerConfigX402();
-
-if (cfgX402.activo) {
-  const problemas = problemasDeConfig(cfgX402);
-  if (problemas.length > 0) {
-    // Reventar al cargar y no en la primera petición: un muro mal configurado
-    // que falla recién cuando llega un comprador es peor que uno que no deja
-    // levantar el servicio.
-    throw new Error(`x402 activo pero mal configurado: ${problemas.join("; ")}`);
-  }
-
-  const muros = new Map<string, Promise<RequestHandler>>();
-  const muroDe = (ruta: string): Promise<RequestHandler> => {
-    let m = muros.get(ruta);
-    if (!m) {
-      m = import("@faremeter/middleware/express").then(({ createMiddleware }) =>
-        createMiddleware({
-          facilitatorURL: cfgX402.facilitatorURL,
-          accepts: [requisitosDePago(cfgX402, ruta)],
-          // v2 es lo que anuncia el Bazaar (`"x402Version": 2`); v1 queda
-          // encendido porque hay clientes que solo hablan esa.
-          supportedVersions: { x402v1: true, x402v2: true },
-        }),
-      ) as Promise<RequestHandler>;
-      muros.set(ruta, m);
-    }
-    return m;
-  };
-
-  for (const ruta of RUTAS_CON_MURO) {
-    const envoltorio: RequestHandler = (req, res, next) => {
-      muroDe(ruta)
-        .then((muro) => muro(req, res, next))
-        .catch(next);
-    };
-    batchPublicoRouter.use(ruta, envoltorio);
-    // El `/csv` entrega el mismo cálculo en otro formato, así que cuesta igual.
-    // Sin esto, pedir el CSV sería la forma gratis de saltarse el muro.
-    if (ruta !== "/comprobante") batchPublicoRouter.use(`${ruta}/csv`, envoltorio);
-  }
-
-  // eslint-disable-next-line no-console
-  console.log(
-    `[x402] muro activo en ${cfgX402.red.nombre} · facilitador ${cfgX402.facilitatorURL} · cobra a ${cfgX402.payTo}`,
-  );
-}
+// El muro de pago x402 NO se monta acá: va a nivel de app en `lib/x402Muro.ts`,
+// antes de `app.use("/api", router)`. Montarlo en este router hacía que el 402
+// anunciara `/` como recurso para todos los endpoints. La explicación completa
+// está en ese archivo.
 
 // JSON Schema Draft 7 del contrato de intake, generado desde el zod
 // versionado (RUMBO §2.2 llevado a interoperabilidad). Un LLM buyer o
