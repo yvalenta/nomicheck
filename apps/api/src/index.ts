@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import router from "./routes/index.js";
 import { detenerBoss, getBoss } from "./lib/boss.js";
+import { delegadoCors } from "./lib/corsPublico.js";
 import { montarMuroX402 } from "./lib/x402Muro.js";
 import { registrarWorkerLiquidacion } from "./workers/liquidacionWorker.js";
 
@@ -12,7 +13,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-app.use(cors({ origin: process.env.CORS_ORIGIN ?? "http://localhost:5173" }));
+// CORS por ruta: `*` para los GET que sirven para verificar (llave pública,
+// esquemas, ejemplos firmados) y `CORS_ORIGIN` para todo lo demás. Sin esto la
+// llave pública era ilegible desde otro origen y ningún verificador de
+// terceros en el navegador podía comprobarnos. Ver lib/corsPublico.ts.
+app.use(cors(delegadoCors));
 app.use(express.json());
 
 // Antes del router: el 402 tiene que salir sin ejecutar el cálculo. Apagado
