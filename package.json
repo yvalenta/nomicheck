@@ -1,10 +1,15 @@
 {
   "name": "payment-validation",
   "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
     "build": "pnpm --filter '@pv/reglas' build && pnpm --parallel --filter './apps/*' build",
-    "typecheck": "pnpm --recursive typecheck"
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --filter '@pv/reglas' build && pnpm --recursive test"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

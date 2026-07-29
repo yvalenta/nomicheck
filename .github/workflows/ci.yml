@@ -1,0 +1,60 @@
+# Las 279 pruebas y el typecheck de los tres workspaces, en cada push y PR.
+#
+# Hasta el 2026-07-29 este repo no tenía CI: las pruebas corrían cuando alguien
+# se acordaba. Una suite que nadie corre se ve exactamente igual que una suite
+# verde.
+#
+# Nada de esto necesita red ni credenciales. Lo que SÍ las necesita —el deploy
+# al VPS (`deploy.sh`), y las sondas contra producción que viven en el repo
+# `nomicheck_ops`— queda afuera a propósito: en CI su rojo hablaría del servidor
+# o del RPC, no del commit que lo disparó.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ni la versión de pnpm ni la de Node se escriben acá: salen de
+      # `package.json` (`packageManager` y `engines.node`), que ya es donde las
+      # busca el resto del mundo. Un segundo lugar con la versión es un lugar
+      # más para desincronizarse.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `@pv/reglas` se resuelve por `main: ./dist/index.js`, así que hay que
+      # COMPILARLO ANTES de typechequear o probar nada que lo importe. No es
+      # teórico: verificado moviendo `packages/reglas/dist` fuera del árbol —
+      # sin él, `pnpm -r typecheck` sale 2 y `pnpm -r test` sale 1. En local no
+      # se nota porque `dist/` ya está de una compilación anterior; en un clon
+      # limpio, que es lo que hace CI, no está.
+      - name: compilar reglas (los demás lo importan por dist/)
+        run: pnpm --filter '@pv/reglas' build
+
+      # `apps/web` NO tenía script `typecheck` hasta el 2026-07-29, así que
+      # `pnpm -r typecheck` se saltaba en silencio el workspace más grande
+      # —12.101 líneas—. Y su `tsconfig.json` es solo `references` con
+      # `files: []`: un `tsc --noEmit` ahí sale limpio **sin mirar un archivo**,
+      # que es la misma trampa que el tsconfig de la raíz. Por eso su script es
+      # `tsc -b --noEmit`, en modo build, que sí sigue las referencias.
+      - name: typecheck de los tres workspaces
+        run: pnpm --recursive typecheck
+
+      - name: pruebas
+        run: pnpm --recursive test
+
+      - name: lint del front
+        run: pnpm --filter '@pv/web' lint
