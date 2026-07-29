@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   diaSemana,
+  diasComerciales,
   esDomingo,
   esFechaValida,
   crearResolutorReglas,
@@ -113,6 +114,48 @@ describe("calendario", () => {
       "2026-02-28",
       "2026-03-01",
     ]);
+  });
+});
+
+describe("diasComerciales", () => {
+  it("la segunda quincena son 15 días tenga el mes 28, 29, 30 o 31", () => {
+    expect(diasComerciales("2026-01-16", "2026-01-31")).toBe(15); // 31 días
+    expect(diasComerciales("2026-02-16", "2026-02-28")).toBe(15); // 28 días
+    expect(diasComerciales("2028-02-16", "2028-02-29")).toBe(15); // bisiesto
+    expect(diasComerciales("2026-06-16", "2026-06-30")).toBe(15); // 30 días
+    expect(diasComerciales("2026-07-16", "2026-07-31")).toBe(15); // el caso real
+  });
+
+  it("la primera quincena siempre son 15 días", () => {
+    for (const mes of ["01", "02", "06", "07"]) {
+      expect(diasComerciales(`2026-${mes}-01`, `2026-${mes}-15`)).toBe(15);
+    }
+  });
+
+  it("el mes completo son 30 días en cualquier mes — la invariante que importa", () => {
+    // Es la propiedad que el bug rompía: quincena 1 + quincena 2 debe dar
+    // exactamente el mes, o el salario mensual pactado no cuadra.
+    const finDeMes: Record<string, string> = {
+      "01": "31", "02": "28", "03": "31", "04": "30", "05": "31", "06": "30",
+      "07": "31", "08": "31", "09": "30", "10": "31", "11": "30", "12": "31",
+    };
+    for (const [mes, ultimo] of Object.entries(finDeMes)) {
+      const q1 = diasComerciales(`2026-${mes}-01`, `2026-${mes}-15`);
+      const q2 = diasComerciales(`2026-${mes}-16`, `2026-${mes}-${ultimo}`);
+      expect(q1 + q2, `mes ${mes}`).toBe(30);
+      expect(diasComerciales(`2026-${mes}-01`, `2026-${mes}-${ultimo}`), `mes ${mes}`).toBe(30);
+    }
+  });
+
+  it("un periodo parcial cuenta sus días reales, sin inventar el 31", () => {
+    expect(diasComerciales("2026-06-17", "2026-06-30")).toBe(14); // ingreso tardío
+    expect(diasComerciales("2026-07-20", "2026-07-31")).toBe(11); // 20…30 comercial
+    expect(diasComerciales("2026-07-16", "2026-07-16")).toBe(1);
+  });
+
+  it("un periodo que cruza de mes suma los días comerciales de cada uno", () => {
+    expect(diasComerciales("2026-07-31", "2026-08-15")).toBe(16);
+    expect(diasComerciales("2026-01-16", "2026-02-15")).toBe(30);
   });
 });
 

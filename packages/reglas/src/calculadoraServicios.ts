@@ -1,7 +1,7 @@
 import type { CalculadoraNomina, ConceptoNomina, DatosNominaServicios, LineaResultado } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
-import { rangoFechas, validarPeriodo } from "./utils.js";
+import { diasComerciales, validarPeriodo } from "./utils.js";
 import { DIAS_MES_COMERCIAL, PCT_IBC_INDEPENDIENTE, PCT_PENSION_INDEPENDIENTE, PCT_SALUD_INDEPENDIENTE } from "./constantes.js";
 
 // Prestación de servicios (contratista independiente) NO es contrato
@@ -33,7 +33,11 @@ export const CalculadoraServicios: CalculadoraNomina = {
     const advertencias: string[] = [];
     const lineas: LineaResultado[] = [];
 
-    const diasPeriodo = Math.min(rangoFechas(d.periodoDesde, d.periodoHasta).length, DIAS_MES_COMERCIAL);
+    // Mes comercial de 30 días, no días calendario — ver `diasComerciales`.
+    const diasPeriodo = Math.min(
+      diasComerciales(d.periodoDesde, d.periodoHasta),
+      DIAS_MES_COMERCIAL
+    );
     const honorarios = (d.honorariosMensuales / DIAS_MES_COMERCIAL) * diasPeriodo;
     lineas.push({
       concepto: `Honorarios (${diasPeriodo} días)`,

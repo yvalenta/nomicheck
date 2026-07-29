@@ -6,7 +6,7 @@ import type {
   LineaResultado,
   NovedadDia,
 } from "./types.js";
-import { crearResolutorReglas, diaSemana, esDomingo, esFechaValida, rangoFechas, validarPeriodo } from "./utils.js";
+import { crearResolutorReglas, diaSemana, diasComerciales, esDomingo, esFechaValida, rangoFechas, validarPeriodo } from "./utils.js";
 import {
   advertenciaIbcTiempoParcial,
   advertenciaPatronAprendiz,
@@ -253,10 +253,17 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
 
     const lineas: LineaResultado[] = [];
 
-    // Devengo base: salario proporcional a los días calendario del periodo
-    // (modelo estándar de nómina colombiana: el salario mensual pactado cubre
-    // la jornada ordinaria; los turnos solo generan recargos y extras).
-    const diasPeriodo = Math.min(fechas.length, DIAS_MES_COMERCIAL);
+    // Devengo base: salario proporcional a los días del periodo en MES
+    // COMERCIAL de 30 días — no en días calendario (modelo estándar de nómina
+    // colombiana: el salario mensual pactado cubre la jornada ordinaria; los
+    // turnos solo generan recargos y extras).
+    //
+    // Con días calendario, la 2ª quincena de julio (16 días) pagaba un día de
+    // más y la de febrero (13 días) dos de menos. Ver `diasComerciales`.
+    const diasPeriodo = Math.min(
+      diasComerciales(d.periodoDesde, d.periodoHasta),
+      DIAS_MES_COMERCIAL
+    );
     const salarioBase = (d.salarioBasicoMensual / DIAS_MES_COMERCIAL) * diasPeriodo;
     // Aprendizaje SENA (Ley 789 de 2002, art. 30): sigue trabajando por
     // turnos, pero el devengo base no es "salario" y las deducciones de

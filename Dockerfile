@@ -27,7 +27,9 @@ RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y openssl && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+# El .npmrc entra ANTES del install: trae los margenes de red que el build
+# del VPS necesita para que el chequeo de cadena de suministro no expire.
+COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/reglas/package.json packages/reglas/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json

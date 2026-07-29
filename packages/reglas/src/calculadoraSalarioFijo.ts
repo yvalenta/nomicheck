@@ -9,7 +9,7 @@ import {
   advertenciaSalarioBajoMinimo,
   advertenciaTerminoNoIndefinido,
 } from "./advertenciasContrato.js";
-import { rangoFechas, reglaEn, validarPeriodo } from "./utils.js";
+import { diasComerciales, reglaEn, validarPeriodo } from "./utils.js";
 import { DIAS_MES_COMERCIAL } from "./constantes.js";
 
 export const CalculadoraSalarioFijo: CalculadoraNomina = {
@@ -70,7 +70,11 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     // aprendices SENA no tienen derecho (su auxilio de sostenimiento no es
     // salario).
     if (d.recibeAuxilioTransporte && !esAprendiz) {
-      const diasPeriodo = Math.min(rangoFechas(d.periodoDesde, d.periodoHasta).length, DIAS_MES_COMERCIAL);
+      // Mes comercial de 30 días, no días calendario — ver `diasComerciales`.
+      const diasPeriodo = Math.min(
+        diasComerciales(d.periodoDesde, d.periodoHasta),
+        DIAS_MES_COMERCIAL
+      );
       const auxilio = calcularAuxilioTransporte(
         d.salarioBasicoMensual,
         diasPeriodo,

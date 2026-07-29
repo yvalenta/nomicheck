@@ -123,6 +123,38 @@ export function diasEntreFechas(desde: string, hasta: string): number {
   return Math.round((h - d) / 86_400_000);
 }
 
+// Días de un periodo medidos en el MES COMERCIAL de 30 días — no en días
+// calendario. El salario mensual pactado remunera el mes completo (CST art.
+// 127), tenga 28, 30 o 31 días: ni un mes largo paga de más, ni febrero paga
+// de menos.
+//
+// Contar días calendario rompe la nómina en los dos extremos del año, y el
+// error es asimétrico (detectado 2026-07 auditando comprobantes reales):
+//   - 2ª quincena de julio (16–31) = 16 días → paga 1 día de MÁS
+//   - 2ª quincena de febrero (16–28) = 13 días → paga 2 días de MENOS, es
+//     decir por debajo del salario mensual pactado
+// Junio (16–30) da 15 por coincidencia: es el único mes donde la quincena
+// calendario y la comercial coinciden.
+//
+// Reglas del mes comercial: el día 31 no existe (se topa a 30), y el último
+// día de febrero cuenta como 30 para que la quincena cierre en 15. Así
+// quincena 1 + quincena 2 = 30 días exactos en CUALQUIER mes.
+export function diasComerciales(desde: string, hasta: string): number {
+  const d = new Date(`${desde}T00:00:00Z`);
+  const h = new Date(`${hasta}T00:00:00Z`);
+  const diaComercial = (f: Date): number => {
+    const dia = f.getUTCDate();
+    const ultimoDelMes = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 0)).getUTCDate();
+    // Febrero (mes 1): su último día real (28 o 29) cierra el mes comercial
+    // en 30. `ultimoDelMes` conoce el año bisiesto, así que 2028 sale solo.
+    if (f.getUTCMonth() === 1 && dia === ultimoDelMes) return 30;
+    return Math.min(dia, 30);
+  };
+  const meses =
+    (h.getUTCFullYear() - d.getUTCFullYear()) * 12 + (h.getUTCMonth() - d.getUTCMonth());
+  return meses * 30 + (diaComercial(h) - diaComercial(d)) + 1;
+}
+
 export function finDePeriodoMensual(desde: string): string {
   const d = new Date(`${desde}T00:00:00Z`);
   const anio = d.getUTCFullYear();

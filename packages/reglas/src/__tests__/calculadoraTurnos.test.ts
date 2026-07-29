@@ -429,6 +429,80 @@ describe("CalculadoraPorTurnos — prorrateo dinámico por días del periodo (nu
   });
 });
 
+describe("CalculadoraPorTurnos — quincena de mes de 31 días (caso real Alexandra, 16–31 jul 2026)", () => {
+  // Auditoría de una nómina real del Restaurante Resplandor (jul-2026). La
+  // planilla: mar–sáb 10–17, descansó dom 19, festivo 20 y dom 26, y trabajó
+  // el lun 27 (10–17) como cambio por el domingo. Sin dominicales, sin extras.
+  //
+  //   básico  = 1.750.905/30 × 15 días  = 875.452,50   ← 15, NO 16
+  //   auxilio =   249.095/30 × 15 días  = 124.547,50
+  //   IBC     = 875.452,50 (el auxilio no hace base)
+  //   salud/pensión = IBC × 4%          =  35.018,10 c/u
+  //   neto    = 1.000.000 − 70.036,20   = 929.963,80
+  //
+  // Contar días calendario daba 16 y un neto de 991.961 — 61.997 de más.
+  const planillaReal = datosBase({
+    periodoDesde: "2026-07-16",
+    periodoHasta: "2026-07-31",
+    novedades: [
+      { fecha: "2026-07-19", trabajo: false },
+      { fecha: "2026-07-26", trabajo: false },
+      { fecha: "2026-07-27", trabajo: true, horaInicio: "10:00", horaFin: "17:00" },
+    ],
+  });
+  const resultado = CalculadoraPorTurnos.calcular(planillaReal, REGLAS_JUL_2026, FESTIVOS_2026);
+
+  it("liquida 15 días de salario, no los 16 días calendario del periodo", () => {
+    const base = resultado.lineas.find((l) => l.concepto.startsWith("Salario básico"));
+    expect(base?.concepto).toBe("Salario básico (15 días)");
+    expect(base?.valorCalculado).toBeCloseTo(875452.5, -1);
+  });
+
+  it("prorratea el auxilio de transporte sobre los mismos 15 días", () => {
+    const aux = resultado.lineas.find((l) => l.concepto === "Auxilio de transporte");
+    expect(aux?.valorCalculado).toBeCloseTo(124547.5, -1);
+  });
+
+  it("no genera recargo dominical: los dos domingos y el festivo fueron descanso", () => {
+    const conceptos = resultado.lineas.map((l) => l.concepto);
+    expect(conceptos.some((c) => c.startsWith("Recargo dominical"))).toBe(false);
+    expect(conceptos.some((c) => c.startsWith("Hora extra"))).toBe(false);
+    expect(conceptos.some((c) => c.startsWith("Recargo nocturno"))).toBe(false);
+  });
+
+  it("cuenta 13 días efectivamente trabajados y usa el divisor 210 (jornada 42 h)", () => {
+    expect(resultado.diasLaborados).toBe(13);
+    expect(resultado.valorHoraOrdinaria).toBe(8338); // 1.750.905 / 210
+  });
+
+  it("da el mismo neto que el comprobante del contador: 929.964", () => {
+    const devengado = resultado.lineas
+      .filter((l) => l.tipo === "devengo")
+      .reduce((s, l) => s + l.valorCalculado, 0);
+    expect(Math.round(devengado - resultado.totalDeducciones)).toBe(929964);
+  });
+});
+
+describe("CalculadoraPorTurnos — invariante: las dos quincenas suman el salario mensual", () => {
+  // La propiedad que el conteo por días calendario rompía. En julio pagaba de
+  // más (16 días) y en febrero de menos (13) — esto último por debajo del
+  // salario pactado, que es incumplimiento, no redondeo.
+  const casos: [string, string, string, string, string][] = [
+    ["febrero", "2026-02-01", "2026-02-15", "2026-02-16", "2026-02-28"],
+    ["junio", "2026-06-01", "2026-06-15", "2026-06-16", "2026-06-30"],
+    ["julio", "2026-07-01", "2026-07-15", "2026-07-16", "2026-07-31"],
+  ];
+  it.each(casos)("en %s, quincena 1 + quincena 2 = 1.750.905", (_mes, d1, h1, d2, h2) => {
+    const basico = (desde: string, hasta: string) =>
+      CalculadoraPorTurnos.calcular(
+        datosBase({ periodoDesde: desde, periodoHasta: hasta }),
+        REGLAS_JUL_2026,
+        FESTIVOS_2026
+      ).lineas.find((l) => l.concepto.startsWith("Salario básico"))!.valorCalculado;
+    expect(basico(d1, h1) + basico(d2, h2)).toBeCloseTo(1750905, -1);
+  });
+});
+
 describe("CalculadoraPorTurnos — tope legal de horas extra (pagar + advertir)", () => {
   it("advierte cuando un día supera 2h extra, pero las paga completas", () => {
     // Martes 16-jun 10:00-21:00 (11h): 7h ordinarias + 4h extra (2 diurnas
