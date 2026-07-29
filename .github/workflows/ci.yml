@@ -54,10 +54,17 @@ jobs:
       #
       # Esto lo encontró la primera corrida REAL del workflow, no la simulación
       # local: acá el cliente ya estaba generado de antes, así que la simulación
-      # daba verde sobre un árbol que no era el que ve CI. `apps/api` tiene un
-      # `postinstall` que lo genera, pero el paso explícito se queda igual: un
-      # hook que no corre falla en silencio, y un paso con nombre falla donde se
-      # lee.
+      # daba verde sobre un árbol que no era el que ve CI.
+      #
+      # Va como PASO EXPLÍCITO y no como `postinstall` de `apps/api`. Se intentó
+      # con el hook y rompió el build de Docker: el `Dockerfile` corre
+      # `pnpm install` en la línea 35, ANTES de copiar `apps/api` en la 39, así
+      # que el postinstall se ejecutaba sin `schema.prisma` a la vista y abortaba
+      # la imagen entera. El Dockerfile ya hacía este mismo generate en su línea
+      # 42, en el momento correcto.
+      #
+      # La lección: un hook corre donde no lo llamaste. Un paso con nombre corre
+      # donde se lee.
       - name: generar el cliente de Prisma (no está versionado)
         run: pnpm --filter '@pv/api' exec prisma generate
 
