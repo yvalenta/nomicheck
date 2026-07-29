@@ -34,7 +34,18 @@ COPY packages/reglas/package.json packages/reglas/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 
-RUN pnpm install --frozen-lockfile
+# El store de pnpm va en un cache mount de BuildKit, no dentro de la capa.
+#
+# Motivo, del 2026-07-29: desde el VPS este install tarda 14+ minutos, porque
+# pnpm 11 valida 491 entradas del lockfile contra el registro con tarballs
+# bajando a 3 KiB/s. Sin cache, un build interrumpido tira TODO ese trabajo y el
+# siguiente empieza de cero. Paso tres veces seguidas.
+#
+# Con el cache mount, los paquetes y la metadata ya descargados sobreviven entre
+# builds. El primero sigue siendo lento; los reintentos, no. Es la diferencia
+# entre un enlace lento y un enlace lento que ademas no acumula nada.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY tsconfig.base.json ./
 COPY packages/reglas packages/reglas

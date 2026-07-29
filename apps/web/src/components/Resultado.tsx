@@ -5,6 +5,7 @@ import PaycheckCard from "./PaycheckCard.tsx";
 import SegmentedControl from "./SegmentedControl.tsx";
 import ValidationRow from "./ValidationRow.tsx";
 import FinancialProgressBar from "./FinancialProgressBar.tsx";
+import HeatmapDias from "./HeatmapDias.tsx";
 import ChatContador from "./ChatContador.tsx";
 import ComprobanteNomina from "./ComprobanteNomina.tsx";
 import { useGuardarLiquidacion } from "../hooks/useGuardarLiquidacion.ts";
@@ -86,6 +87,12 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
           <FinancialProgressBar resultado={resultado} />
         </div>
       </PaycheckCard>
+
+      {/* Solo el modo turnos tiene desglose diario — el salario fijo y la
+          prestación de servicios no registran jornadas. */}
+      {resultado.detalleDias && resultado.detalleDias.length > 0 && (
+        <HeatmapDias dias={resultado.detalleDias} />
+      )}
 
       <div className="flex justify-center">
         <SegmentedControl<Vista>

@@ -147,6 +147,47 @@ export interface ResultadoNomina {
   valorHoraOrdinaria?: number;
   /** Días efectivamente laborados (con turno), no días calendario del periodo — solo modo turnos. */
   diasLaborados?: number;
+  /** Desglose día a día del periodo — solo modo turnos. Ver `DetalleDia`. */
+  detalleDias?: DetalleDia[];
+}
+
+/**
+ * Un día del periodo, con sus horas y su parte proporcional del dinero.
+ *
+ * **Es informativo, no una liquidación diaria.** La nómina no se liquida por
+ * día: el salario y el auxilio remuneran el mes y acá se prorratean sobre el
+ * mes comercial de 30; las deducciones de ley se calculan sobre el IBC del
+ * periodo completo y acá se reparten en proporción al devengo salarial de cada
+ * día. Lo único genuinamente diario son las horas y los recargos que causan.
+ *
+ * Por eso la suma de `netoDia` puede diferir del `netoEsperado` en unos pocos
+ * pesos: cada día se redondea por separado.
+ */
+export interface DetalleDia {
+  fecha: string; // YYYY-MM-DD
+  /** Domingo o festivo: día de descanso obligatorio (CST art. 172 y 177). */
+  esDominicalFestivo: boolean;
+  /** Festivo del calendario (no domingo) — para distinguirlo en la UI. */
+  esFestivo: boolean;
+  /** Hubo turno ese día. */
+  trabajado: boolean;
+  /** Ausencia declarada explícitamente como NO remunerada. */
+  ausenciaNoRemunerada: boolean;
+  horasOrdinarias: number;
+  horasExtra: number;
+  /** Horas del turno que caen en jornada nocturna (desde las 7 p.m.). */
+  horasNocturnas: number;
+  horasTotales: number;
+  /** Salario base prorrateado del día (mensual / 30). */
+  salarioDia: number;
+  /** Auxilio de transporte prorrateado del día. */
+  auxilioDia: number;
+  /** Recargos y horas extra causados ese día. */
+  recargosDia: number;
+  /** Salud + pensión en proporción al devengo salarial del día. */
+  deduccionesDia: number;
+  /** salarioDia + auxilioDia + recargosDia − deduccionesDia. */
+  netoDia: number;
 }
 
 export interface LineaResultado {

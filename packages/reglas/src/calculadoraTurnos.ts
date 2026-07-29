@@ -408,6 +408,85 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     advertencias.push(...advertenciasDeducciones);
     issues.push(...issuesDeducciones);
 
+    // --- Desglose día a día (informativo, ver DetalleDia en types.ts) ---
+    //
+    // El salario y el auxilio del periodo se reparten en partes iguales entre
+    // los días CALENDARIO del periodo, para que la suma del desglose sea
+    // exactamente lo liquidado. Ojo: eso hace que `salarioDia` no coincida con
+    // el `valorDia` de la cabecera cuando el periodo tiene 16 días calendario
+    // y se liquidan 15 comerciales — es correcto, son dos cosas distintas
+    // (uno reparte lo pagado; el otro es la tarifa diaria del contrato).
+    //
+    // Los recargos sí son genuinamente diarios: se recalculan por día con la
+    // MISMA función que arma las líneas del recibo, no con una fórmula
+    // paralela que pueda derivar.
+    const auxilioLinea = lineas.find((l) => l.concepto === "Auxilio de transporte");
+    const salarioPorDiaCalendario = salarioBase / fechas.length;
+    const auxilioPorDiaCalendario = (auxilioLinea?.valorCalculado ?? 0) / fechas.length;
+    const deduccionesTotales = totalDeducciones + valorAusentismo;
+    const porFecha = new Map(dias.map((dia) => [dia.fecha, dia]));
+
+    const detalleDias = fechas.map((fecha) => {
+      const dia = porFecha.get(fecha);
+      const esFestivo = festivos.some((f) => f.fecha === fecha);
+      const esDominicalFestivo = esDomingo(fecha) || esFestivo;
+      const novedad = d.novedades.find((n) => n.fecha === fecha);
+
+      let recargosDia = 0;
+      if (dia) {
+        const valorHora = d.salarioBasicoMensual / r.en("divisor_hora_ordinaria", fecha);
+        const horasDia: HorasRecargo = dia.esDominicalFestivo
+          ? {
+              dominicalesDiurnas: dia.ordinariaDiurna,
+              dominicalesNocturnas: dia.ordinariaNocturna,
+              extrasDominicalesDiurnas: dia.extraDiurna,
+              extrasDominicalesNocturnas: dia.extraNocturna,
+            }
+          : {
+              nocturnas: dia.ordinariaNocturna,
+              extrasDiurnas: dia.extraDiurna,
+              extrasNocturnas: dia.extraNocturna,
+            };
+        recargosDia = lineasRecargos(valorHora, horasDia, {
+          recargoNocturno: r.en("recargo_nocturno", fecha),
+          recargoDominical: r.en("recargo_dominical", fecha),
+          extraDiurnaPct: r.en("hora_extra_diurna", fecha),
+          extraNocturnaPct: r.en("hora_extra_nocturna", fecha),
+        }).reduce((s, l) => s + l.valorCalculado, 0);
+      }
+
+      // Las deducciones se causan sobre el IBC del periodo, no por día: se
+      // reparten en proporción a lo que cada día aporta a ese IBC.
+      const aporteAlIbc = salarioPorDiaCalendario + recargosDia;
+      const deduccionesDia = ibc > 0 ? deduccionesTotales * (aporteAlIbc / ibc) : 0;
+
+      const horasOrdinarias = (dia?.ordinariaDiurna ?? 0) + (dia?.ordinariaNocturna ?? 0);
+      const horasExtra = (dia?.extraDiurna ?? 0) + (dia?.extraNocturna ?? 0);
+      const salarioDia = redondearPeso(salarioPorDiaCalendario);
+      const auxilioDia = redondearPeso(auxilioPorDiaCalendario);
+      const recargos = redondearPeso(recargosDia);
+      const deducciones = redondearPeso(deduccionesDia);
+
+      return {
+        fecha,
+        esDominicalFestivo,
+        esFestivo,
+        trabajado: dia !== undefined,
+        ausenciaNoRemunerada: novedad?.trabajo === false && novedad.remunerada === false,
+        horasOrdinarias: redondearHoras(horasOrdinarias),
+        horasExtra: redondearHoras(horasExtra),
+        horasNocturnas: redondearHoras(
+          (dia?.ordinariaNocturna ?? 0) + (dia?.extraNocturna ?? 0)
+        ),
+        horasTotales: redondearHoras(horasOrdinarias + horasExtra),
+        salarioDia,
+        auxilioDia,
+        recargosDia: recargos,
+        deduccionesDia: deducciones,
+        netoDia: redondearPeso(salarioDia + auxilioDia + recargos - deducciones),
+      };
+    });
+
     return ensamblarResultado({
       modo: "turnos",
       periodoDesde: d.periodoDesde,
@@ -428,6 +507,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
       // el ajuste por ausentismo (no pasa por aplicarDeducciones — no tiene
       // tope legal, es simplemente el pago de los días no remunerados).
       totalDeducciones: redondearPeso(totalDeducciones + valorAusentismo),
+      detalleDias,
     });
   },
 };

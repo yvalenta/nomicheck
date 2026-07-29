@@ -1,4 +1,4 @@
-import type { LineaResultado, ModoCalculo, ResultadoNomina } from "./types.js";
+import type { DetalleDia, LineaResultado, ModoCalculo, ResultadoNomina } from "./types.js";
 import type { IssueQA } from "./qa/tipos.js";
 import { redondearPeso } from "./numero.js";
 
@@ -20,6 +20,7 @@ export function ensamblarResultado(params: {
   valorDia?: number;
   valorHoraOrdinaria?: number;
   diasLaborados?: number;
+  detalleDias?: DetalleDia[];
 }): ResultadoNomina {
   const totalDevengos = redondearPeso(
     params.lineas.filter((l) => l.tipo === "devengo").reduce((s, l) => s + l.valorCalculado, 0)
@@ -44,5 +45,6 @@ export function ensamblarResultado(params: {
     valorDia: params.valorDia,
     valorHoraOrdinaria: params.valorHoraOrdinaria,
     diasLaborados: params.diasLaborados,
+    detalleDias: params.detalleDias,
   };
 }

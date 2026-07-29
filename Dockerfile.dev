@@ -21,7 +21,11 @@ COPY packages/reglas/package.json packages/reglas/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 
-RUN pnpm install --frozen-lockfile
+# Mismo cache mount que el Dockerfile de produccion, y por el mismo motivo: sin
+# el, un build interrumpido en el VPS tira los 14 minutos de descargas y el
+# siguiente empieza de cero. Ver el comentario largo alla.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
 
