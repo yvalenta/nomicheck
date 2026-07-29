@@ -1,16 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { obtenerEstadoLiquidacion, type EstadoLiquidacion, type EstadoPeriodo } from "../../apiEmpresa";
 
-// Estados donde parar el polling — espejo de ESTADOS_TERMINALES_LIQUIDACION
-// del backend (apps/api/src/lib/estados.ts). Cambiar aquí Y allá si se agrega
-// un estado terminal nuevo.
-//
-// Se exporta SOLO para que `usePeriodoEstado.test.ts` pueda comparar esta lista
-// contra la del backend: es una constante copiada a mano cruzando la frontera
-// front/back, y si se desincroniza el polling no falla — sigue consultando para
-// siempre un periodo que ya termino, o para antes de tiempo. Ninguna de las dos
-// cosas se ve. La prueba es la unica guarda que tiene esta copia.
-export const TERMINALES: EstadoPeriodo[] = ["liquidado", "liquidado_con_rechazos", "fallido"];
+import { TERMINALES } from "./estadosPeriodo";
 
 /**
  * Polling controlado: solo consulta el estado mientras `activo=true`

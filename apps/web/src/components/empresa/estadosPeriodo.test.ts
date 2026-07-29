@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { TERMINALES } from "./usePeriodoEstado";
+import { TERMINALES } from "./estadosPeriodo";
 
 // La constante `TERMINALES` es una copia a mano de ESTADOS_TERMINALES_LIQUIDACION
 // del backend, y el comentario que la acompaña lo dice sin rodeos: "cambiar aquí
