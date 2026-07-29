@@ -35,14 +35,31 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Los dos pasos que siguen existen por la MISMA razón: hay artefactos
+      # generados que en local ya están de una corrida anterior y en un clon
+      # limpio no. Es la trampa clásica de un CI nuevo — el árbol de desarrollo
+      # tiene estado que el repositorio no tiene.
+
       # `@pv/reglas` se resuelve por `main: ./dist/index.js`, así que hay que
       # COMPILARLO ANTES de typechequear o probar nada que lo importe. No es
       # teórico: verificado moviendo `packages/reglas/dist` fuera del árbol —
-      # sin él, `pnpm -r typecheck` sale 2 y `pnpm -r test` sale 1. En local no
-      # se nota porque `dist/` ya está de una compilación anterior; en un clon
-      # limpio, que es lo que hace CI, no está.
+      # sin él, `pnpm -r typecheck` sale 2 y `pnpm -r test` sale 1.
       - name: compilar reglas (los demás lo importan por dist/)
         run: pnpm --filter '@pv/reglas' build
+
+      # Los tipos del cliente de Prisma se GENERAN del schema; no están en el
+      # repo. Sin esto, `apps/api` no compila: `Prisma.PrismaClientKnownRequestError`
+      # y `Prisma.InputJsonValue` no existen, y los callbacks de `$transaction`
+      # caen a `any` implícito — 24 errores de tipos.
+      #
+      # Esto lo encontró la primera corrida REAL del workflow, no la simulación
+      # local: acá el cliente ya estaba generado de antes, así que la simulación
+      # daba verde sobre un árbol que no era el que ve CI. `apps/api` tiene un
+      # `postinstall` que lo genera, pero el paso explícito se queda igual: un
+      # hook que no corre falla en silencio, y un paso con nombre falla donde se
+      # lee.
+      - name: generar el cliente de Prisma (no está versionado)
+        run: pnpm --filter '@pv/api' exec prisma generate
 
       # `apps/web` NO tenía script `typecheck` hasta el 2026-07-29, así que
       # `pnpm -r typecheck` se saltaba en silencio el workspace más grande
