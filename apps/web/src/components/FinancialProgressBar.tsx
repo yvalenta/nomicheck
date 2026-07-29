@@ -1,9 +1,9 @@
-import { formatCOP, type ResultadoNomina } from "@pv/reglas";
+import { esDevengoBase, formatCOP, type ResultadoNomina } from "@pv/reglas";
 
 // Barra proporcional: [base azul][recargos/extras mint][deducciones coral].
 export default function FinancialProgressBar({ resultado }: { resultado: ResultadoNomina }) {
   const base = resultado.lineas
-    .filter((l) => l.tipo === "devengo" && (l.concepto.startsWith("Salario") || l.concepto.startsWith("Auxilio")))
+    .filter((l) => l.tipo === "devengo" && esDevengoBase(l))
     .reduce((s, l) => s + l.valorCalculado, 0);
   const recargos = resultado.totalDevengos - base;
   const deducciones = resultado.totalDeducciones;

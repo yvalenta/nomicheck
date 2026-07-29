@@ -142,7 +142,7 @@ describe("Embargo + convenio simultáneos — cada uno respeta su propio tope", 
       REGLAS_JUL_2026,
       "2026-06-30",
       {
-        deduccionesConvenio: [{ concepto: "Aporte AFC (convenio)", valorMensual: 900000 }],
+        deduccionesConvenio: [{ codigo: "APORTE_AFC", concepto: "Aporte AFC (convenio)", valorMensual: 900000 }],
         descuentoJudicial: { tipo: "alimentos_o_cooperativa", valorMensual: 600000 },
       },
       1

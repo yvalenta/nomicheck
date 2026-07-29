@@ -7,7 +7,21 @@
 // Purga por diseño (Ley 1581/2012, gap §5.3 de execution_market/docs/04):
 // el request se procesa y se descarta. El output NO incluye datos que el
 // buyer no envió — externalIds del buyer + resultados del motor.
-import { crearResolutorReglas, type LineaResultado } from "@pv/reglas";
+import {
+  crearResolutorReglas,
+  ETIQUETAS_CONCEPTO,
+  type LineaResultado,
+  type Locale,
+} from "@pv/reglas";
+
+// Moneda de cada país soportado. La deriva el país porque no es una elección
+// del buyer: una liquidación bajo el CST colombiano está en pesos y no hay
+// otra lectura posible. Al sumar un país, sumar acá su moneda — el tipo
+// obliga a no olvidarlo.
+const MONEDA_POR_PAIS = { CO: "COP" } as const satisfies Record<
+  BatchLiquidarInput["pais"],
+  string
+>;
 import {
   calcularReciboLote,
   calcularRecibosContratistas,
@@ -35,12 +49,18 @@ const DISCLAIMER =
   "contador titulado (Ley 43/1990) antes de usarse como liquidación oficial. " +
   "NomiCheck no persiste los datos de este batch (Ley 1581/2012 habeas data).";
 
-function lineaMotorABatch(l: LineaResultado): LineaBatch {
+function lineaMotorABatch(l: LineaResultado, locale: Locale = "es"): LineaBatch {
   const salida: LineaBatch = {
-    concepto: l.concepto,
+    codigo: l.codigo,
+    // La etiqueta se traduce; el código y la referencia legal, nunca.
+    concepto:
+      l.codigo === "CONCEPTO_DECLARADO"
+        ? l.concepto
+        : (ETIQUETAS_CONCEPTO[l.codigo]?.[locale] ?? l.concepto),
     tipo: l.tipo,
     valor: l.valorCalculado,
   };
+  if (l.codigoDeclarado !== undefined) salida.codigoDeclarado = l.codigoDeclarado;
   if (l.ley !== undefined) salida.referenciaLegal = l.ley;
   if (l.horas !== undefined) salida.horas = l.horas;
   if (l.base !== undefined) salida.base = l.base;
@@ -156,7 +176,7 @@ export async function ejecutarBatchPublico(
   for (const r of lote.recibos) {
     const original = empleadosById.get(r.empleadoId);
     if (!original) continue;
-    const lineas = (r.lineas as unknown as LineaResultado[]).map(lineaMotorABatch);
+    const lineas = (r.lineas as unknown as LineaResultado[]).map((l) => lineaMotorABatch(l, input.locale));
     const advertencias = (r.advertencias as unknown as string[]) ?? [];
     const recibo: ReciboBatch = {
       externalId: original.externalId,
@@ -176,7 +196,7 @@ export async function ejecutarBatchPublico(
   for (const r of contratistasRecibos) {
     const original = contratistasById.get(r.contratistaId);
     if (!original) continue;
-    const lineas = (r.lineas as unknown as LineaResultado[]).map(lineaMotorABatch);
+    const lineas = (r.lineas as unknown as LineaResultado[]).map((l) => lineaMotorABatch(l, input.locale));
     const advertencias = (r.advertencias as unknown as string[]) ?? [];
     recibos.push({
       externalId: original.externalId,
@@ -203,6 +223,9 @@ export async function ejecutarBatchPublico(
 
   const sinFirma = {
     version: "1" as const,
+    pais: input.pais,
+    moneda: MONEDA_POR_PAIS[input.pais],
+    locale: input.locale,
     generadoEn: new Date().toISOString(),
     reglasVerificadasAl: REGLAS_VERIFICADAS_AL,
     reglasHash,

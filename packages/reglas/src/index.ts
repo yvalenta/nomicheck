@@ -3,6 +3,7 @@ export * from "./utils.js";
 export * from "./numero.js";
 export * from "./constantes.js";
 export * from "./catalogoReglas.js";
+export * from "./conceptos.js";
 export * from "./deducciones.js";
 export * from "./auxilio.js";
 export * from "./ensamblarResultado.js";

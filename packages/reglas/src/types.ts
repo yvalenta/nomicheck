@@ -190,7 +190,64 @@ export interface DetalleDia {
   netoDia: number;
 }
 
+/**
+ * Código estable de cada línea de la liquidación.
+ *
+ * **Es el contrato con los consumidores; `concepto` no lo es.** `concepto` es
+ * una etiqueta para mostrar: puede reescribirse, traducirse o llevar sufijos
+ * (el tramo normativo, la cantidad de días). Comparar contra esa etiqueta —
+ * `concepto.startsWith("Recargo")` — se rompe en cuanto cambia el texto, y es
+ * lo que hoy hacen ~100 sitios entre web, API y tests.
+ *
+ * Los códigos son deliberadamente neutros respecto del país donde se puede:
+ * `SALARIO_BASE` y `HONORARIOS` existen en cualquier jurisdicción. Los que
+ * nombran una figura propia de Colombia (`FONDO_SOLIDARIDAD`, `AUXILIO_TRANSPORTE`,
+ * `PROVISION_PRIMA`) simplemente no los emite un motor de otro país.
+ */
+export type CodigoConcepto =
+  // --- Devengos ---
+  | "SALARIO_BASE"
+  | "AUXILIO_SOSTENIMIENTO" // aprendiz SENA — no es salario
+  | "AUXILIO_TRANSPORTE"
+  | "HONORARIOS" // prestación de servicios / freelance
+  | "RECARGO_NOCTURNO"
+  | "RECARGO_DOMINICAL"
+  | "RECARGO_NOCTURNO_DOMINICAL"
+  | "HORA_EXTRA_DIURNA"
+  | "HORA_EXTRA_NOCTURNA"
+  | "HORA_EXTRA_DOMINICAL_DIURNA"
+  | "HORA_EXTRA_DOMINICAL_NOCTURNA"
+  // --- Deducciones ---
+  | "AJUSTE_AUSENTISMO"
+  | "SALUD_EMPLEADO"
+  | "PENSION_EMPLEADO"
+  | "FONDO_SOLIDARIDAD"
+  | "APORTE_AFC"
+  | "PRESTAMO"
+  | "AHORRO"
+  | "REPROCESO"
+  | "EMBARGO_JUDICIAL"
+  // --- Provisiones (pasivo del empleador, no dinero del periodo) ---
+  | "PROVISION_CESANTIAS"
+  | "PROVISION_INTERESES_CESANTIAS"
+  | "PROVISION_PRIMA"
+  | "PROVISION_VACACIONES"
+  // --- Liquidación final (pago al terminar el contrato, no provisión) ---
+  | "LIQUIDACION_FINAL_CESANTIAS"
+  | "LIQUIDACION_FINAL_INTERESES_CESANTIAS"
+  | "LIQUIDACION_FINAL_PRIMA"
+  | "LIQUIDACION_FINAL_VACACIONES"
+  /** Línea que declaró quien llama (`ConceptoNomina`), no una regla del motor.
+   *  Su código propio, si lo mandó, viaja en `codigoDeclarado`. */
+  | "CONCEPTO_DECLARADO";
+
 export interface LineaResultado {
+  /** Identificador estable — usalo para comparar. Ver `CodigoConcepto`. */
+  codigo: CodigoConcepto;
+  /** Código propio de quien llamó, solo en líneas `CONCEPTO_DECLARADO`:
+   *  permite correlacionar la respuesta con lo que envió. */
+  codigoDeclarado?: string;
+  /** Etiqueta legible. Para mostrar, nunca para comparar. */
   concepto: string;
   horas?: number;
   base?: number;

@@ -22,7 +22,7 @@ import type { Prisma } from "@prisma/client";
 const SIN_HORARIO_BASE = [null, null, null, null, null, null, null] as const;
 
 function ibcDeLineas(lineas: LineaResultado[]): number {
-  return lineas.find((l) => l.concepto === "Salud (aporte empleado)")?.base ?? 0;
+  return lineas.find((l) => l.codigo === "SALUD_EMPLEADO")?.base ?? 0;
 }
 
 export interface DatosPeriodo {
@@ -152,10 +152,10 @@ export function calcularReciboLote(
               : undefined,
           });
           return [
-            { concepto: "Provisión cesantías", valorCalculado: prestaciones.cesantias, tipo: "provision", ley: "CST art. 249" },
-            { concepto: "Provisión intereses a las cesantías", valorCalculado: prestaciones.interesesCesantias, tipo: "provision", ley: "Ley 52 de 1975, art. 1" },
-            { concepto: "Provisión prima de servicios", valorCalculado: prestaciones.prima, tipo: "provision", ley: "CST art. 306" },
-            { concepto: "Provisión vacaciones", valorCalculado: prestaciones.vacaciones, tipo: "provision", ley: "CST art. 186" },
+            { codigo: "PROVISION_CESANTIAS", concepto: "Provisión cesantías", valorCalculado: prestaciones.cesantias, tipo: "provision", ley: "CST art. 249" },
+            { codigo: "PROVISION_INTERESES_CESANTIAS", concepto: "Provisión intereses a las cesantías", valorCalculado: prestaciones.interesesCesantias, tipo: "provision", ley: "Ley 52 de 1975, art. 1" },
+            { codigo: "PROVISION_PRIMA", concepto: "Provisión prima de servicios", valorCalculado: prestaciones.prima, tipo: "provision", ley: "CST art. 306" },
+            { codigo: "PROVISION_VACACIONES", concepto: "Provisión vacaciones", valorCalculado: prestaciones.vacaciones, tipo: "provision", ley: "CST art. 186" },
           ];
         })();
 

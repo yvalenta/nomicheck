@@ -11,28 +11,37 @@ import {
   Sun,
   Sunrise,
 } from "lucide-react";
-import { formatCOP, type LineaResultado } from "@pv/reglas";
+import { formatCOP, type CodigoConcepto, type LineaResultado } from "@pv/reglas";
 
-function iconoDe(concepto: string): LucideIcon {
-  if (concepto.startsWith("Salario")) return Banknote;
-  if (concepto.startsWith("Recargo nocturno")) return Moon;
-  if (concepto.startsWith("Recargo dominical")) return CalendarDays;
-  if (concepto.startsWith("Hora extra nocturna")) return Moon;
-  if (concepto.startsWith("Hora extra dominical")) return CalendarDays;
-  if (concepto.startsWith("Hora extra")) return Sunrise;
-  if (concepto.startsWith("Auxilio")) return Bus;
-  if (concepto.startsWith("Ajuste por ausentismo")) return CalendarX;
-  if (concepto.startsWith("Salud")) return HeartPulse;
-  if (concepto.startsWith("Pensión")) return PiggyBank;
-  if (concepto.startsWith("Fondo")) return HandCoins;
-  return Sun;
+// Ícono por CÓDIGO, no por etiqueta: reescribir un texto ya no cambia el
+// ícono, y el compilador avisa si el motor agrega un concepto sin ícono.
+const ICONOS: Partial<Record<CodigoConcepto, LucideIcon>> = {
+  SALARIO_BASE: Banknote,
+  AUXILIO_SOSTENIMIENTO: Banknote,
+  AUXILIO_TRANSPORTE: Bus,
+  HONORARIOS: Banknote,
+  RECARGO_NOCTURNO: Moon,
+  RECARGO_NOCTURNO_DOMINICAL: Moon,
+  RECARGO_DOMINICAL: CalendarDays,
+  HORA_EXTRA_NOCTURNA: Moon,
+  HORA_EXTRA_DOMINICAL_DIURNA: CalendarDays,
+  HORA_EXTRA_DOMINICAL_NOCTURNA: CalendarDays,
+  HORA_EXTRA_DIURNA: Sunrise,
+  AJUSTE_AUSENTISMO: CalendarX,
+  SALUD_EMPLEADO: HeartPulse,
+  PENSION_EMPLEADO: PiggyBank,
+  FONDO_SOLIDARIDAD: HandCoins,
+};
+
+function iconoDe(codigo: CodigoConcepto): LucideIcon {
+  return ICONOS[codigo] ?? Sun;
 }
 
 // Fórmula legible para el tooltip, armada con los datos que expone el motor.
 function formulaDe(l: LineaResultado): string | null {
   const pct = l.recargoPct !== undefined ? `${(l.recargoPct * 100).toFixed(0)}%` : null;
   if (l.horas !== undefined && pct) {
-    const esExtra = l.concepto.startsWith("Hora extra");
+    const esExtra = l.codigo.startsWith("HORA_EXTRA");
     return `${l.horas} h × valor hora × ${esExtra ? `(100% + ${pct})` : pct}`;
   }
   if (l.base !== undefined && pct) return `${formatCOP(l.base)} × ${pct}`;
@@ -41,7 +50,7 @@ function formulaDe(l: LineaResultado): string | null {
 }
 
 export default function ValidationRow({ linea }: { linea: LineaResultado }) {
-  const Icono = iconoDe(linea.concepto);
+  const Icono = iconoDe(linea.codigo);
   const esDeduccion = linea.tipo === "deduccion";
   const formula = formulaDe(linea);
 

@@ -70,6 +70,7 @@ export function lineasRecargos(
 
   if (h.nocturnas > 0) {
     lineas.push({
+      codigo: "RECARGO_NOCTURNO",
       concepto: `Recargo nocturno${sufijo}`,
       horas: redondearHoras(h.nocturnas),
       recargoPct: pcts.recargoNocturno,
@@ -82,6 +83,7 @@ export function lineasRecargos(
   const dominicales = h.dominicalesDiurnas + h.dominicalesNocturnas;
   if (dominicales > 0) {
     lineas.push({
+      codigo: "RECARGO_DOMINICAL",
       concepto: `Recargo dominical/festivo${sufijo}`,
       horas: redondearHoras(dominicales),
       recargoPct: pcts.recargoDominical,
@@ -93,6 +95,7 @@ export function lineasRecargos(
 
   if (h.dominicalesNocturnas > 0) {
     lineas.push({
+      codigo: "RECARGO_NOCTURNO_DOMINICAL",
       concepto: `Recargo nocturno dominical/festivo${sufijo}`,
       horas: redondearHoras(h.dominicalesNocturnas),
       recargoPct: pcts.recargoNocturno,
@@ -104,6 +107,7 @@ export function lineasRecargos(
 
   if (h.extrasDiurnas > 0) {
     lineas.push({
+      codigo: "HORA_EXTRA_DIURNA",
       concepto: `Hora extra diurna${sufijo}`,
       horas: redondearHoras(h.extrasDiurnas),
       recargoPct: pcts.extraDiurnaPct,
@@ -115,6 +119,7 @@ export function lineasRecargos(
 
   if (h.extrasNocturnas > 0) {
     lineas.push({
+      codigo: "HORA_EXTRA_NOCTURNA",
       concepto: `Hora extra nocturna${sufijo}`,
       horas: redondearHoras(h.extrasNocturnas),
       recargoPct: pcts.extraNocturnaPct,
@@ -129,6 +134,7 @@ export function lineasRecargos(
   if (h.extrasDominicalesDiurnas > 0) {
     const pct = pcts.recargoDominical + pcts.extraDiurnaPct;
     lineas.push({
+      codigo: "HORA_EXTRA_DOMINICAL_DIURNA",
       concepto: `Hora extra dominical/festiva diurna${sufijo}`,
       horas: redondearHoras(h.extrasDominicalesDiurnas),
       recargoPct: pct,
@@ -141,6 +147,7 @@ export function lineasRecargos(
   if (h.extrasDominicalesNocturnas > 0) {
     const pct = pcts.recargoDominical + pcts.extraNocturnaPct;
     lineas.push({
+      codigo: "HORA_EXTRA_DOMINICAL_NOCTURNA",
       concepto: `Hora extra dominical/festiva nocturna${sufijo}`,
       horas: redondearHoras(h.extrasDominicalesNocturnas),
       recargoPct: pct,

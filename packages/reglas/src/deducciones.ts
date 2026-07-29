@@ -1,4 +1,4 @@
-import type { DescuentoJudicial, LineaResultado, ReglaLegal, TipoEmbargo } from "./types.js";
+import type { CodigoConcepto, DescuentoJudicial, LineaResultado, ReglaLegal, TipoEmbargo } from "./types.js";
 import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
 import { TABLA_FONDO_SOLIDARIDAD } from "./constantes.js";
@@ -38,6 +38,7 @@ export function deduccionesDeLey(
 
   const lineas: LineaResultado[] = [
     {
+      codigo: "SALUD_EMPLEADO",
       concepto: "Salud (aporte empleado)",
       base: redondearPeso(ibc),
       recargoPct: pctSalud,
@@ -53,6 +54,7 @@ export function deduccionesDeLey(
   const smlmv = r.en("smlmv", fecha);
 
   lineas.push({
+    codigo: "PENSION_EMPLEADO",
     concepto: "Pensión (aporte empleado)",
     base: redondearPeso(ibc),
     recargoPct: pctPension,
@@ -65,6 +67,7 @@ export function deduccionesDeLey(
   if (ibcEnSmlmv >= umbralSolidaridadSmlmv) {
     const pct = pctFondoSolidaridad(ibcEnSmlmv);
     lineas.push({
+      codigo: "FONDO_SOLIDARIDAD",
       concepto: "Fondo de solidaridad pensional",
       base: redondearPeso(ibc),
       recargoPct: pct,
@@ -93,6 +96,7 @@ export interface ResultadoDeducciones {
 // tope del 50% del art. 149 CST y se recortan proporcionalmente entre
 // ellas si el total lo supera — nunca los aportes obligatorios de ley).
 export interface DeduccionConvenio {
+  codigo: CodigoConcepto;
   concepto: string;
   /** Ya prorrateado por el llamador (igual que el auxilio de transporte). */
   valorMensual: number;
@@ -162,6 +166,7 @@ export function aplicarDeducciones(
 
   const convenio = (opciones.deduccionesConvenio ?? []).filter((c) => c.valorMensual > 0);
   const lineasConvenio = convenio.map((c) => ({
+    codigo: c.codigo,
     concepto: c.concepto,
     valorCalculado: redondearPeso(c.valorMensual),
     tipo: "deduccion" as const,
@@ -200,6 +205,7 @@ export function aplicarDeducciones(
         ? "CST art. 156 — hasta 50% de cualquier salario"
         : "CST art. 154 y 155 — inembargable hasta 1 SMLMV, 1/5 del excedente";
     lineas.push({
+      codigo: "EMBARGO_JUDICIAL",
       concepto: `Embargo judicial (${embargo.tipo === "alimentos_o_cooperativa" ? "alimentos/cooperativa" : "ordinario"})`,
       valorCalculado: redondearPeso(embargable),
       tipo: "deduccion",

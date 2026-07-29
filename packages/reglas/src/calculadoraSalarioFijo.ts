@@ -58,6 +58,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     const ibc = d.salarioBasicoMensual;
 
     lineas.push({
+      codigo: esAprendiz ? "AUXILIO_SOSTENIMIENTO" : "SALARIO_BASE",
       concepto: esAprendiz ? "Auxilio de sostenimiento" : "Salario básico",
       base: redondearPeso(d.salarioBasicoMensual),
       valorCalculado: redondearPeso(d.salarioBasicoMensual),
@@ -114,6 +115,8 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     for (const c of d.conceptos) {
       const tipo = clasificacion[c.tipo];
       lineas.push({
+        codigo: "CONCEPTO_DECLARADO",
+        codigoDeclarado: c.codigo,
         concepto: c.nombre,
         base: c.base !== undefined ? redondearPeso(c.base) : undefined,
         valorCalculado: redondearPeso(c.valor),

@@ -14,7 +14,7 @@ import {
   advertenciaTerminoNoIndefinido,
 } from "./advertenciasContrato.js";
 import { redondearPeso } from "./numero.js";
-import { aplicarDeducciones } from "./deducciones.js";
+import { aplicarDeducciones, type DeduccionConvenio } from "./deducciones.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
 import { crearIssue, emitirIssue } from "./qa/index.js";
 import type { IssueQA } from "./qa/tipos.js";
@@ -276,6 +276,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
           ? "solo_salud"
           : "completo";
     lineas.push({
+      codigo: esAprendiz ? "AUXILIO_SOSTENIMIENTO" : "SALARIO_BASE",
       concepto: esAprendiz ? `Auxilio de sostenimiento (${diasPeriodo} días)` : `Salario básico (${diasPeriodo} días)`,
       base: redondearPeso(d.salarioBasicoMensual),
       valorCalculado: redondearPeso(salarioBase),
@@ -295,6 +296,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     );
     if (diasAusenciaNoRemunerada > 0) {
       lineas.push({
+        codigo: "AJUSTE_AUSENTISMO",
         concepto: `Ajuste por ausentismo (${diasAusenciaNoRemunerada} día${diasAusenciaNoRemunerada === 1 ? "" : "s"} no remunerado${diasAusenciaNoRemunerada === 1 ? "" : "s"})`,
         base: redondearPeso(d.salarioBasicoMensual),
         valorCalculado: valorAusentismo,
@@ -375,15 +377,16 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     // prorratean por días del periodo igual que el auxilio de transporte.
     const prorratear = (mensual: number | undefined) =>
       ((mensual ?? 0) / DIAS_MES_COMERCIAL) * diasPeriodo;
-    const deduccionesConvenio = [
+    const deduccionesConvenio: DeduccionConvenio[] = [
       {
+        codigo: "APORTE_AFC",
         concepto: "Aporte AFC (convenio)",
         valorMensual: prorratear(d.aporteAfcMensual),
         ley: "E.T. art. 126-4 — deducción por convenio, no afecta IBC (Fase 1: sin declaración de renta)",
       },
-      { concepto: "Préstamo (convenio)", valorMensual: prorratear(d.prestamoMensual) },
-      { concepto: "Ahorro (convenio)", valorMensual: prorratear(d.ahorroMensual) },
-      { concepto: "Reproceso", valorMensual: prorratear(d.reprocesoMensual) },
+      { codigo: "PRESTAMO", concepto: "Préstamo (convenio)", valorMensual: prorratear(d.prestamoMensual) },
+      { codigo: "AHORRO", concepto: "Ahorro (convenio)", valorMensual: prorratear(d.ahorroMensual) },
+      { codigo: "REPROCESO", concepto: "Reproceso", valorMensual: prorratear(d.reprocesoMensual) },
     ];
     const embargoPeriodo = d.descuentoJudicial
       ? {
@@ -420,7 +423,7 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     // Los recargos sí son genuinamente diarios: se recalculan por día con la
     // MISMA función que arma las líneas del recibo, no con una fórmula
     // paralela que pueda derivar.
-    const auxilioLinea = lineas.find((l) => l.concepto === "Auxilio de transporte");
+    const auxilioLinea = lineas.find((l) => l.codigo === "AUXILIO_TRANSPORTE");
     const salarioPorDiaCalendario = salarioBase / fechas.length;
     const auxilioPorDiaCalendario = (auxilioLinea?.valorCalculado ?? 0) / fechas.length;
     const deduccionesTotales = totalDeducciones + valorAusentismo;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, FileText, HelpCircle, Loader2, RotateCcw, Save, XCircle } from "lucide-react";
-import { formatCOP, type ResultadoNomina } from "@pv/reglas";
+import { esRecargoOExtra, formatCOP, type ResultadoNomina } from "@pv/reglas";
 import PaycheckCard from "./PaycheckCard.tsx";
 import SegmentedControl from "./SegmentedControl.tsx";
 import ValidationRow from "./ValidationRow.tsx";
@@ -30,7 +30,7 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
 
   const lineasVisibles = resultado.lineas.filter((l) => {
     if (vista === "recargos")
-      return l.concepto.startsWith("Recargo") || l.concepto.startsWith("Hora extra");
+      return esRecargoOExtra(l);
     if (vista === "deducciones") return l.tipo === "deduccion";
     return true;
   });

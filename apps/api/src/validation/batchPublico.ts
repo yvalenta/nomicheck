@@ -56,8 +56,29 @@ const turnoBatch = z.object({
   horaFin: horaHHmm,
 });
 
+/**
+ * País cuya legislación se aplica. Hoy solo Colombia.
+ *
+ * Entra al contrato AHORA, con un único valor válido, para que agregar un
+ * segundo país después sea aditivo y no rompa a nadie: quien integre hoy
+ * escribe `pais: "CO"` (o lo omite) y su request sigue siendo válido cuando
+ * exista "PE". Sin este campo, sumar un país obligaría a la v2 del contrato.
+ *
+ * Fuera de Colombia el modelo esperado es prestación de servicios /
+ * freelance: sin recargos, sin horas extra, sin prestaciones sociales — lo
+ * que el motor ya resuelve con `CalculadoraServicios`. La complejidad del
+ * CST (jornada 42 h, recargo dominical, festivos) es propia de "CO".
+ */
+const pais = z.enum(["CO"]).default("CO");
+
+/** Idioma de las ETIQUETAS del recibo. No traduce `referenciaLegal`: una cita
+ *  legal es nombre propio ("Ley 2466 de 2025" no se busca como "Law 2466"). */
+const locale = z.enum(["es", "en"]).default("es");
+
 export const batchLiquidarSchema = z.object({
   version: z.literal("1"),
+  pais,
+  locale,
   buyer: z.object({
     executorId: z.string().min(1).optional(),
     wallet: walletEvm.optional(),
@@ -83,6 +104,11 @@ export type BatchLiquidarInput = z.infer<typeof batchLiquidarSchema>;
 // pero con `externalId` en vez de FKs de BD (el buyer no tiene ids de
 // NomiCheck).
 export interface LineaBatch {
+  /** Identificador estable del concepto — comparar contra esto, nunca contra
+   *  `concepto`, que es una etiqueta traducible. */
+  codigo: string;
+  /** Código propio del buyer, solo en líneas que él declaró. */
+  codigoDeclarado?: string;
   concepto: string;
   tipo: "devengo" | "deduccion" | "provision";
   valor: number;
@@ -130,6 +156,13 @@ export interface FirmaOutput {
 
 export interface BatchLiquidarOutput {
   version: "1";
+  /** País cuya legislación se aplicó. Eco del request. */
+  pais: "CO";
+  /** Moneda de TODOS los importes del payload. La deriva el país, no el
+   *  buyer: no se puede pedir una nómina colombiana denominada en otra cosa. */
+  moneda: "COP";
+  /** Idioma de las etiquetas de `lineas[].concepto`. */
+  locale: "es" | "en";
   generadoEn: string;
   reglasVerificadasAl: string;
   reglasHash: string;

@@ -29,6 +29,7 @@ export function calcularAuxilioTransporte(
   const auxilioMensual = r.en("auxilio_transporte", fecha);
   return {
     linea: {
+      codigo: "AUXILIO_TRANSPORTE",
       concepto: "Auxilio de transporte",
       valorCalculado: redondearPeso((auxilioMensual / DIAS_MES_COMERCIAL) * diasPeriodo),
       tipo: "devengo",

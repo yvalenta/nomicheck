@@ -1,5 +1,10 @@
 import { Printer } from "lucide-react";
-import { formatCOP, formatRangoFechas, type LineaResultado, type ResultadoNomina } from "@pv/reglas";
+import {
+  esIngresoSalarial as esIngresoSalarialMotor,
+  formatCOP,
+  formatRangoFechas,
+  type ResultadoNomina,
+} from "@pv/reglas";
 
 interface Props {
   resultado: ResultadoNomina;
@@ -15,16 +20,9 @@ interface Props {
 // que el motor genera con nombre conocido. Cualquier otro devengo (ej.
 // auxilio de rodamiento/alimentación extraído de un comprobante o declarado
 // como concepto extralegal) se presenta como "ingreso no salarial".
-function esIngresoSalarial(l: LineaResultado): boolean {
-  return (
-    l.concepto.startsWith("Salario") ||
-    l.concepto.startsWith("Auxilio de transporte") ||
-    l.concepto.startsWith("Auxilio de sostenimiento") ||
-    l.concepto.startsWith("Recargo") ||
-    l.concepto.startsWith("Hora extra") ||
-    l.concepto.startsWith("Honorarios")
-  );
-}
+// La clasificación vive en el motor (conceptos.ts): así el recibo y el API
+// coinciden siempre, y reescribir una etiqueta no cambia dónde cae la línea.
+const esIngresoSalarial = esIngresoSalarialMotor;
 
 function vacio(valor: number | string | undefined | null, formato?: (v: number) => string): string {
   if (valor === undefined || valor === null || valor === "") return "—";

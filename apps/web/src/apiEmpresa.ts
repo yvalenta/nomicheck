@@ -1,4 +1,5 @@
 import { supabase } from "./lib/supabase";
+import type { CodigoConcepto } from "@pv/reglas";
 
 export interface Empleado {
   id: number;
@@ -325,6 +326,10 @@ export interface Turno {
 }
 
 export interface LineaRecibo {
+  /** Espeja `LineaResultado.codigo` del motor: identificador estable de la
+   *  línea. Comparar contra esto, nunca contra `concepto`. */
+  codigo: CodigoConcepto;
+  codigoDeclarado?: string;
   concepto: string;
   horas?: number;
   base?: number;

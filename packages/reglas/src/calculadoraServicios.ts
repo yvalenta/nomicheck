@@ -40,6 +40,7 @@ export const CalculadoraServicios: CalculadoraNomina = {
     );
     const honorarios = (d.honorariosMensuales / DIAS_MES_COMERCIAL) * diasPeriodo;
     lineas.push({
+      codigo: "HONORARIOS",
       concepto: `Honorarios (${diasPeriodo} días)`,
       base: redondearPeso(d.honorariosMensuales),
       valorCalculado: redondearPeso(honorarios),
@@ -49,6 +50,8 @@ export const CalculadoraServicios: CalculadoraNomina = {
 
     for (const c of d.conceptos ?? []) {
       lineas.push({
+        codigo: "CONCEPTO_DECLARADO",
+        codigoDeclarado: c.codigo,
         concepto: c.nombre,
         base: c.base !== undefined ? redondearPeso(c.base) : undefined,
         valorCalculado: redondearPeso(c.valor),

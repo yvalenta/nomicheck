@@ -3,6 +3,9 @@ import { prisma } from "../lib/prisma.js";
 import { obtenerReglasYFestivos } from "./nominaService.js";
 
 interface LineaReciboJson {
+  /** Opcional a propósito: los recibos guardados ANTES de que existiera el
+   *  código no lo traen. Por eso `buscarLinea` cae al texto legacy. */
+  codigo?: string;
   concepto: string;
   base?: number;
   valorCalculado: number;
@@ -36,13 +39,25 @@ export interface PilaPeriodoResumen {
 // hacen IBC, ver calculadoraSalarioFijo.ts). Sin esa línea (aprendiz etapa
 // lectiva, alcance "ninguno" — SENA gestiona su afiliación) no hay IBC: la
 // PILA de ese recibo no aplica.
+// Busca por código y, si el recibo es anterior a que el código existiera,
+// cae al texto con el que se guardó. El fallback NO se puede quitar mientras
+// haya recibos históricos en BD: se liquidan PILAs de periodos ya cerrados.
+function buscarLinea(
+  lineas: LineaReciboJson[],
+  codigo: string,
+  conceptoLegacy: string
+): LineaReciboJson | undefined {
+  return lineas.find((l) => (l.codigo ? l.codigo === codigo : l.concepto === conceptoLegacy));
+}
+
 function ibcDeRecibo(lineas: LineaReciboJson[]): number | null {
-  const linea = lineas.find((l) => l.concepto === "Salud (aporte empleado)");
-  return linea?.base ?? null;
+  return buscarLinea(lineas, "SALUD_EMPLEADO", "Salud (aporte empleado)")?.base ?? null;
 }
 
 function auxilioDeRecibo(lineas: LineaReciboJson[]): number {
-  return lineas.find((l) => l.concepto === "Auxilio de transporte")?.valorCalculado ?? 0;
+  return (
+    buscarLinea(lineas, "AUXILIO_TRANSPORTE", "Auxilio de transporte")?.valorCalculado ?? 0
+  );
 }
 
 // Liquidación PILA "exacta" de un periodo ya liquidado (SDD.md §14): a

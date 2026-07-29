@@ -2,14 +2,36 @@ import { calcularPrestacionesSociales, type LineaResultado } from "@pv/reglas";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 
-// Conceptos exactos usados en liquidacionService.ts al provisionar cada
-// periodo — se agrupan por este texto para sumar lo ya provisionado.
-const CONCEPTOS_PROVISION = {
+// Códigos de las provisiones emitidas al liquidar cada periodo. Antes se
+// agrupaba por el TEXTO del concepto — frágil: el mismo concepto se escribe
+// "Provisión intereses a las cesantías" acá y "…sobre cesantías" en
+// costoEmpleador.ts, y solo funcionaba porque el par correcto coincidía.
+const CODIGOS_PROVISION = {
+  cesantias: "PROVISION_CESANTIAS",
+  intereses: "PROVISION_INTERESES_CESANTIAS",
+  prima: "PROVISION_PRIMA",
+  vacaciones: "PROVISION_VACACIONES",
+} as const;
+
+// Textos con que se guardaron las provisiones ANTES de que existiera el
+// código. Los recibos viejos siguen en BD y esta función los suma para pagar
+// la liquidación final: si se agrupara solo por código, esos periodos darían
+// CERO y al trabajador se le pagaría de menos. El fallback no se puede
+// quitar mientras queden recibos anteriores al cambio.
+const CONCEPTOS_PROVISION_LEGACY = {
   cesantias: "Provisión cesantías",
   intereses: "Provisión intereses a las cesantías",
   prima: "Provisión prima de servicios",
   vacaciones: "Provisión vacaciones",
 } as const;
+
+type ClaveProvision = keyof typeof CODIGOS_PROVISION;
+
+function esProvisionDe(linea: LineaResultado, clave: ClaveProvision): boolean {
+  return linea.codigo
+    ? linea.codigo === CODIGOS_PROVISION[clave]
+    : linea.concepto === CONCEPTOS_PROVISION_LEGACY[clave];
+}
 
 function diaSiguiente(fecha: string): string {
   const d = new Date(`${fecha}T00:00:00Z`);
@@ -36,7 +58,7 @@ export async function liquidarFinal(empresaId: number, empleadoId: number) {
   });
 
   const yaLiquidadoFinal = recibosPrevios.some((r) =>
-    (r.lineas as unknown as LineaResultado[]).some((l) => l.concepto.startsWith("Liquidación final"))
+    (r.lineas as unknown as LineaResultado[]).some((l) => (l.codigo ? l.codigo.startsWith("LIQUIDACION_FINAL") : l.concepto.startsWith("Liquidación final")))
   );
   if (yaLiquidadoFinal) {
     throw new Error("Este empleado ya tiene una liquidación final registrada");
@@ -46,10 +68,10 @@ export async function liquidarFinal(empresaId: number, empleadoId: number) {
   for (const recibo of recibosPrevios) {
     for (const linea of recibo.lineas as unknown as LineaResultado[]) {
       if (linea.tipo !== "provision") continue;
-      if (linea.concepto === CONCEPTOS_PROVISION.cesantias) acumulado.cesantias += linea.valorCalculado;
-      else if (linea.concepto === CONCEPTOS_PROVISION.intereses) acumulado.intereses += linea.valorCalculado;
-      else if (linea.concepto === CONCEPTOS_PROVISION.prima) acumulado.prima += linea.valorCalculado;
-      else if (linea.concepto === CONCEPTOS_PROVISION.vacaciones) acumulado.vacaciones += linea.valorCalculado;
+      if (esProvisionDe(linea, "cesantias")) acumulado.cesantias += linea.valorCalculado;
+      else if (esProvisionDe(linea, "intereses")) acumulado.intereses += linea.valorCalculado;
+      else if (esProvisionDe(linea, "prima")) acumulado.prima += linea.valorCalculado;
+      else if (esProvisionDe(linea, "vacaciones")) acumulado.vacaciones += linea.valorCalculado;
     }
   }
 
@@ -72,10 +94,10 @@ export async function liquidarFinal(empresaId: number, empleadoId: number) {
   }
 
   const lineas: LineaResultado[] = [
-    { concepto: "Liquidación final — cesantías", tipo: "devengo", valorCalculado: acumulado.cesantias, ley: "CST art. 249" },
-    { concepto: "Liquidación final — intereses a las cesantías", tipo: "devengo", valorCalculado: acumulado.intereses, ley: "Ley 52 de 1975, art. 1" },
-    { concepto: "Liquidación final — prima de servicios", tipo: "devengo", valorCalculado: acumulado.prima, ley: "CST art. 306" },
-    { concepto: "Liquidación final — vacaciones", tipo: "devengo", valorCalculado: acumulado.vacaciones, ley: "CST art. 186" },
+    { codigo: "LIQUIDACION_FINAL_CESANTIAS", concepto: "Liquidación final — cesantías", tipo: "devengo", valorCalculado: acumulado.cesantias, ley: "CST art. 249" },
+    { codigo: "LIQUIDACION_FINAL_INTERESES_CESANTIAS", concepto: "Liquidación final — intereses a las cesantías", tipo: "devengo", valorCalculado: acumulado.intereses, ley: "Ley 52 de 1975, art. 1" },
+    { codigo: "LIQUIDACION_FINAL_PRIMA", concepto: "Liquidación final — prima de servicios", tipo: "devengo", valorCalculado: acumulado.prima, ley: "CST art. 306" },
+    { codigo: "LIQUIDACION_FINAL_VACACIONES", concepto: "Liquidación final — vacaciones", tipo: "devengo", valorCalculado: acumulado.vacaciones, ley: "CST art. 186" },
   ];
   const total = acumulado.cesantias + acumulado.intereses + acumulado.prima + acumulado.vacaciones;
 
