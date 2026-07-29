@@ -1,7 +1,35 @@
 // Tests del wrapper stateless (RUMBO §3.4). Ejercitan el pipeline sin BD
 // del buyer — usan `obtenerReglasYFestivos` que lee el catálogo público
 // cacheado (no es tenant, es el mismo set del verificador anónimo).
-import { describe, expect, it } from "vitest";
+//
+// HASTA EL 2026-07-29 ESTOS DIEZ TESTS PEGABAN A UNA BASE DE DATOS REAL.
+// `obtenerReglasYFestivos` consulta `prisma.reglaLegal.findMany()`, así que en
+// una máquina con `DATABASE_URL` puesto consultaban Supabase, y en CI —donde no
+// hay ninguno— fallaban con `Environment variable not found: DATABASE_URL`.
+//
+// El propio `vitest.config.ts` dice que esta suite es "solo tests de módulos
+// PUROS del backend (funciones sin BD/HTTP)" y que "los tests con Prisma se
+// quedan como E2E ad-hoc". El archivo declaraba el invariante que la suite
+// violaba, y nadie lo notó porque en local siempre había una base a mano.
+//
+// El corte va en el CLIENTE de Prisma, que es donde está la impureza, y no en
+// `obtenerReglasYFestivos`: mockear esa función dejaría afuera a
+// `obtenerLedgerReglas`, que lee las mismas tablas por su cuenta, y el test del
+// `reglasHash` compara justamente las dos rutas. Mockeando el cliente, las dos
+// ven el mismo catálogo y la comparación sigue significando algo.
+//
+// El fixture NO es inventado: es `prisma/semillaLegal.ts`, la misma semilla que
+// `seed.ts` escribe en la base. Si un valor legal cambia, cambia para los dos.
+import { describe, expect, it, vi } from "vitest";
+
+import { FESTIVOS_SEMILLA, REGLAS_SEMILLA } from "../../../prisma/semillaLegal.js";
+
+vi.mock("../../lib/prisma.js", () => ({
+  prisma: {
+    reglaLegal: { findMany: async () => REGLAS_SEMILLA.map((r) => ({ ...r, vigenteHasta: r.vigenteHasta ?? null, fuente: r.fuente ?? null })) },
+    festivo: { findMany: async () => FESTIVOS_SEMILLA },
+  },
+}));
 import { ejecutarBatchPublico } from "../batchPublicoService.js";
 import { hashCatalogo, obtenerLedgerReglas, REGLAS_VERIFICADAS_AL } from "../reglasVerificadasService.js";
 import { batchToCsv } from "../batchCsvService.js";
