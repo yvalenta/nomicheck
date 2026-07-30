@@ -280,8 +280,10 @@ export interface DatosPrestaciones {
   fechaCorte: string; // YYYY-MM-DD — fin del periodo a provisionar/liquidar
   /** Salario fijo mensual. Ignorado si se pasa `devengosVariables`. */
   salarioBase: number;
-  /** Últimos meses devengados si el salario varía — promedio de estos (o del tiempo servido si es menor a 12). */
+  /** Últimos meses devengados de salario ORDINARIO variable (comisiones, bonificaciones habituales) — promedio de estos (o del tiempo servido si es menor a 12). Entran a la base de las cuatro prestaciones, vacaciones incluidas. */
   devengosVariables?: DevengoMensual[];
+  /** Horas extra y trabajo en días de descanso obligatorio, por mes. Van aparte de `devengosVariables` porque **CST art. 192 num. 1 los excluye expresamente** de la remuneración de vacaciones ("el valor del trabajo en días de descanso obligatorio y el valor del trabajo suplementario en horas extras"), pero sí hacen base de cesantías y prima. Meterlos en `devengosVariables` sobreliquida las vacaciones. */
+  devengosSuplementarios?: DevengoMensual[];
   /** Monto mensual vigente del auxilio de transporte. Entra a la base de cesantías Y de prima (Ley 1ª de 1963, art. 7: "se entiende incorporado al salario para todos los efectos"), NO a la de vacaciones — la CSJ lo excluye porque compensa un gasto que no se causa mientras el trabajador está de vacaciones. */
   auxilioTransporte?: number;
   /** Fechas (YYYY-MM-DD) excluidas del conteo por suspensión disciplinaria o licencia no remunerada — interrumpen el contrato para efecto de estas 4 prestaciones. */

@@ -16,6 +16,50 @@ describe("calcularLiquidacionFinal", () => {
     auxilioTransporte: 249_095,
   };
 
+  it("reproduce al peso una planilla de liquidación real", () => {
+    // Planilla de referencia: básico 1.850.000, "otros conceptos" 241.943
+    // (extras y recargos), auxilio 249.095, del 1 al 30 de julio de 2026.
+    // Base de cesantías y prima = 2.341.038; base de vacaciones = solo el
+    // básico, porque el art. 192 num. 1 excluye extras y descanso obligatorio.
+    const r = calcularLiquidacionFinal(
+      {
+        ...planilla,
+        devengosSuplementarios: [{ mes: "2026-07", valor: 241_943 }],
+        diasVacacionesTomados: 0,
+      },
+      REGLAS_JUL_2026
+    );
+    expect(valorDe(r, "LIQUIDACION_FINAL_CESANTIAS")).toBe(195_087);
+    expect(valorDe(r, "LIQUIDACION_FINAL_INTERESES_CESANTIAS")).toBe(1_951);
+    expect(valorDe(r, "LIQUIDACION_FINAL_PRIMA")).toBe(195_087);
+    expect(valorDe(r, "LIQUIDACION_FINAL_VACACIONES")).toBe(77_083);
+    expect(r.total).toBe(469_208); // la planilla suma 469.207: un peso de redondeo
+  });
+
+  it("el trabajo suplementario hace base de cesantías y prima, pero NO de vacaciones (art. 192 num. 1)", () => {
+    const extras = [{ mes: "2026-07", valor: 241_943 }];
+    const con = calcularLiquidacionFinal({ ...planilla, devengosSuplementarios: extras }, REGLAS_JUL_2026);
+    const sin = calcularLiquidacionFinal(planilla, REGLAS_JUL_2026);
+
+    expect(valorDe(con, "LIQUIDACION_FINAL_CESANTIAS")).toBeGreaterThan(valorDe(sin, "LIQUIDACION_FINAL_CESANTIAS"));
+    expect(valorDe(con, "LIQUIDACION_FINAL_PRIMA")).toBeGreaterThan(valorDe(sin, "LIQUIDACION_FINAL_PRIMA"));
+    expect(valorDe(con, "LIQUIDACION_FINAL_VACACIONES")).toBe(valorDe(sin, "LIQUIDACION_FINAL_VACACIONES"));
+  });
+
+  it("una comisión sí entra a la base de vacaciones; una hora extra no", () => {
+    // El mismo monto, clasificado distinto, da vacaciones distintas. Es toda
+    // la diferencia entre los dos campos.
+    const monto = [{ mes: "2026-07", valor: 2_091_943 }];
+    const comision = calcularLiquidacionFinal({ ...planilla, devengosVariables: monto }, REGLAS_JUL_2026);
+    const extra = calcularLiquidacionFinal(
+      { ...planilla, devengosSuplementarios: [{ mes: "2026-07", valor: 241_943 }] },
+      REGLAS_JUL_2026
+    );
+    expect(valorDe(comision, "LIQUIDACION_FINAL_VACACIONES")).toBeGreaterThan(
+      valorDe(extra, "LIQUIDACION_FINAL_VACACIONES")
+    );
+  });
+
   it("emite las cuatro prestaciones, cada una con su norma", () => {
     const r = calcularLiquidacionFinal(planilla, REGLAS_JUL_2026);
     expect(r.lineas.map((l) => l.codigo)).toEqual([

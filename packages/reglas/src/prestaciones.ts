@@ -32,6 +32,15 @@ function salarioBasePrestacional(datos: DatosPrestaciones): number {
   return total / datos.devengosVariables.length;
 }
 
+// Promedio mensual del trabajo suplementario. Se calcula aparte del ordinario
+// porque las vacaciones no lo computan (art. 192 num. 1) aunque cesantías y
+// prima sí: son dos bases distintas, no una base con un descuento.
+function promedioSuplementario(datos: DatosPrestaciones): number {
+  const d = datos.devengosSuplementarios;
+  if (!d || d.length === 0) return 0;
+  return d.reduce((s, x) => s + x.valor, 0) / d.length;
+}
+
 // Días trabajados de un semestre calendario (ene-jun / jul-dic) que caen
 // dentro de [fechaIngreso, fechaCorte], topados a DIAS_MAX_SEMESTRE_PRIMA
 // aunque el semestre real tenga más (ej. 181 días en un semestre bisiesto).
@@ -61,7 +70,13 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
   // doctrina y jurisprudencia (CSJ) excluyen el auxilio de la base de
   // vacaciones porque compensa un gasto de transporte que no se causa
   // mientras el trabajador está de vacaciones.
-  const salarioConAuxilio = salarioOrdinario + (datos.auxilioTransporte ?? 0);
+  //
+  // Y el trabajo suplementario corre al revés: CST art. 192 num. 1 lo excluye
+  // EXPRESAMENTE de la remuneración de vacaciones ("el valor del trabajo en
+  // días de descanso obligatorio y el valor del trabajo suplementario en horas
+  // extras"), pero es salario para cesantías (art. 253) y prima (art. 306).
+  // Por eso hay dos bases y no una con un descuento encima.
+  const salarioConAuxilio = salarioOrdinario + promedioSuplementario(datos) + (datos.auxilioTransporte ?? 0);
 
   const cesantias = redondearPeso((salarioConAuxilio * diasTrabajadosAcumulado) / DIAS_ANO_COMERCIAL);
   const interesesCesantias = redondearPeso((cesantias * diasTrabajadosAcumulado * PCT_INTERES_CESANTIAS) / DIAS_ANO_COMERCIAL);

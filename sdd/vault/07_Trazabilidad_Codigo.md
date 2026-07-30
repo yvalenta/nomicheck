@@ -26,7 +26,7 @@ Empezar por [[00_Indice_Nomina]] si lo que se busca es la regla; empezar por ac�
 | [[01_Ingresos_y_Jornada]] | `recargos.ts`, `auxilio.ts`, `calculadoraTurnos.ts`, `calculadoraSalarioFijo.ts` | `POST /nomina/calcular`, `POST /recargos/calcular`, `POST /batch/liquidar` |
 | [[02_Descuentos_al_Trabajador]] | `deducciones.ts` | `POST /nomina/calcular`, `POST /batch/liquidar` |
 | [[03_Beneficios_de_Ley]] | `prestaciones.ts` | `POST /prima/calcular`, `POST /cesantias/calcular`, `POST /batch/liquidar` |
-| [[04_Fin_del_Contrato]] | `indemnizacion.ts`, `liquidacionFinalService.ts` | `POST /indemnizacion/calcular`, `POST /empresa/empleados/:id/liquidacion-final` |
+| [[04_Fin_del_Contrato]] | `indemnizacion.ts`, `liquidacionFinal.ts` (cálculo puro), `liquidacionFinalService.ts` (con historial en BD) | `POST /indemnizacion/calcular`, `POST /empresa/empleados/:id/liquidacion-final` |
 | [[05_Valores_Actualizables]] | `semillaLegal.ts` (valores), `catalogoReglas.ts` (metadatos), `parametrosSnapshotService.ts` (publicación) | `GET /reglas/parametros`, `GET /batch/parametros`, `GET /reglas/verificadas-al` |
 | [[06_Aportes_Patronales_y_Parafiscales]] | `costoEmpleador.ts`, `constantes.ts` | `GET /empresa/costos` |
 | **(sin archivo en el baúl)** | `retencionFuente.ts` | `POST /retencion/calcular`, `POST /batch/retencion` — ver §6 |
@@ -80,6 +80,7 @@ Las 25 claves que el motor resuelve de `ReglaLegal`, y la sección del baúl que
 | `EMBARGO_JUDICIAL` | [[02_Descuentos_al_Trabajador]] → embargos (tope propio, aparte del 50%) |
 | `PROVISION_CESANTIAS`, `PROVISION_INTERESES_CESANTIAS`, `PROVISION_PRIMA`, `PROVISION_VACACIONES` | [[03_Beneficios_de_Ley]] → provisión (**no** entra al neto) |
 | `LIQUIDACION_FINAL_CESANTIAS`, `LIQUIDACION_FINAL_INTERESES_CESANTIAS`, `LIQUIDACION_FINAL_PRIMA`, `LIQUIDACION_FINAL_VACACIONES` | [[04_Fin_del_Contrato]] → pago efectivo (**sí** entra al neto) |
+| `INDEMNIZACION_DESPIDO` | [[04_Fin_del_Contrato]] → indemnización. **No es una prestación**: es la sanción por terminar el contrato antes de tiempo, y puede ser cero mientras las cuatro de arriba se pagan igual |
 | `CONCEPTO_DECLARADO` | *ninguna — es una línea que declaró quien llamó, no una regla del motor* |
 
 Cada línea calculada lleva además un campo `ley` con su cita legal (ej. `"Ley 2466 de 2025, art. 2"`). Esa cita y este baúl deben decir lo mismo: son las dos caras del mismo hecho.

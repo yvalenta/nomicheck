@@ -23,9 +23,19 @@ No todo lo que el trabajador recibe cuenta para estas 4 prestaciones. La ley (ar
     *   Un **reembolso** para que el trabajador cumpla sus funciones (viáticos de representación, herramientas de trabajo) — no una ganancia para él.
     *   **Propinas voluntarias del cliente** (ej. el "servicio" del 10% en un restaurante): no las paga la empresa, así que nunca son salario.
 
-> ⚠️ **Salario Variable:** si el trabajador tiene comisiones u horas extra habituales que cambian mes a mes, la base para Prima, Cesantías, Intereses y Vacaciones **no** es el último salario devengado, sino el **promedio de lo devengado en el último año** (o del tiempo trabajado, si lleva menos de un año). Cada prestación tiene su propio artículo, aunque la regla del promedio sea la misma: cesantías, art. 253 CST; prima, art. 306 CST; vacaciones, art. 192 num. 2 CST.
+> ⚠️ **Salario Variable:** si el trabajador tiene pagos que cambian mes a mes, la base para Prima, Cesantías, Intereses y Vacaciones **no** es el último salario devengado, sino el **promedio de lo devengado en el último año** (o del tiempo trabajado, si lleva menos de un año). Cada prestación tiene su propio artículo, aunque la regla del promedio sea la misma: cesantías, art. 253 CST; prima, art. 306 CST; vacaciones, art. 192 num. 2 CST.
 
-> A diferencia del Auxilio de Transporte (que se excluye **siempre** de Vacaciones, ver abajo), un pago salarial variable habitual (ej. una comisión) sí entra a la base de las 4 prestaciones — **incluidas** Vacaciones.
+> 🔀 **Pero no todo lo variable entra a las cuatro por igual.** Hay que separar dos cosas que suelen ir juntas en la misma columna de una planilla:
+>
+> | Qué es | Cesantías, intereses y prima | Vacaciones |
+> |---|---|---|
+> | **Salario ordinario variable** — comisiones, bonificaciones habituales | ✅ entra | ✅ **entra** |
+> | **Trabajo suplementario** — horas extra y trabajo en días de descanso obligatorio | ✅ entra | ❌ **NO entra** |
+> | **Auxilio de transporte** | ✅ entra | ❌ NO entra |
+>
+> La exclusión de las horas extra y del dominical no es doctrina: es texto expreso del **CST art. 192 num. 1** — *"se exceptúa el valor del trabajo en días de descanso obligatorio y el valor del trabajo suplementario en horas extras"*. Es decir que las vacaciones se liquidan sobre el salario **ordinario**, mientras las otras tres se liquidan sobre todo lo salarial.
+>
+> Meter las extras en la misma bolsa que las comisiones **sobreliquida las vacaciones** de quien hizo muchas horas extra. Por eso el motor las recibe en dos campos distintos (`devengosVariables` y `devengosSuplementarios`, ver [[07_Trazabilidad_Codigo]]) y no en uno solo con un descuento encima: son dos bases, no una base con ajuste.
 
 ## 1. Prima de Servicios
 Es medio salario que se paga en junio y medio salario que se paga en diciembre. Equivale al 8.33% mensual.

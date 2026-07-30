@@ -21,8 +21,10 @@ export interface DatosLiquidacionFinal {
   /** Último día del contrato. Se liquida hasta acá, inclusive. */
   fechaRetiro: string;
   salarioBase: number;
-  /** Meses devengados si el salario varía (comisiones, recargos, extras). Si se envían, la base prestacional es su promedio y no `salarioBase` — CST art. 253. Sin esto, una liquidación real se queda corta: las planillas colombianas liquidan sobre "salario básico + otros conceptos". */
+  /** Meses de salario ORDINARIO variable (comisiones, bonificaciones habituales). Si se envían, la base prestacional es su promedio y no `salarioBase` — CST art. 253. Entran a las cuatro prestaciones, vacaciones incluidas. */
   devengosVariables?: { mes: string; valor: number }[];
+  /** Meses de horas extra y trabajo en descanso obligatorio. Van aparte: CST art. 192 num. 1 los excluye de vacaciones, pero hacen base de cesantías y prima. Es la diferencia entre liquidar bien y sobreliquidar las vacaciones de quien hizo muchas extras. */
+  devengosSuplementarios?: { mes: string; valor: number }[];
   /** Monto mensual del auxilio si el trabajador tiene derecho. Entra a cesantías y prima, no a vacaciones. */
   auxilioTransporte?: number;
   /** Última fecha hasta la que YA se pagó prima. Si falta, se liquida desde el ingreso. */
@@ -85,6 +87,7 @@ export function calcularLiquidacionFinal(
   const comunes = {
     salarioBase: datos.salarioBase,
     devengosVariables: datos.devengosVariables,
+    devengosSuplementarios: datos.devengosSuplementarios,
     auxilioTransporte: datos.auxilioTransporte,
     diasSuspension: datos.diasSuspension,
   };

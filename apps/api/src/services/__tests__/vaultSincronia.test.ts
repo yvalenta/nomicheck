@@ -21,7 +21,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { auditarVigencias, CATALOGO_REGLAS_LEGALES } from "@pv/reglas";
+import { auditarVigencias, CATALOGO_REGLAS_LEGALES, ETIQUETAS_CONCEPTO } from "@pv/reglas";
 import type { ReglaLegal } from "@pv/reglas";
 import { REGLAS_SEMILLA } from "../../../prisma/semillaLegal.js";
 
@@ -189,6 +189,25 @@ describe("sincronía baúl ↔ catálogo legal", () => {
     // admin la ofrecería para editar y el motor no la resolvería nunca.
     const sinSembrar = [...CLAVES_CATALOGO].filter((c) => !CLAVES_SEMILLA.has(c)).sort();
     expect(sinSembrar, "claves del catálogo que la semilla no trae").toEqual([]);
+  });
+});
+
+describe("cada CodigoConcepto tiene su regla en el baúl", () => {
+  // §4 de 07_Trazabilidad mapea cada código de línea a la regla que lo
+  // respalda. Nada lo vigilaba: al agregar INDEMNIZACION_DESPIDO al motor, la
+  // tabla quedó incompleta y los tres tests de `clave` siguieron en verde,
+  // porque un CodigoConcepto no es una clave de ReglaLegal. Mismo modo de
+  // falla que la fecha publicada — un mapeo documentado sin instrumento.
+  //
+  // Importa por lo mismo que el resto del archivo: el código es el enganche
+  // estable que un comprador usa para correlacionar una línea de su recibo
+  // con la regla que la produjo. Un código sin fila acá rompe esa cadena.
+  it("ningún código del motor falta en la tabla de 07_Trazabilidad", () => {
+    const mapeados = leer(ARCHIVO_TRAZABILIDAD);
+    const sinMapear = Object.keys(ETIQUETAS_CONCEPTO)
+      .filter((codigo) => !mapeados.includes(`\`${codigo}\``))
+      .sort();
+    expect(sinMapear, "códigos de línea que el baúl no respalda con una regla").toEqual([]);
   });
 });
 
