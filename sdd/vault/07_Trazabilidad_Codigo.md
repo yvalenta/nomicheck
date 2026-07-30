@@ -117,8 +117,24 @@ Esto encontró y cerró dos bugs con fecha:
 |---|---|
 | `recargo_dominical` | Solo estaban sembrados los tramos de 2025-07-01 a 2027-06-30. Toda liquidación por turnos anterior a jul-2025 ya fallaba, y el **1-jul-2027** habría fallado la nómina entera. Cerrado: los cuatro tramos sembrados |
 | `divisor_hora_ordinaria` | Una sola fila de 220 cubría 2021-01-01 a 2026-07-14, aplicando la jornada de 44h a periodos en que la jornada legal era de 48, 47 o 46 horas — subestimaba el valor de la hora hasta un 9% en retroactivos de 2021 a jul-2025. Cerrado: los cinco escalones de la Ley 2101 sembrados ([[05_Valores_Actualizables]] §3) |
+| `smlmv`, `auxilio_transporte`, `uvt` | Tenían **una sola fila**, la de 2026, así que el sistema solo podía liquidar desde 2026 aunque el resto del catálogo cubriera de sobra los años anteriores. A diferencia de los dos de arriba, esta historia no se deduce de la ley: hace falta el valor concreto de cada decreto. Cerrado: 2020-2025 sembrados y verificados ([[05_Valores_Actualizables]] §1 y §2) |
 
-Ningún golden test del motor cambió al corregirlos, lo que confirma el diagnóstico: las fechas afectadas eran justamente las que ninguna prueba ejercitaba.
+Ningún golden test del motor cambió al corregir los dos primeros, lo que confirma el diagnóstico: las fechas afectadas eran justamente las que ninguna prueba ejercitaba.
+
+Verificado end-to-end contra `POST /api/batch/liquidar` en el contenedor de dev, un domingo de marzo de cada año con el salario mínimo de ese año:
+
+| Periodo | Auxilio aplicado | Recargo dominical | Divisor efectivo |
+|---|---|---|---|
+| marzo 2020 | $102.854 | 75% | 240 |
+| marzo 2021 | $106.454 | 75% | 240 |
+| marzo 2022 | $117.172 | 75% | 240 |
+| marzo 2023 | $140.606 | 75% | 240 |
+| marzo 2024 | $162.000 | 75% | 235 |
+| marzo 2025 | $200.000 | 75% | 230 |
+| marzo 2026 | $249.095 | 80% | 220 |
+| julio 2027 | $249.095 | **100%** | 210 |
+
+Los ocho periodos fallaban antes de este pase: los siete primeros por falta de valor anual, el último por la ventana cerrada del recargo dominical.
 
 > 🗓️ **Dos fechas distintas, a propósito.** [[05_Valores_Actualizables]] lleva la fecha de la última **verificación legal** de los valores. `REGLAS_VERIFICADAS_AL` lleva la del catálogo **sembrado**. Cuando difieren, el baúl va adelante del catálogo — y eso es información, no un error: significa que hay un paso 2 pendiente.
 
@@ -150,7 +166,7 @@ Devengo y recargos, deducciones de ley, tope de deducciones, los dos regímenes 
 | **Piso de 1 SMLMV en descuentos por convenio** | [[02_Descuentos_al_Trabajador]] documenta la regla legal completa; el motor aplica solo el tope del 50% del devengado, sin el piso. Divergencia conocida y anotada en los dos lados |
 | **Aportes patronales como constantes, no como parámetros** | Los porcentajes de [[06_Aportes_Patronales_y_Parafiscales]] viven en `constantes.ts`, sin vigencia. La exoneración del art. 114-1 ya se movió dos veces por ley; cuando se mueva otra vez no habrá forma de liquidar retroactivamente el periodo anterior |
 | **Cinco lugares describen los mismos parámetros** | [[05_Valores_Actualizables]], `semillaLegal.ts`, el fixture `__tests__/fixtures.ts` del motor, `catalogoReglas.ts` y el `CATALOGO_PUBLICO` de `parametrosSnapshotService.ts`. El test de §5 cubre el baúl contra la semilla, y audita vigencias en los dos catálogos por separado — pero que el fixture y la semilla tengan los **mismos valores** sigue siendo a mano. El fixture existe por una razón válida (el motor no debe depender de Prisma para testearse), así que la salida no es borrarlo sino generarlo |
-| **Pisos de vigencia en valores anuales** | `smlmv`, `auxilio_transporte` y `uvt` arrancan en 2026-01-01, así que **el sistema solo puede liquidar desde 2026**: verificado contra la BD de dev, un `POST /batch/liquidar` con periodo de marzo de 2024 devuelve `internal_error` por estas tres claves (ya no por el recargo dominical ni por el divisor). A diferencia de esos dos, esto **no se cierra razonando**: hace falta sembrar el valor real de cada decreto anual. Es la única barrera que queda para liquidaciones retroactivas de años anteriores |
+| **Piso de la retención en la fuente** | La nómina liquida desde 2020, pero la **retención solo desde 2023**: los topes del art. 336 los cambió la Ley 2277 de 2022 y esa misma ley unificó la tabla de tarifas del art. 383, que vive como constante estructural en `constantes.ts` y no como clave con vigencia. Sembrar los topes viejos sin migrar la tabla daría un número plausible y falso, así que se prefiere que lance. Cerrarlo de verdad exige convertir `TABLA_RETENCION_FUENTE_ART_383` en un valor con vigencia — ver [[05_Valores_Actualizables]] §2 |
 
 ## 7. Cómo lo usa la app, y cómo lo usa el API
 

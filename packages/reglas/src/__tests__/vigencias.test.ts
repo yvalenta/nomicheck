@@ -25,6 +25,13 @@ const CLAVES_INCONDICIONALES = [
   "hora_extra_nocturna",
 ];
 
+/**
+ * Claves cuyo valor lo fija un decreto o resolución cada año. A diferencia de
+ * las de arriba, su historia no se puede deducir: hace falta el valor real de
+ * cada norma. Son las que fijan el piso de lo liquidable.
+ */
+const CLAVES_ANUALES = ["smlmv", "auxilio_transporte", "uvt"];
+
 describe("auditarVigencias", () => {
   it("no reporta huecos cuando los tramos son contiguos y el último es abierto", () => {
     const reglas: ReglaLegal[] = [
@@ -93,6 +100,47 @@ describe("el catálogo no deja sin cubrir ninguna fecha liquidable", () => {
       (h) => h.motivo === "despues-del-ultimo-tramo"
     );
     expect(cerradas, "claves que dejan de resolver en una fecha futura conocida").toEqual([]);
+  });
+
+  it("las claves anuales cubren sin huecos desde 2020, año por año", () => {
+    // Un hueco de un solo día entre dos tramos anuales (p. ej. olvidar el
+    // 31-dic) tumbaría la liquidación de ese día y de ningún otro — el peor
+    // tipo de bug para encontrar a mano.
+    const huecos = auditarVigencias(REGLAS_JUL_2026, "2020-01-01", "2030-12-31", CLAVES_ANUALES);
+    expect(huecos, "años sin valor sembrado en las claves de decreto anual").toEqual([]);
+  });
+
+  // El catálogo tiene DOS pisos, y son distintos a propósito:
+  //
+  //   nómina    → 2020-01-01. Toda clave que una liquidación de salario
+  //               necesita está sembrada desde ahí.
+  //   retención → 2023-01-01. Los topes del art. 336 los cambió la Ley 2277
+  //               de 2022 (el tope anual bajó de 5.040 a 1.340 UVT), y esa
+  //               misma ley unificó la tabla de tarifas marginales del art.
+  //               383. Esa tabla es una constante ESTRUCTURAL del motor
+  //               (`TABLA_RETENCION_FUENTE_ART_383` en constantes.ts), no una
+  //               clave con vigencia — así que sembrar los topes viejos no
+  //               alcanzaría para recalcular una retención de 2022: saldría
+  //               con los topes de entonces y las tarifas de ahora. Preferimos
+  //               que lance antes que devolver un número plausible y falso.
+  const CLAVES_RETENCION = ["limite_rentas_exentas_porcentaje", "limite_rentas_exentas_uvt_anual"];
+
+  it("todas las claves de nómina arrancan en 2020 o antes", () => {
+    // Basta UNA que arranque después para que 2020 sea inliquidable: el
+    // resolutor lanza por la primera que no encuentre.
+    const tardias = auditarVigencias(REGLAS_JUL_2026, "2020-01-01", "2030-12-31")
+      .filter((h) => h.motivo === "antes-del-primer-tramo")
+      .map((h) => h.clave)
+      .filter((c) => !CLAVES_RETENCION.includes(c));
+    expect(tardias, "claves de nómina que arrancan después de 2020").toEqual([]);
+  });
+
+  it("las claves de retención arrancan en 2023, el piso que fijó la Ley 2277", () => {
+    // Se afirma el límite en vez de ignorarlo: si alguien siembra los topes
+    // pre-2023 sin migrar también la tabla del art. 383, este test falla y
+    // obliga a leer el comentario de arriba antes de seguir.
+    const desde2023 = auditarVigencias(REGLAS_JUL_2026, "2023-01-01", "2030-12-31", CLAVES_RETENCION);
+    expect(desde2023, "los topes de retención deben cubrir 2023 en adelante").toEqual([]);
   });
 });
 

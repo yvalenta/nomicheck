@@ -13,7 +13,33 @@
 // valor). Revisar si la reforma pensional (Ley 2381 de 2024, hoy suspendida
 // por la Corte Constitucional) se reactiva — cambiaría fondo_solidaridad.
 export const REGLAS_SEMILLA = [
+  // --- Valores anuales, con su historia desde 2020 ---
+  //
+  // El decreto de diciembre del año N fija el valor del año N+1, y cada uno
+  // deroga al anterior: por eso son tramos cerrados de 1-ene a 31-dic, no
+  // filas abiertas. Sin la historia, el sistema solo podía liquidar desde
+  // 2026 — cualquier periodo anterior lanzaba `No hay regla legal vigente`
+  // aunque el resto del catálogo sí lo cubriera. 2020-01-01 queda como piso
+  // uniforme de todo el catálogo (es también el piso de las tarifas de
+  // salud/pensión y del umbral del fondo de solidaridad).
+  //
+  // Valores y decretos verificados el 30-jul-2026 contra dos fuentes
+  // independientes (actualicese.com y consultorcontable.com) y, en los casos
+  // en que discrepaban, contra el Gestor Normativo de Función Pública.
+  { clave: "smlmv", valor: 877803, vigenteDesde: "2020-01-01", vigenteHasta: "2020-12-31", fuente: "Decreto 2360 del 26 de diciembre de 2019" },
+  { clave: "smlmv", valor: 908526, vigenteDesde: "2021-01-01", vigenteHasta: "2021-12-31", fuente: "Decreto 1785 del 29 de diciembre de 2020" },
+  { clave: "smlmv", valor: 1000000, vigenteDesde: "2022-01-01", vigenteHasta: "2022-12-31", fuente: "Decreto 1724 del 15 de diciembre de 2021" },
+  { clave: "smlmv", valor: 1160000, vigenteDesde: "2023-01-01", vigenteHasta: "2023-12-31", fuente: "Decreto 2613 del 28 de diciembre de 2022" },
+  { clave: "smlmv", valor: 1300000, vigenteDesde: "2024-01-01", vigenteHasta: "2024-12-31", fuente: "Decreto 2292 del 29 de diciembre de 2023" },
+  { clave: "smlmv", valor: 1423500, vigenteDesde: "2025-01-01", vigenteHasta: "2025-12-31", fuente: "Decreto 1572 del 24 de diciembre de 2024" },
   { clave: "smlmv", valor: 1750905, vigenteDesde: "2026-01-01", fuente: "Decreto 1469 de 2025" },
+
+  { clave: "auxilio_transporte", valor: 102854, vigenteDesde: "2020-01-01", vigenteHasta: "2020-12-31", fuente: "Decreto 2361 del 26 de diciembre de 2019" },
+  { clave: "auxilio_transporte", valor: 106454, vigenteDesde: "2021-01-01", vigenteHasta: "2021-12-31", fuente: "Decreto 1786 del 29 de diciembre de 2020" },
+  { clave: "auxilio_transporte", valor: 117172, vigenteDesde: "2022-01-01", vigenteHasta: "2022-12-31", fuente: "Decreto 1725 del 15 de diciembre de 2021" },
+  { clave: "auxilio_transporte", valor: 140606, vigenteDesde: "2023-01-01", vigenteHasta: "2023-12-31", fuente: "Decreto 2614 del 28 de diciembre de 2022" },
+  { clave: "auxilio_transporte", valor: 162000, vigenteDesde: "2024-01-01", vigenteHasta: "2024-12-31", fuente: "Decreto 2293 del 29 de diciembre de 2023" },
+  { clave: "auxilio_transporte", valor: 200000, vigenteDesde: "2025-01-01", vigenteHasta: "2025-12-31", fuente: "Decreto 1573 del 24 de diciembre de 2024" },
   { clave: "auxilio_transporte", valor: 249095, vigenteDesde: "2026-01-01", fuente: "Decreto 1470 de 2025" },
   // Recargo dominical/festivo: los CUATRO tramos, no solo los vigentes.
   //
@@ -81,6 +107,16 @@ export const REGLAS_SEMILLA = [
   // sistema de depuración, E.T. art. 383/388 — motor en retencionFuente.ts).
   // Verificado 16-jul-2026 (uvt/AFC/336); tabla de tarifas del art. 383 vive
   // como constante estructural en constantes.ts (no cambia por decreto anual).
+  // UVT: misma lógica que el SMLMV — resolución de la DIAN a fin de año para
+  // el año siguiente, tramos cerrados de 1-ene a 31-dic. La usa toda la
+  // depuración de retención en la fuente, así que sin historia no se puede
+  // recalcular una retención de un año anterior.
+  { clave: "uvt", valor: 35607, vigenteDesde: "2020-01-01", vigenteHasta: "2020-12-31", fuente: "DIAN, Resolución 000084 de 2019" },
+  { clave: "uvt", valor: 36308, vigenteDesde: "2021-01-01", vigenteHasta: "2021-12-31", fuente: "DIAN, Resolución 000111 de 11-12-2020" },
+  { clave: "uvt", valor: 38004, vigenteDesde: "2022-01-01", vigenteHasta: "2022-12-31", fuente: "DIAN, Resolución 000140 de 2021" },
+  { clave: "uvt", valor: 42412, vigenteDesde: "2023-01-01", vigenteHasta: "2023-12-31", fuente: "DIAN, Resolución 001264 de 18-11-2022" },
+  { clave: "uvt", valor: 47065, vigenteDesde: "2024-01-01", vigenteHasta: "2024-12-31", fuente: "DIAN, Resolución 000187 de 2023" },
+  { clave: "uvt", valor: 49799, vigenteDesde: "2025-01-01", vigenteHasta: "2025-12-31", fuente: "DIAN, Resolución 000193 de 04-12-2024" },
   { clave: "uvt", valor: 52374, vigenteDesde: "2026-01-01", fuente: "DIAN, Resolución 000238 de 15-12-2025" },
   { clave: "limite_porcentaje_afc", valor: 0.30, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4 (Ley 1607 de 2012)" },
   { clave: "limite_anual_uvt_afc", valor: 3800, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4 (Ley 1607 de 2012)" },

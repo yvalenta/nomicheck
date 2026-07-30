@@ -162,6 +162,33 @@ describe("cobertura temporal de la semilla real", () => {
     );
     expect(entreTramos, "tramos no contiguos dentro de una misma clave").toEqual([]);
   });
+
+  it("las claves de decreto anual cubren año por año desde 2020", () => {
+    // smlmv, auxilio_transporte y uvt no se pueden deducir: cada año sale de
+    // un decreto o resolución distinta. Un año faltante deja inliquidable ese
+    // año entero, y un hueco de un día (olvidar el 31-dic) deja inliquidable
+    // ese día solo — el bug más difícil de ver a mano.
+    const huecos = auditarVigencias(SEMILLA, "2020-01-01", "2030-12-31", [
+      "smlmv",
+      "auxilio_transporte",
+      "uvt",
+    ]);
+    expect(huecos, "años sin valor sembrado").toEqual([]);
+  });
+
+  it("2020 es el piso de lo liquidable en nómina", () => {
+    // Dos exclusiones, ambas límites reales y no descuidos:
+    //  - los topes de retención arrancan en 2023 (Ley 2277 de 2022) — ver el
+    //    comentario largo en vigencias.test.ts de packages/reglas;
+    //  - los knobs de pago on-chain arrancan cuando se lanzó la función: no
+    //    existe un "valor histórico" de una política de producto.
+    const soloRetencion = ["limite_rentas_exentas_porcentaje", "limite_rentas_exentas_uvt_anual"];
+    const tardias = auditarVigencias(SEMILLA, "2020-01-01", "2030-12-31")
+      .filter((h) => h.motivo === "antes-del-primer-tramo")
+      .map((h) => h.clave)
+      .filter((c) => !soloRetencion.includes(c) && !CLAVES_POLITICA.has(c));
+    expect(tardias, "claves de nómina que arrancan después de 2020").toEqual([]);
+  });
 });
 
 describe("integridad de la red de wikilinks", () => {

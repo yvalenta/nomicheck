@@ -4,7 +4,23 @@ import type { Festivo, ReglaLegal } from "../types.js";
 // duplica aquí a propósito: el motor no debe depender de Prisma para
 // testearse (packages/reglas es TS puro, sin ORM).
 export const REGLAS_JUL_2026: ReglaLegal[] = [
+  // Valores anuales con su historia desde 2020 (tramos cerrados: el decreto
+  // de diciembre fija el año siguiente y deroga al anterior). Están acá para
+  // que el fixture no diverja de la semilla real y para poder testear
+  // liquidaciones retroactivas.
+  { clave: "smlmv", valor: 877803, vigenteDesde: "2020-01-01", vigenteHasta: "2020-12-31", fuente: "Decreto 2360 del 26 de diciembre de 2019" },
+  { clave: "smlmv", valor: 908526, vigenteDesde: "2021-01-01", vigenteHasta: "2021-12-31", fuente: "Decreto 1785 del 29 de diciembre de 2020" },
+  { clave: "smlmv", valor: 1000000, vigenteDesde: "2022-01-01", vigenteHasta: "2022-12-31", fuente: "Decreto 1724 del 15 de diciembre de 2021" },
+  { clave: "smlmv", valor: 1160000, vigenteDesde: "2023-01-01", vigenteHasta: "2023-12-31", fuente: "Decreto 2613 del 28 de diciembre de 2022" },
+  { clave: "smlmv", valor: 1300000, vigenteDesde: "2024-01-01", vigenteHasta: "2024-12-31", fuente: "Decreto 2292 del 29 de diciembre de 2023" },
+  { clave: "smlmv", valor: 1423500, vigenteDesde: "2025-01-01", vigenteHasta: "2025-12-31", fuente: "Decreto 1572 del 24 de diciembre de 2024" },
   { clave: "smlmv", valor: 1750905, vigenteDesde: "2026-01-01", fuente: "Decreto 1469 de 2025" },
+  { clave: "auxilio_transporte", valor: 102854, vigenteDesde: "2020-01-01", vigenteHasta: "2020-12-31", fuente: "Decreto 2361 del 26 de diciembre de 2019" },
+  { clave: "auxilio_transporte", valor: 106454, vigenteDesde: "2021-01-01", vigenteHasta: "2021-12-31", fuente: "Decreto 1786 del 29 de diciembre de 2020" },
+  { clave: "auxilio_transporte", valor: 117172, vigenteDesde: "2022-01-01", vigenteHasta: "2022-12-31", fuente: "Decreto 1725 del 15 de diciembre de 2021" },
+  { clave: "auxilio_transporte", valor: 140606, vigenteDesde: "2023-01-01", vigenteHasta: "2023-12-31", fuente: "Decreto 2614 del 28 de diciembre de 2022" },
+  { clave: "auxilio_transporte", valor: 162000, vigenteDesde: "2024-01-01", vigenteHasta: "2024-12-31", fuente: "Decreto 2293 del 29 de diciembre de 2023" },
+  { clave: "auxilio_transporte", valor: 200000, vigenteDesde: "2025-01-01", vigenteHasta: "2025-12-31", fuente: "Decreto 1573 del 24 de diciembre de 2024" },
   { clave: "auxilio_transporte", valor: 249095, vigenteDesde: "2026-01-01", fuente: "Decreto 1470 de 2025" },
   { clave: "recargo_dominical", valor: 0.75, vigenteDesde: "2003-01-01", vigenteHasta: "2025-06-30", fuente: "Ley 789 de 2002, art. 26 (CST art. 179)" },
   { clave: "recargo_dominical", valor: 0.8, vigenteDesde: "2025-07-01", vigenteHasta: "2026-06-30", fuente: "Ley 2466 de 2025, art. 2" },
@@ -28,6 +44,12 @@ export const REGLAS_JUL_2026: ReglaLegal[] = [
   { clave: "embargo_alimentos_pct_max", valor: 0.5, vigenteDesde: "1950-01-01", fuente: "CST art. 156" },
   { clave: "max_horas_extra_dia", valor: 2, vigenteDesde: "1967-01-01", fuente: "D.L. 13 de 1967, art. 1" },
   { clave: "max_horas_extra_semana", valor: 12, vigenteDesde: "1981-01-01", fuente: "Ley 6 de 1981" },
+  { clave: "uvt", valor: 35607, vigenteDesde: "2020-01-01", vigenteHasta: "2020-12-31", fuente: "DIAN, Resolución 000084 de 2019" },
+  { clave: "uvt", valor: 36308, vigenteDesde: "2021-01-01", vigenteHasta: "2021-12-31", fuente: "DIAN, Resolución 000111 de 11-12-2020" },
+  { clave: "uvt", valor: 38004, vigenteDesde: "2022-01-01", vigenteHasta: "2022-12-31", fuente: "DIAN, Resolución 000140 de 2021" },
+  { clave: "uvt", valor: 42412, vigenteDesde: "2023-01-01", vigenteHasta: "2023-12-31", fuente: "DIAN, Resolución 001264 de 18-11-2022" },
+  { clave: "uvt", valor: 47065, vigenteDesde: "2024-01-01", vigenteHasta: "2024-12-31", fuente: "DIAN, Resolución 000187 de 2023" },
+  { clave: "uvt", valor: 49799, vigenteDesde: "2025-01-01", vigenteHasta: "2025-12-31", fuente: "DIAN, Resolución 000193 de 04-12-2024" },
   { clave: "uvt", valor: 52374, vigenteDesde: "2026-01-01", fuente: "DIAN, Resolución 000238 de 15-12-2025" },
   { clave: "limite_porcentaje_afc", valor: 0.3, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4" },
   { clave: "limite_anual_uvt_afc", valor: 3800, vigenteDesde: "2012-01-01", fuente: "E.T. art. 126-1 y 126-4" },

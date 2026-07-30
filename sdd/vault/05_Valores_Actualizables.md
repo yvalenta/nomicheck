@@ -31,6 +31,22 @@ Cada valor parametrizado de este archivo lleva su **`clave`** al lado. Esa clave
 
 Quién tiene derecho a cada uno y cómo entran a la base de cada cálculo: [[01_Ingresos_y_Jornada]] (devengo), [[02_Descuentos_al_Trabajador]] (el auxilio **no** hace base de salud/pensión), [[03_Beneficios_de_Ley]] (el auxilio **sí** entra a prima y cesantías, **no** a vacaciones).
 
+### Historia desde 2020
+
+Una liquidación retroactiva tiene derecho al valor de **su** fecha, no al de hoy. Por eso los años anteriores no se borran al llegar enero: se cierran. Cada decreto de diciembre fija el año siguiente y deroga expresamente al anterior, así que estos son tramos cerrados de 1-ene a 31-dic.
+
+| Año | SMLMV | Auxilio de transporte | Decretos (mismo día, número consecutivo) |
+|---|---|---|---|
+| 2020 | $877.803 | $102.854 | 2360 y 2361 del 26 de diciembre de 2019 |
+| 2021 | $908.526 | $106.454 | 1785 y 1786 del 29 de diciembre de 2020 |
+| 2022 | $1.000.000 | $117.172 | 1724 y 1725 del 15 de diciembre de 2021 |
+| 2023 | $1.160.000 | $140.606 | 2613 y 2614 del 28 de diciembre de 2022 |
+| 2024 | $1.300.000 | $162.000 | 2292 y 2293 del 29 de diciembre de 2023 |
+| 2025 | $1.423.500 | $200.000 | 1572 y 1573 del 24 de diciembre de 2024 |
+| **2026** | **$1.750.905** | **$249.095** | **1469 y 1470 del 29 de diciembre de 2025** |
+
+*Valores y números de decreto verificados el 30 de julio de 2026 contra dos fuentes independientes y, donde discrepaban, contra el Gestor Normativo de Función Pública. **2020-01-01 es el piso de lo liquidable**: antes de esa fecha el sistema no tiene con qué calcular y lanza excepción en vez de inventar un valor.*
+
 > ⚠️ **Situación jurídica del decreto (importante):** El Decreto 1469 de 2025 estuvo suspendido provisionalmente por el Consejo de Estado entre el 12 de febrero de 2026 y el 17 de julio de 2026, mientras se resolvía una demanda de nulidad por falta de motivación técnica del incremento del 23,7%. El 17 de julio de 2026 el Consejo de Estado **revocó la suspensión** y el decreto volvió a tener plena vigencia. Durante todo el proceso el valor pagado a los trabajadores **nunca cambió** ($1.750.905), porque el Gobierno expidió un decreto transitorio (Decreto 159 de 2026) que mantuvo la misma cifra. El proceso de nulidad de fondo sigue abierto: si el sistema de nómina necesita blindarse contra un fallo definitivo que anule el decreto, este es el punto a vigilar. Fuente: Consejo de Estado, Sección Segunda, auto del 17 de julio de 2026.
 
 **Regla de negocio recomendada para el software:** guardar el SMLMV como un parámetro con vigencia (`fecha_inicio`, `fecha_fin`, `valor`, `fuente`) y no como una constante fija en el código, precisamente porque este valor puede volver a estar en disputa judicial. Esto ya está implementado: es la tabla `ReglaLegal`.
@@ -39,11 +55,21 @@ Quién tiene derecho a cada uno y cómo entran a la base de cada cálculo: [[01_
 
 ## 2. UVT (Unidad de Valor Tributario) 2026
 
-| Concepto | `clave` | Valor |
+La fija la DIAN por resolución antes de fin de año, aplicándole al valor anterior la variación del IPC entre el 1 de octubre del año pasado y el 1 de octubre del año en curso. `clave`: `uvt`.
+
+| Año | UVT | Norma |
 |---|---|---|
-| UVT 2026 | `uvt` | **$52.374** |
-| Norma | — | Resolución DIAN 000238 del 15 de diciembre de 2025 |
-| Uso en nómina | — | Topes de retención en la fuente por salarios, sanciones mínimas, y otros topes tributarios que dependen de la nómina (ver §9). |
+| 2020 | $35.607 | Resolución DIAN 000084 de 2019 |
+| 2021 | $36.308 | Resolución DIAN 000111 del 11 de diciembre de 2020 |
+| 2022 | $38.004 | Resolución DIAN 000140 de 2021 |
+| 2023 | $42.412 | Resolución DIAN 001264 del 18 de noviembre de 2022 |
+| 2024 | $47.065 | Resolución DIAN 000187 de 2023 |
+| 2025 | $49.799 | Resolución DIAN 000193 del 4 de diciembre de 2024 |
+| **2026** | **$52.374** | **Resolución DIAN 000238 del 15 de diciembre de 2025** |
+
+**Uso en nómina:** topes de retención en la fuente por salarios, sanciones mínimas, y otros topes tributarios que dependen de la nómina (ver §8).
+
+> ⚠️ **Tener la UVT de un año no alcanza para recalcular la retención de ese año.** Los topes del art. 336 del E.T. los cambió la Ley 2277 de 2022 (el tope anual bajó de 5.040 a 1.340 UVT) y esa misma ley unificó la tabla de tarifas marginales del art. 383. Esa tabla es una **constante estructural** del motor, no un valor con vigencia — así que una retención anterior a 2023 saldría con los topes de entonces y las tarifas de ahora. El sistema prefiere lanzar antes que devolver un número plausible y falso: **el piso de la retención es 2023**, aunque el de la nómina sea 2020.
 
 ---
 
