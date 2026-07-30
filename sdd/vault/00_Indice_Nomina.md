@@ -46,7 +46,7 @@ Y en los cinco pasos, cada número sale de [[05_Valores_Actualizables]].
 
 Ver la checklist de mantenimiento anual al final de [[05_Valores_Actualizables]]. En resumen: cada vez que el Gobierno publique el decreto de salario mínimo (diciembre) o la DIAN publique la UVT (diciembre), solo se edita ese archivo. Los archivos de reglas (01-04, 06) solo deben tocarse cuando cambia una **ley**, no un valor — por ejemplo, la Ley 2466 de 2025 obligó a corregir el horario nocturno y la fórmula del recargo dominical en [[01_Ingresos_y_Jornada]], porque eso sí fue un cambio de regla, no solo de cifra.
 
-Editar el baúl **no** cambia lo que el sistema calcula: los valores hay que sembrarlos también en la base. El procedimiento de los dos pasos, y el test que falla si se hace solo uno, están en [[07_Trazabilidad_Codigo]].
+Editar el baúl **no** cambia lo que el sistema calcula: los valores hay que sembrarlos también en la base. El procedimiento de los tres pasos —editar acá, sembrar, y mover la fecha que el API publica—, cuándo el seed no alcanza y hace falta una migración, y los tests que fallan si se hace solo el primero, están en [[07_Trazabilidad_Codigo]] §5.
 
 ## ⚠️ Lo que este baúl todavía no cubre
 

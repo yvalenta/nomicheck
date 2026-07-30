@@ -16,12 +16,20 @@ import { obtenerReglasYFestivos } from "./nominaService.js";
 // y 06, valores actualizables solo en 05_Valores_Actualizables.md, y el
 // mapa clave↔regla↔código en 07_Trazabilidad_Codigo.md); el catálogo
 // `ReglaLegal` (Prisma) es la implementación de ese spec, y deben coincidir
-// en cada revisión. Actualizar esta fecha cuando se revise el vault + se
-// re-siembre el catálogo. RUMBO §2.4.
+// en cada revisión. RUMBO §2.4.
+//
+// Esta constante NO se elige acá: es la fecha de verificación más reciente
+// que declara el encabezado de `05_Valores_Actualizables.md`, y hay un test
+// que falla si las dos se separan. El baúl manda porque es donde queda el
+// alcance de cada pasada (qué se miró y contra qué fuente); acá solo cabe
+// una fecha, y por eso lleva la última. Es el paso 3 del procedimiento de
+// `07_Trazabilidad_Codigo.md` §5 — el único que no rompe ningún cálculo si
+// se olvida, y por eso el que se olvidaba.
 //
 // Que coincidan no es un acto de fe: `vaultSincronia.test.ts` falla si se
-// siembra una clave que el vault no documenta, o al revés.
-export const REGLAS_VERIFICADAS_AL = "2026-07-16";
+// siembra una clave que el vault no documenta, si el vault cita una que no
+// existe, o si esta fecha se queda atrás.
+export const REGLAS_VERIFICADAS_AL = "2026-07-30";
 
 interface ReglaCanonica {
   clave: string;

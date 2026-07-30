@@ -84,21 +84,40 @@ Las 25 claves que el motor resuelve de `ReglaLegal`, y la sección del baúl que
 
 Cada línea calculada lleva además un campo `ley` con su cita legal (ej. `"Ley 2466 de 2025, art. 2"`). Esa cita y este baúl deben decir lo mismo: son las dos caras del mismo hecho.
 
-## 5. El procedimiento de dos pasos (y el test que lo vigila)
+## 5. El procedimiento de tres pasos (y los tests que lo vigilan)
 
-Cambiar un valor legal son **siempre dos pasos**, nunca uno:
+Cambiar un valor legal son **siempre tres pasos**, nunca uno:
 
-1. **Editar [[05_Valores_Actualizables]]** — el número, su norma, su vigencia.
+1. **Editar [[05_Valores_Actualizables]]** — el número, su norma, su vigencia. Y la fecha de verificación del encabezado, si se volvió a mirar la fuente oficial.
 2. **Sembrarlo** en `apps/api/prisma/semillaLegal.ts` como **fila nueva** con su `vigenteDesde`. Nunca editar la fila vieja: una liquidación retroactiva tiene derecho a resolver el valor que estaba vigente en su fecha.
 3. Actualizar `REGLAS_VERIFICADAS_AL` en `reglasVerificadasService.ts`, que es la fecha que el API publica como "catálogo verificado al…".
 
-El instrumento que vigila esto es `apps/api/src/services/__tests__/vaultSincronia.test.ts`. Falla si:
+### Cuándo el seed no alcanza y hace falta una migración
+
+El paso 2 termina en `pnpm --filter @pv/api db:seed`, que hace un *upsert* por `(clave, vigenteDesde)`. Sobre una base vacía eso basta y es idempotente. Sobre una base que ya tiene datos —o sea, dev y producción— depende de qué cambió:
+
+| Cambio en la semilla | ¿Basta con re-sembrar? |
+|---|---|
+| Fila nueva: una `clave` nueva, o un tramo nuevo de una existente | ✅ entra sola |
+| Otro `valor` para la misma `(clave, vigenteDesde)` | ✅ se actualiza |
+| Cambió el `vigenteDesde` o el `vigenteHasta` de una fila que ya existía | ❌ **hace falta migración** |
+
+El caso rojo no es teórico: es el que obligó a escribir `20260730140000_vigencias_recargos_y_divisor`. La fila vieja **sobrevive** al re-seed, porque la llave por la que se busca es justamente lo que cambió; y como el resolutor se queda con el `vigenteDesde` más reciente, la fila obsoleta le gana al tramo histórico correcto. Un re-seed sin limpieza deja el bug intacto y encima con datos contradictorios en la base.
+
+Regla práctica: **si se movió una ventana de vigencia, va migración** (`DELETE` exacto + `INSERT ... WHERE NOT EXISTS`, para que siga siendo idempotente). Si solo se agregó historia sin tocar lo existente, la migración es solo `INSERT` — así fue `20260730160000_valores_anuales_historicos`.
+
+Y un detalle de entorno que muerde: el entrypoint de dev **no** corre migraciones (el de producción sí). En dev hay que aplicarlas a mano antes de sembrar — ver `docs/seeds-y-acceso-local.md`.
+
+### Los instrumentos
+
+El principal es `apps/api/src/services/__tests__/vaultSincronia.test.ts`. Falla si:
 
 *   una `clave` de `REGLAS_SEMILLA` no aparece documentada en el baúl (se sembró un valor sin explicarlo);
 *   el baúl documenta una `clave` que no existe en la semilla ni en el catálogo (quedó prosa sobre algo que se borró);
 *   un enlace interno del baúl apunta a un archivo que no existe;
 *   un archivo del baúl queda huérfano, sin que nadie lo enlace;
-*   **una clave deja de resolver en alguna fecha** — ventana cerrada hacia el futuro, hueco entre tramos, o piso posterior a 2021 en las claves que las calculadoras resuelven sin condición.
+*   **una clave deja de resolver en alguna fecha** — ventana cerrada hacia el futuro, hueco entre tramos, o piso posterior a 2021 en las claves que las calculadoras resuelven sin condición;
+*   **el paso 3 quedó pendiente** — `REGLAS_VERIFICADAS_AL` no coincide con la última fecha de verificación que declara el encabezado de [[05_Valores_Actualizables]]. Es el paso que se olvida, porque es el único que no rompe ningún cálculo: solo hace que el API publique una fecha vieja a quien compró procedencia.
 
 Es deliberadamente un test y no un linter aparte: corre con `pnpm test`, en el mismo lugar donde ya se verifica que el motor no se rompa.
 
@@ -136,7 +155,9 @@ Verificado end-to-end contra `POST /api/batch/liquidar` en el contenedor de dev,
 
 Los ocho periodos fallaban antes de este pase: los siete primeros por falta de valor anual, el último por la ventana cerrada del recargo dominical.
 
-> 🗓️ **Dos fechas distintas, a propósito.** [[05_Valores_Actualizables]] lleva la fecha de la última **verificación legal** de los valores. `REGLAS_VERIFICADAS_AL` lleva la del catálogo **sembrado**. Cuando difieren, el baúl va adelante del catálogo — y eso es información, no un error: significa que hay un paso 2 pendiente.
+> 🗓️ **Las dos fechas son una sola, y hay un test que lo exige.** El encabezado de [[05_Valores_Actualizables]] declara cuándo se verificaron los valores contra la fuente oficial; `REGLAS_VERIFICADAS_AL` publica esa misma fecha a quien compró procedencia. Estuvieron sueltas a propósito, con la idea de que la diferencia fuera *información* —baúl adelantado, paso 2 pendiente—, y terminó significando lo contrario: el catálogo se re-verificó y se re-sembró dos veces sin que nadie moviera la constante. Una divergencia que nada señala no informa a nadie.
+>
+> El corolario práctico es que **los tres pasos van en el mismo commit**. Mientras estén a medias el test está rojo, y eso es correcto: hay trabajo en vuelo, no un estado estable que valga la pena describir. Lo que no se vale es apagarlo al revés, moviendo la constante antes de sembrar — sería publicar la fecha de verificación de un catálogo que todavía no existe. Y si la verificación fue **parcial**, no se resuelve dejando las fechas distintas: se anota su alcance en el encabezado del baúl —como está hoy la de los valores históricos 2020-2025— y la constante lleva la más reciente.
 
 ## 6. Estado real de cobertura
 

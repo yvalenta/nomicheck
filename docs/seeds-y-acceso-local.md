@@ -23,11 +23,43 @@ cualquier cuenta que crees ahí es real.
 
 ```bash
 docker compose up -d          # api (3001), web (5173) y db
+```
+
+El entrypoint de dev (`bin/docker-entrypoint.dev`) reinstala dependencias y
+regenera el cliente de Prisma, pero **no aplica migraciones** — eso solo lo hace
+el de producción. En dev se aplican a mano, y **antes** del seed:
+
+```bash
+docker compose exec api ./node_modules/.bin/prisma migrate deploy
+```
+
+```bash
 pnpm --filter @pv/api db:seed # reglas legales + festivos
 ```
 
-`prisma/seed.ts` siembra el **catálogo legal** (SMLMV, recargos, UVT, topes…),
-no usuarios ni empresas. Es idempotente: se puede correr las veces que haga falta.
+`prisma/seed.ts` siembra el **catálogo legal** (SMLMV, recargos, UVT, topes…) y
+los festivos, no usuarios ni empresas.
+
+### El seed no reemplaza a las migraciones
+
+El seed hace `upsert` por `(clave, vigenteDesde)`. Sobre una base **vacía** eso
+alcanza y es idempotente. Sobre una base que ya tiene datos, no siempre:
+
+| Cambio en `semillaLegal.ts` | ¿Basta con re-sembrar? |
+|---|---|
+| Fila nueva (una `clave` nueva, o un tramo nuevo) | ✅ entra sola |
+| Otro `valor` para la misma `(clave, vigenteDesde)` | ✅ se actualiza |
+| Cambió el `vigenteDesde` o el `vigenteHasta` de una fila que ya existía | ❌ **hace falta migración** |
+
+El caso rojo es el peligroso y no es hipotético: la fila vieja sobrevive al
+re-seed, y como el resolutor elige la de `vigenteDesde` más reciente, puede
+ganarle al tramo correcto. Quedan datos contradictorios y el bug intacto. Por eso
+la corrección de vigencias del divisor de jornada fue una migración con `DELETE` +
+`INSERT` (`20260730140000_vigencias_recargos_y_divisor`) y no un re-seed.
+
+Regla práctica: **si cambió una ventana de vigencia, va migración.** El
+procedimiento completo de cómo se cambia un valor legal está en
+[`sdd/vault/07_Trazabilidad_Codigo.md`](../sdd/vault/07_Trazabilidad_Codigo.md) §5.
 
 ## Conseguir una cuenta con rol de administrador
 
@@ -102,3 +134,4 @@ curl -s http://localhost:3001/api/health   # {"ok":true,...}
 | El panel abre pero todo sale vacío | La API está caída y el chequeo de rol falló abierto | Levantar la API |
 | `Failed to fetch dynamically imported module` | La pestaña quedó abierta desde antes de un build y pide chunks con hash viejo | Ya está cubierto por `lib/lazyConReintento.ts`: recarga una vez sola |
 | `port is already allocated` en el `db` | OrbStack u otro Postgres ocupa el 5432 | El binding del host está comentado a propósito en `docker-compose.yml`; la API llega por la red de Docker (`db:5432`) |
+| `No hay regla legal vigente` al liquidar un periodo viejo | Tu base quedó sin las migraciones de vigencias; el seed solo no las aplica | `prisma migrate deploy` y después `db:seed` (ver arriba) |

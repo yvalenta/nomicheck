@@ -15,7 +15,7 @@
 //
 // Cuando falla, la respuesta correcta casi nunca es relajar el test: es
 // documentar la clave nueva en `05_Valores_Actualizables.md` y mapearla en
-// `07_Trazabilidad_Codigo.md`. Ver el procedimiento de dos pasos en ese
+// `07_Trazabilidad_Codigo.md`. Ver el procedimiento de tres pasos en ese
 // mismo archivo, §5.
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,6 +26,10 @@ import type { ReglaLegal } from "@pv/reglas";
 import { REGLAS_SEMILLA } from "../../../prisma/semillaLegal.js";
 
 const DIR_VAULT = join(dirname(fileURLToPath(import.meta.url)), "../../../../../sdd/vault");
+const RUTA_SERVICIO_VERIFICADAS = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../reglasVerificadasService.ts"
+);
 
 const ARCHIVO_VALORES = "05_Valores_Actualizables.md";
 const ARCHIVO_TRAZABILIDAD = "07_Trazabilidad_Codigo.md";
@@ -55,6 +59,58 @@ function wikilinksDe(texto: string): string[] {
 /** Claves citadas en el baúl como `clave_asi` dentro de backticks. */
 function clavesCitadas(texto: string): Set<string> {
   return new Set([...texto.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]));
+}
+
+const MESES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+/**
+ * Las fechas de verificación que declara el encabezado de
+ * `05_Valores_Actualizables.md`, en ISO y ordenadas.
+ *
+ * El encabezado es la parte anterior al primer `##`, y solo cuentan sus
+ * líneas de cita que hablan de una *verificación*: la pasada de trazabilidad
+ * que vive ahí al lado no re-mira ninguna fuente oficial, así que no mueve la
+ * fecha que el API publica.
+ */
+function fechasDeVerificacionDelVault(): string[] {
+  const encabezado = leer(ARCHIVO_VALORES).split(/\n## /)[0];
+  const fechas: string[] = [];
+  for (const linea of encabezado.split("\n")) {
+    if (!linea.startsWith(">") || !/erificaci[óo]n/i.test(linea)) continue;
+    const m = linea.match(/(\d{1,2}) de ([a-záéíóú]+) de (\d{4})/i);
+    if (!m) continue;
+    const mes = MESES.indexOf(m[2].toLowerCase());
+    if (mes < 0) continue;
+    fechas.push(`${m[3]}-${String(mes + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`);
+  }
+  return fechas.sort();
+}
+
+/**
+ * `REGLAS_VERIFICADAS_AL`, leída del archivo como texto.
+ *
+ * Importar el módulo traería `nominaService` y con él un `PrismaClient` — que
+ * es justo lo que se evitó al separar `semillaLegal.ts` de `seed.ts`. Este
+ * test no necesita una base para comparar dos fechas.
+ */
+function reglasVerificadasAl(): string {
+  const src = readFileSync(RUTA_SERVICIO_VERIFICADAS, "utf8");
+  const m = src.match(/REGLAS_VERIFICADAS_AL\s*=\s*"(\d{4}-\d{2}-\d{2})"/);
+  if (!m) throw new Error("no se encontró REGLAS_VERIFICADAS_AL en reglasVerificadasService.ts");
+  return m[1];
 }
 
 const CLAVES_SEMILLA = new Set(REGLAS_SEMILLA.map((r) => r.clave));
@@ -99,11 +155,18 @@ describe("sincronía baúl ↔ catálogo legal", () => {
       ...clavesCitadas(leer(ARCHIVO_TRAZABILIDAD)),
     ]);
     // Identificadores en backticks que NO son claves de ReglaLegal: campos de
-    // la tabla, nombres de columna, códigos de error del API. La lista crece
-    // cuando el baúl menciona un identificador nuevo de otra clase — es un
-    // costo de una línea, y se paga con gusto: el caso que importa es el
-    // inverso (una clave fantasma documentada que el sistema no conoce), y ahí
-    // callar sería dejar el baúl mintiendo.
+    // la tabla, nombres de columna, códigos de error del API. El caso que
+    // importa es el inverso (una clave fantasma documentada que el sistema no
+    // conoce), y ahí callar sería dejar el baúl mintiendo.
+    //
+    // La lista crece cuando el baúl nombra un identificador nuevo *de otra
+    // clase* — algo que el sistema sí tiene, pero que no es una `clave`. Lo
+    // que NO va acá es una palabra técnica cualquiera que alguien puso entre
+    // backticks: en el baúl los backticks significan "identificador que el
+    // sistema conoce", así que si el test se queja de un verbo de Prisma o de
+    // un término de oficio, la corrección es quitarle los backticks, no
+    // ensanchar esta lista. Cada nombre exento es un lugar donde una clave
+    // fantasma podría esconderse por colisión.
     const noSonClaves = new Set([
       "clave",
       "valor",
@@ -126,6 +189,37 @@ describe("sincronía baúl ↔ catálogo legal", () => {
     // admin la ofrecería para editar y el motor no la resolvería nunca.
     const sinSembrar = [...CLAVES_CATALOGO].filter((c) => !CLAVES_SEMILLA.has(c)).sort();
     expect(sinSembrar, "claves del catálogo que la semilla no trae").toEqual([]);
+  });
+});
+
+describe("paso 3 del procedimiento: la fecha que el API publica", () => {
+  // Los tres pasos de cambiar un valor legal están en 07_Trazabilidad §5.
+  // Los dos primeros se notan solos: el baúl se lee y el cálculo cambia. El
+  // tercero —mover `REGLAS_VERIFICADAS_AL`— no rompe nada si se olvida, así
+  // que se olvidó dos veces seguidas y el API quedó publicando una fecha de
+  // dos semanas atrás a quien compró procedencia. Esto lo amarra.
+
+  it("el encabezado del baúl declara al menos una fecha de verificación", () => {
+    // Si el encabezado se reescribe y el formato deja de reconocerse, el test
+    // de abajo pasaría por vacío — que es exactamente el modo de falla que
+    // este instrumento existe para evitar. Mejor fallar acá y ruidosamente.
+    expect(
+      fechasDeVerificacionDelVault(),
+      `no se reconoció ninguna fecha en el encabezado de ${ARCHIVO_VALORES} — ` +
+        "se espera una línea de cita del tipo `> 🗓️ **…verificación…:** 30 de julio de 2026`"
+    ).not.toEqual([]);
+  });
+
+  it("REGLAS_VERIFICADAS_AL es la última fecha de verificación del baúl", () => {
+    const fechas = fechasDeVerificacionDelVault();
+    const ultima = fechas[fechas.length - 1];
+    expect(
+      reglasVerificadasAl(),
+      `el baúl declara verificaciones ${fechas.join(", ")} y el API publica otra fecha. ` +
+        "Si se re-verificó y re-sembró el catálogo, actualizar REGLAS_VERIFICADAS_AL " +
+        `a ${ultima}; si la verificación fue parcial, anotar su alcance en el ` +
+        "encabezado del baúl (07_Trazabilidad_Codigo.md §5)"
+    ).toBe(ultima);
   });
 });
 

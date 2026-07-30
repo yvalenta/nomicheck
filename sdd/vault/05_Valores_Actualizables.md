@@ -2,8 +2,9 @@
 
 Este archivo es la **única fuente de verdad** para los valores que cambian cada año o cada vigencia. Ningún otro archivo del baúl debe escribir un número "a mano" — todos deben remitir aquí con la nota `(ver [[05_Valores_Actualizables]])`. Así, cuando el Gobierno expida el decreto de enero, **solo se edita este archivo** y el resto del baúl queda correcto automáticamente.
 
-> 🗓️ **Última verificación legal de los valores:** 21 de julio de 2026.
-> 🔗 **Última pasada de trazabilidad (sin re-verificar leyes):** 30 de julio de 2026.
+> 🗓️ **Última verificación legal de los valores vigentes (2026):** 21 de julio de 2026.
+> 🗓️ **Verificación de los valores históricos 2020-2025 (§1 y §2):** 30 de julio de 2026, contra dos fuentes independientes y el Gestor Normativo de Función Pública.
+> 🔗 **Última pasada de trazabilidad:** 30 de julio de 2026.
 > ⚠️ Todo valor en este archivo debe llevar su fuente (decreto, ley o resolución) y su fecha de vigencia. Si no tiene fuente, no se usa.
 
 ## Dos clases de número (y por qué importa)
@@ -253,15 +254,23 @@ Estos números **no cambian con un decreto anual**; son la convención legal de 
 
 ## 11. Checklist de mantenimiento anual
 
-Cada 1 de enero (o cuando se publique el decreto correspondiente), actualizar en este archivo y solo aquí:
+Cada 1 de enero (o cuando se publique el decreto correspondiente):
 
 - [ ] Nuevo SMLMV (decreto de diciembre del año anterior) — `smlmv`
 - [ ] Nuevo Auxilio de Transporte (decreto de diciembre del año anterior) — `auxilio_transporte`
 - [ ] Nueva UVT (resolución DIAN de diciembre) — `uvt`
-- [ ] Verificar si cambia el tramo de recargo dominical/festivo (próximo salto: 1 julio 2027 → 100%) — `recargo_dominical`
+- [ ] **Cerrar el tramo del año que termina** poniéndole `vigenteHasta` al 31 de diciembre, y dejar abierto solo el año nuevo. Este es el paso que se olvida: si no se cierra, quedan dos filas abiertas y el valor viejo sigue siendo resoluble para fechas futuras
 - [ ] Verificar litigios pendientes sobre el decreto del salario mínimo
 - [ ] Verificar si el Congreso aprobó la reforma pensional (cambiaría la tabla del Fondo de Solidaridad y las tarifas de salud/pensión)
 - [ ] Verificar si una ley tributaria movió los topes en UVT del §8 o la tabla del art. 383
 - [ ] Cargar los **festivos** del año nuevo (Ley Emiliani) — no son un valor de este archivo pero se siembran junto con las reglas
 
-**Después de editar este archivo**, sembrar los valores nuevos y actualizar la fecha de verificación del catálogo. Los dos pasos y su instrumento de control están en [[07_Trazabilidad_Codigo]]: el baúl y la base **deben** quedar diciendo lo mismo, y hay un test que lo verifica.
+Además, **una sola vez, antes del 1 de julio de 2027**: el recargo dominical salta al 100%. Ya está sembrado y con su tramo cerrado hasta el 30 de junio de 2027 (§4), así que no hay nada que hacer — solo confirmar que ninguna ley posterior movió ese calendario.
+
+**Editar este archivo no cambia lo que el sistema calcula.** Son tres pasos, y hay un test que falla si se hace solo el primero:
+
+1. Editar acá el valor, con su norma y su vigencia.
+2. Sembrarlo en `apps/api/prisma/semillaLegal.ts` como **fila nueva** (nunca editando la vieja) y correr el seed.
+3. Actualizar `REGLAS_VERIFICADAS_AL` en `reglasVerificadasService.ts` — es la fecha que el API publica como "catálogo verificado al…".
+
+El detalle, y la advertencia de cuándo el seed **no** alcanza y hace falta una migración, están en [[07_Trazabilidad_Codigo]] §5.

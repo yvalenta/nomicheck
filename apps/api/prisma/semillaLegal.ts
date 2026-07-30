@@ -8,10 +8,14 @@
 // Ahora hay un solo lugar donde viven: lo siembra `seed.ts` y lo usan las
 // pruebas como fixture. Si cambia un valor legal, cambia para los dos.
 
-// Semilla legal verificada contra fuentes oficiales/prensa especializada el
-// 16-jul-2026 (ver SDD.md §03 Módulo A para el detalle y las fuentes de cada
-// valor). Revisar si la reforma pensional (Ley 2381 de 2024, hoy suspendida
-// por la Corte Constitucional) se reactiva — cambiaría fondo_solidaridad.
+// Semilla legal verificada contra fuentes oficiales/prensa especializada. Las
+// fechas de cada pasada y su alcance los lleva el encabezado de
+// `sdd/vault/05_Valores_Actualizables.md`, que es la fuente de verdad: acá van
+// los valores, allá va desde cuándo se sabe que son ciertos. (Detalle y
+// fuentes por valor: SDD.md §03 Módulo A.)
+//
+// Revisar si la reforma pensional (Ley 2381 de 2024, hoy suspendida por la
+// Corte Constitucional) se reactiva — cambiaría fondo_solidaridad.
 export const REGLAS_SEMILLA = [
   // --- Valores anuales, con su historia desde 2020 ---
   //
