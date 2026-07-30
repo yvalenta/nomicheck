@@ -12,11 +12,15 @@ import { obtenerReglasYFestivos } from "./nominaService.js";
 
 // Fecha de última verificación del catálogo legal contra las fuentes
 // oficiales (SMLMV, UVT, Ley 2466/2025, Ley 2101/2021, tarifas EPS/AFP,
-// festivos). El spec humano vive en `sdd/vault/` (reglas estables en
-// 01-04 y 06, valores actualizables solo en 05_Valores_Actualizables.md);
-// el catálogo `ReglaLegal` (Prisma) es la implementación de ese spec, y
-// deben coincidir en cada revisión. Actualizar esta fecha cuando se revise
-// el vault + se re-siembre el catálogo. RUMBO §2.4.
+// festivos). El spec humano vive en `sdd/vault/` (reglas estables en 01-04
+// y 06, valores actualizables solo en 05_Valores_Actualizables.md, y el
+// mapa clave↔regla↔código en 07_Trazabilidad_Codigo.md); el catálogo
+// `ReglaLegal` (Prisma) es la implementación de ese spec, y deben coincidir
+// en cada revisión. Actualizar esta fecha cuando se revise el vault + se
+// re-siembre el catálogo. RUMBO §2.4.
+//
+// Que coincidan no es un acto de fe: `vaultSincronia.test.ts` falla si se
+// siembra una clave que el vault no documenta, o al revés.
 export const REGLAS_VERIFICADAS_AL = "2026-07-16";
 
 interface ReglaCanonica {
