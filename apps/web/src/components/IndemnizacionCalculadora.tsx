@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Gavel, Scale } from "lucide-react";
+import { ArrowLeft, Clock, Gavel, Scale } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularIndemnizacion, type ParametrosPublicos, type ResultadoIndemnizacion } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
@@ -29,6 +29,7 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
   const [fechaTerminacion, setFechaTerminacion] = useState("");
   const [fechaVencimientoPactada, setFechaVencimientoPactada] = useState("");
   const [conJustaCausa, setConJustaCausa] = useState(false);
+  const [enPeriodoPrueba, setEnPeriodoPrueba] = useState(false);
   const [resultado, setResultado] = useState<ResultadoIndemnizacion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [calculando, setCalculando] = useState(false);
@@ -53,6 +54,7 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
             fechaTerminacion,
             fechaVencimientoPactada,
             conJustaCausa,
+            enPeriodoPrueba,
           }
         : {
             tipoContrato: tipoContrato as "indefinido" | "tiempo_parcial",
@@ -60,6 +62,7 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
             fechaIngreso,
             fechaTerminacion,
             conJustaCausa,
+            enPeriodoPrueba,
           };
       setResultado(await calcularIndemnizacion(datos));
     } catch (e) {
@@ -146,12 +149,24 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
             <label className="flex items-center gap-2.5 text-sm text-ink">
               <input
                 type="checkbox"
-                checked={conJustaCausa}
-                onChange={(e) => setConJustaCausa(e.target.checked)}
+                checked={enPeriodoPrueba}
+                onChange={(e) => setEnPeriodoPrueba(e.target.checked)}
                 className="w-4 h-4 accent-coral"
               />
-              <Gavel size={16} className="text-muted" /> La empresa alega justa causa comprobada
+              <Clock size={16} className="text-muted" /> Terminado dentro del período de prueba
             </label>
+
+            {!enPeriodoPrueba && (
+              <label className="flex items-center gap-2.5 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={conJustaCausa}
+                  onChange={(e) => setConJustaCausa(e.target.checked)}
+                  className="w-4 h-4 accent-coral"
+                />
+                <Gavel size={16} className="text-muted" /> La empresa alega justa causa comprobada
+              </label>
+            )}
           </div>
         </PaycheckCard>
 

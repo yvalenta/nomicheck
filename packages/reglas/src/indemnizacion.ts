@@ -26,6 +26,8 @@ export interface DatosIndemnizacionTermino {
   /** Fecha pactada de vencimiento del contrato a término fijo, o fecha estimada de fin de la obra/labor. */
   fechaVencimientoPactada: string;
   conJustaCausa: boolean;
+  /** Terminado dentro del período de prueba (CST art. 80): base independiente de `conJustaCausa` — cualquiera de las partes puede terminar sin previo aviso y sin indemnización, sin necesidad de alegar ni probar justa causa. */
+  enPeriodoPrueba?: boolean;
 }
 
 export interface DatosIndemnizacionIndefinido {
@@ -34,6 +36,8 @@ export interface DatosIndemnizacionIndefinido {
   fechaIngreso: string;
   fechaTerminacion: string;
   conJustaCausa: boolean;
+  /** Terminado dentro del período de prueba (CST art. 80): base independiente de `conJustaCausa` — cualquiera de las partes puede terminar sin previo aviso y sin indemnización, sin necesidad de alegar ni probar justa causa. */
+  enPeriodoPrueba?: boolean;
 }
 
 export type DatosIndemnizacion = DatosIndemnizacionTermino | DatosIndemnizacionIndefinido;
@@ -69,6 +73,16 @@ export function calcularIndemnizacion(
 ): ResultadoIndemnizacion {
   if (!(datos.salarioMensual > 0)) {
     throw new Error(`El salario mensual debe ser mayor que cero (recibido: ${datos.salarioMensual})`);
+  }
+
+  if (datos.enPeriodoPrueba) {
+    return {
+      diasIndemnizacion: 0,
+      valor: 0,
+      explicacion:
+        "Terminado dentro del período de prueba: cualquiera de las partes puede darlo por terminado unilateralmente, sin previo aviso y sin lugar a indemnización — no depende de que haya justa causa.",
+      ley: "CST art. 80",
+    };
   }
 
   if (datos.conJustaCausa) {

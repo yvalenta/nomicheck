@@ -5,6 +5,7 @@ const base = {
   salarioMensual: z.number().positive(),
   fechaTerminacion: fecha,
   conJustaCausa: z.boolean(),
+  enPeriodoPrueba: z.boolean().optional(),
 };
 
 const conTermino = z.object({

@@ -19,6 +19,56 @@ describe("calcularIndemnizacion — con justa causa", () => {
   });
 });
 
+describe("calcularIndemnizacion — período de prueba (CST art. 80)", () => {
+  it("sin indemnización aunque no haya justa causa alegada, en contrato indefinido", () => {
+    const r = calcularIndemnizacion(
+      {
+        tipoContrato: "indefinido",
+        salarioMensual: 2_000_000,
+        fechaIngreso: "2026-07-01",
+        fechaTerminacion: "2026-07-30",
+        conJustaCausa: false,
+        enPeriodoPrueba: true,
+      },
+      REGLAS_JUL_2026
+    );
+    expect(r.valor).toBe(0);
+    expect(r.diasIndemnizacion).toBe(0);
+    expect(r.ley).toBe("CST art. 80");
+  });
+
+  it("sin indemnización en contrato a término fijo", () => {
+    const r = calcularIndemnizacion(
+      {
+        tipoContrato: "fijo",
+        salarioMensual: 2_000_000,
+        fechaTerminacion: "2026-07-30",
+        fechaVencimientoPactada: "2026-12-31",
+        conJustaCausa: false,
+        enPeriodoPrueba: true,
+      },
+      REGLAS_JUL_2026
+    );
+    expect(r.valor).toBe(0);
+    expect(r.diasIndemnizacion).toBe(0);
+  });
+
+  it("tiene prioridad sobre conJustaCausa en la explicación (base legal distinta, art. 80 no art. 62)", () => {
+    const r = calcularIndemnizacion(
+      {
+        tipoContrato: "indefinido",
+        salarioMensual: 2_000_000,
+        fechaIngreso: "2026-07-01",
+        fechaTerminacion: "2026-07-30",
+        conJustaCausa: true,
+        enPeriodoPrueba: true,
+      },
+      REGLAS_JUL_2026
+    );
+    expect(r.ley).toBe("CST art. 80");
+  });
+});
+
 describe("calcularIndemnizacion — término fijo / obra o labor (CST art. 64 num. 1)", () => {
   it("indemniza los días que faltan hasta el vencimiento pactado", () => {
     const r = calcularIndemnizacion(

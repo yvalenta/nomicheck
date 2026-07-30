@@ -71,6 +71,7 @@ export type DatosIndemnizacion =
       fechaTerminacion: string;
       fechaVencimientoPactada: string;
       conJustaCausa: boolean;
+      enPeriodoPrueba?: boolean;
     }
   | {
       tipoContrato: "indefinido" | "tiempo_parcial";
@@ -78,6 +79,7 @@ export type DatosIndemnizacion =
       fechaIngreso: string;
       fechaTerminacion: string;
       conJustaCausa: boolean;
+      enPeriodoPrueba?: boolean;
     };
 
 export interface ResultadoIndemnizacion {
