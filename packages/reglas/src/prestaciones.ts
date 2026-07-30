@@ -1,7 +1,13 @@
 import type { DatosPrestaciones, ResultadoPrestaciones } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { rangoFechas, validarPeriodo } from "./utils.js";
-import { DIAS_ANO_COMERCIAL, DIAS_MAX_SEMESTRE_PRIMA, DIVISOR_VACACIONES, PCT_INTERES_CESANTIAS } from "./constantes.js";
+import {
+  DIAS_ANO_COMERCIAL,
+  DIAS_MAX_SEMESTRE_PRIMA,
+  DIAS_MES_COMERCIAL,
+  DIVISOR_VACACIONES,
+  PCT_INTERES_CESANTIAS,
+} from "./constantes.js";
 
 // Cesantías (CST art. 249), intereses sobre cesantías (Ley 52 de 1975, art.
 // 1), prima de servicios (CST art. 306, mod. Ley 1788 de 2016) y vacaciones
@@ -59,7 +65,31 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
 
   const cesantias = redondearPeso((salarioConAuxilio * diasTrabajadosAcumulado) / DIAS_ANO_COMERCIAL);
   const interesesCesantias = redondearPeso((cesantias * diasTrabajadosAcumulado * PCT_INTERES_CESANTIAS) / DIAS_ANO_COMERCIAL);
-  const vacaciones = redondearPeso((salarioOrdinario * diasTrabajadosAcumulado) / DIVISOR_VACACIONES);
+
+  // Vacaciones: 15 días hábiles por año servido (CST art. 186). El divisor de
+  // 720 ya expresa esa proporción sobre el mes comercial, así que los días
+  // causados salen de las constantes que ya existen — no hay un "15" suelto.
+  const advertencias: string[] = [];
+  const diasVacacionesCausados = (diasTrabajadosAcumulado * DIAS_MES_COMERCIAL) / DIVISOR_VACACIONES;
+  const diasTomados = datos.diasVacacionesTomados ?? 0;
+  if (diasTomados > diasVacacionesCausados) {
+    // No se descuenta de otra prestación ni se devuelve un negativo: se paga
+    // cero de vacaciones y se avisa, porque un disfrute mayor al causado suele
+    // ser un anticipo o un dato mal capturado, y decidirlo no es del motor.
+    advertencias.push(
+      `Se reportaron ${diasTomados} días de vacaciones disfrutados pero solo se causaron ${
+        Math.round(diasVacacionesCausados * 100) / 100
+      } en el tiempo servido: las vacaciones pendientes se liquidan en cero, no en negativo.`
+    );
+  }
+  const diasVacacionesPendientes = Math.max(0, diasVacacionesCausados - diasTomados);
+  // Se conserva la fórmula original cuando no hay disfrute que restar: es la
+  // misma cuenta, pero por otro camino de punto flotante, y los golden tests
+  // comparan al peso.
+  const vacaciones =
+    diasTomados > 0
+      ? redondearPeso((salarioOrdinario * diasVacacionesPendientes) / DIAS_MES_COMERCIAL)
+      : redondearPeso((salarioOrdinario * diasTrabajadosAcumulado) / DIVISOR_VACACIONES);
 
   // Prima: suma por cada semestre calendario (ene-jun, jul-dic) traslapado
   // con el tiempo servido, cada uno topado a 180 días.
@@ -78,6 +108,7 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
     interesesCesantias,
     prima,
     vacaciones,
-    advertencias: [],
+    diasVacacionesCausados: Math.round(diasVacacionesCausados * 100) / 100,
+    advertencias,
   };
 }

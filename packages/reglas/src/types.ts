@@ -237,6 +237,10 @@ export type CodigoConcepto =
   | "LIQUIDACION_FINAL_INTERESES_CESANTIAS"
   | "LIQUIDACION_FINAL_PRIMA"
   | "LIQUIDACION_FINAL_VACACIONES"
+  /** Indemnización por despido sin justa causa (CST art. 64). NO es una
+   *  prestación: es la sanción por terminar el contrato antes de tiempo, y
+   *  puede ser cero mientras las cuatro de arriba se pagan igual. */
+  | "INDEMNIZACION_DESPIDO"
   /** Línea que declaró quien llama (`ConceptoNomina`), no una regla del motor.
    *  Su código propio, si lo mandó, viaja en `codigoDeclarado`. */
   | "CONCEPTO_DECLARADO";
@@ -278,10 +282,12 @@ export interface DatosPrestaciones {
   salarioBase: number;
   /** Últimos meses devengados si el salario varía — promedio de estos (o del tiempo servido si es menor a 12). */
   devengosVariables?: DevengoMensual[];
-  /** Monto mensual vigente del auxilio de transporte. Solo afecta la base de cesantías (Ley 15 de 1959, art. 7) — NO prima ni vacaciones. */
+  /** Monto mensual vigente del auxilio de transporte. Entra a la base de cesantías Y de prima (Ley 1ª de 1963, art. 7: "se entiende incorporado al salario para todos los efectos"), NO a la de vacaciones — la CSJ lo excluye porque compensa un gasto que no se causa mientras el trabajador está de vacaciones. */
   auxilioTransporte?: number;
   /** Fechas (YYYY-MM-DD) excluidas del conteo por suspensión disciplinaria o licencia no remunerada — interrumpen el contrato para efecto de estas 4 prestaciones. */
   diasSuspension?: string[];
+  /** Días de vacaciones ya disfrutados, que se restan de los causados. Al liquidar un retiro solo se paga lo pendiente: sin esto, quien ya tomó sus vacaciones las cobraría dos veces. */
+  diasVacacionesTomados?: number;
 }
 
 export interface ResultadoPrestaciones {
@@ -289,7 +295,10 @@ export interface ResultadoPrestaciones {
   cesantias: number;
   interesesCesantias: number;
   prima: number;
+  /** Valor de las vacaciones **pendientes** — ya descontadas las disfrutadas. */
   vacaciones: number;
+  /** Días de vacación causados por el tiempo servido (15 hábiles por año, CST art. 186), antes de restar los disfrutados. */
+  diasVacacionesCausados: number;
   advertencias: string[];
 }
 

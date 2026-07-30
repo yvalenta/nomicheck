@@ -187,6 +187,19 @@ export function rangoFechas(desde: string, hasta: string): string[] {
 }
 
 // 0=domingo, 1=lunes ... 6=sábado (UTC para evitar ambigüedades de timezone)
+/**
+ * El día calendario siguiente, en UTC.
+ *
+ * Se usa para abrir un tramo justo después de un corte ya pagado: si la prima
+ * se pagó hasta el 30 de junio, el tramo pendiente empieza el 1 de julio, no
+ * el 30 — cobrar ese día otra vez es pagarlo dos veces.
+ */
+export function diaSiguiente(fecha: string): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function diaSemana(fecha: string): number {
   return new Date(fecha).getUTCDay();
 }

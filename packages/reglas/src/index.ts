@@ -12,6 +12,7 @@ export * from "./calculadoraTurnos.js";
 export * from "./calculadoraSalarioFijo.js";
 export * from "./calculadoraServicios.js";
 export * from "./indemnizacion.js";
+export * from "./liquidacionFinal.js";
 export * from "./recargos.js";
 export * from "./costoEmpleador.js";
 export * from "./retencionFuente.js";

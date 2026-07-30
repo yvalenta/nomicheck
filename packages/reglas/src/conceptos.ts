@@ -114,6 +114,10 @@ export const ETIQUETAS_CONCEPTO: Record<CodigoConcepto, Record<Locale, string>> 
     en: "Final settlement — statutory bonus",
   },
   LIQUIDACION_FINAL_VACACIONES: { es: "Liquidación final — vacaciones", en: "Final settlement — vacation" },
+  INDEMNIZACION_DESPIDO: {
+    es: "Indemnización por despido sin justa causa",
+    en: "Severance pay for dismissal without cause",
+  },
   CONCEPTO_DECLARADO: { es: "Concepto declarado", en: "Declared item" },
 };
 

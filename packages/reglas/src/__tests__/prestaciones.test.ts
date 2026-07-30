@@ -16,6 +16,56 @@ describe("calcularPrestacionesSociales", () => {
     expect(r.prima).toBe(2_000_000);
   });
 
+  it("un año servido causa 15 días de vacaciones (CST art. 186)", () => {
+    const r = calcularPrestacionesSociales({
+      fechaIngreso: "2026-01-01",
+      fechaCorte: "2026-12-30", // 360 días comerciales exactos
+      salarioBase: 2_000_000,
+    });
+    expect(r.diasTrabajadosAcumulado).toBe(364);
+    // 364 días × 30 / 720 — algo más de 15 por los días calendario de más.
+    expect(r.diasVacacionesCausados).toBeCloseTo(15.17, 2);
+  });
+
+  it("las vacaciones ya disfrutadas se restan: solo se liquida lo pendiente", () => {
+    const base = {
+      fechaIngreso: "2026-01-01",
+      fechaCorte: "2026-12-31",
+      salarioBase: 2_000_000,
+    };
+    const sinTomar = calcularPrestacionesSociales(base);
+    const conSieteTomados = calcularPrestacionesSociales({ ...base, diasVacacionesTomados: 7 });
+
+    // Cada día de vacación vale un día de salario: 2.000.000 / 30.
+    expect(sinTomar.vacaciones - conSieteTomados.vacaciones).toBe(Math.round((2_000_000 / 30) * 7));
+    expect(conSieteTomados.advertencias).toEqual([]);
+    // Solo toca vacaciones — las otras tres prestaciones no se enteran.
+    expect(conSieteTomados.cesantias).toBe(sinTomar.cesantias);
+    expect(conSieteTomados.prima).toBe(sinTomar.prima);
+    expect(conSieteTomados.interesesCesantias).toBe(sinTomar.interesesCesantias);
+  });
+
+  it("disfrutar más días de los causados liquida en cero y advierte, no en negativo", () => {
+    const r = calcularPrestacionesSociales({
+      fechaIngreso: "2026-01-01",
+      fechaCorte: "2026-03-31", // ~7,6 días causados
+      salarioBase: 2_000_000,
+      diasVacacionesTomados: 15,
+    });
+    expect(r.vacaciones).toBe(0);
+    expect(r.advertencias).toHaveLength(1);
+    expect(r.advertencias[0]).toContain("no en negativo");
+  });
+
+  it("no pasar diasVacacionesTomados da exactamente lo mismo que pasar cero", () => {
+    // La rama que resta usa otra ruta de punto flotante; esto fija que ninguna
+    // liquidación existente se mueva un peso por haber agregado el campo.
+    const base = { fechaIngreso: "2024-03-15", fechaCorte: "2026-07-30", salarioBase: 1_850_000 };
+    expect(calcularPrestacionesSociales({ ...base, diasVacacionesTomados: 0 }).vacaciones).toBe(
+      calcularPrestacionesSociales(base).vacaciones
+    );
+  });
+
   it("salario variable (CST art. 253): usa el promedio de los devengos declarados, no el último mes", () => {
     const r = calcularPrestacionesSociales({
       fechaIngreso: "2026-01-01",
