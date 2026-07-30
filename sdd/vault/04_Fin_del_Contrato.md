@@ -2,6 +2,12 @@
 
 Cuando una persona deja de trabajar, hay que pagarle inmediatamente todo lo que se le ha guardado (Prima, Cesantías, Intereses y Vacaciones) proporcional a los días que alcanzó a trabajar ese año.
 
+## Período de Prueba
+
+Durante los primeros meses del contrato (máximo 2 meses, o la quinta parte del plazo pactado si el contrato es a término fijo menor a un año — lo que sea menor), **cualquiera de las dos partes** puede terminar el contrato en cualquier momento, sin previo aviso y **sin pagar ninguna indemnización**. Es un motivo legal aparte (artículo 80 del CST): no depende de que haya o no justa causa, ni de probar nada — ni siquiera hace falta alegarla.
+
+> ⚠️ Esto **no** afecta la liquidación final: Cesantías, Intereses, Prima y Vacaciones se le deben igual al trabajador, proporcional a los días que alcanzó a trabajar. El período de prueba solo elimina la indemnización y el preaviso — nunca las prestaciones sociales ya causadas.
+
 ## Indemnización por Despido Injusto
 Si la empresa echa al trabajador sin una justa causa (las causas justas están en el artículo 62 del CST), tiene que pagar una multa económica.
 
