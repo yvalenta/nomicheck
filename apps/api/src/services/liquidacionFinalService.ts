@@ -1,6 +1,7 @@
-import { calcularPrestacionesSociales, type LineaResultado } from "@pv/reglas";
+import { calcularPrestacionesSociales, reglaEn, type LineaResultado } from "@pv/reglas";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { obtenerReglasYFestivos } from "./nominaService.js";
 
 // Códigos de las provisiones emitidas al liquidar cada periodo. Antes se
 // agrupaba por el TEXTO del concepto — frágil: el mismo concepto se escribe
@@ -82,10 +83,19 @@ export async function liquidarFinal(empresaId: number, empleadoId: number) {
   const inicioTramo = ultimaFechaFin ? diaSiguiente(ultimaFechaFin) : empleado.fechaIngreso;
 
   if (inicioTramo <= empleado.fechaRetiro) {
+    // Mismo criterio que calcularReciboLote (liquidacionCalculo.ts): el
+    // auxilio de transporte SÍ integra la base de cesantías/prima (Ley 1ª
+    // de 1963, art. 7) — sin esto, el tramo final de un empleado que nunca
+    // pasó por un periodo liquidado (ingreso y retiro en la misma
+    // liquidación) se subliquidaba por el valor del auxilio.
+    const { reglas } = await obtenerReglasYFestivos();
     const tramo = calcularPrestacionesSociales({
       fechaIngreso: inicioTramo,
       fechaCorte: empleado.fechaRetiro,
       salarioBase: empleado.salarioBase,
+      auxilioTransporte: empleado.auxilioTransporte
+        ? reglaEn(reglas, "auxilio_transporte", empleado.fechaRetiro)
+        : undefined,
     });
     acumulado.cesantias += tramo.cesantias;
     acumulado.intereses += tramo.interesesCesantias;
