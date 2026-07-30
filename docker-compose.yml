@@ -46,9 +46,31 @@ x-app: &app
       condition: service_healthy
 
 services:
+  # `tsc --watch`: recompila packages/reglas/dist en cada cambio de fuente.
+  # Sin esto, api/web quedan sirviendo un dist/ congelado en la foto del
+  # último build manual — un cambio en @pv/reglas no se ve reflejado hasta
+  # correr `pnpm --filter @pv/reglas build` a mano y reiniciar los otros
+  # contenedores (bug real detectado 2026-07-30 verificando un fix).
+  reglas:
+    <<: *app
+    command: pnpm --filter @pv/reglas dev
+    # api/web esperan a que exista un dist/ compilado antes de arrancar
+    # (relevante en un checkout nuevo, sin build previo en el bind mount).
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/packages/reglas/dist/index.js"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
   api:
     <<: *app
     command: pnpm --filter @pv/api dev
+    depends_on:
+      db:
+        condition: service_healthy
+      reglas:
+        condition: service_healthy
     ports:
       - "3001:3001"
 
@@ -58,6 +80,11 @@ services:
     environment:
       <<: *app-env
       API_PROXY_TARGET: http://api:3001
+    depends_on:
+      db:
+        condition: service_healthy
+      reglas:
+        condition: service_healthy
     ports:
       - "5173:5173"
     stdin_open: true
