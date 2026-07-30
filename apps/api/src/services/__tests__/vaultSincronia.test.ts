@@ -21,7 +21,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { CATALOGO_REGLAS_LEGALES } from "@pv/reglas";
+import { auditarVigencias, CATALOGO_REGLAS_LEGALES } from "@pv/reglas";
+import type { ReglaLegal } from "@pv/reglas";
 import { REGLAS_SEMILLA } from "../../../prisma/semillaLegal.js";
 
 const DIR_VAULT = join(dirname(fileURLToPath(import.meta.url)), "../../../../../sdd/vault");
@@ -97,8 +98,12 @@ describe("sincronía baúl ↔ catálogo legal", () => {
       ...clavesCitadas(leer(ARCHIVO_VALORES)),
       ...clavesCitadas(leer(ARCHIVO_TRAZABILIDAD)),
     ]);
-    // Palabras en snake_case que aparecen entre backticks sin ser claves de
-    // ReglaLegal (campos de la tabla, nombres de columna).
+    // Identificadores en backticks que NO son claves de ReglaLegal: campos de
+    // la tabla, nombres de columna, códigos de error del API. La lista crece
+    // cuando el baúl menciona un identificador nuevo de otra clase — es un
+    // costo de una línea, y se paga con gusto: el caso que importa es el
+    // inverso (una clave fantasma documentada que el sistema no conoce), y ahí
+    // callar sería dejar el baúl mintiendo.
     const noSonClaves = new Set([
       "clave",
       "valor",
@@ -108,6 +113,7 @@ describe("sincronía baúl ↔ catálogo legal", () => {
       "vigenteDesde",
       "vigenteHasta",
       "ley", // campo de LineaResultado con la cita legal de cada línea
+      "internal_error", // código de error del API, citado en §6 de trazabilidad
     ]);
     const fantasma = [...citadas]
       .filter((c) => !noSonClaves.has(c) && !CLAVES_SEMILLA.has(c) && !CLAVES_CATALOGO.has(c))
@@ -120,6 +126,41 @@ describe("sincronía baúl ↔ catálogo legal", () => {
     // admin la ofrecería para editar y el motor no la resolvería nunca.
     const sinSembrar = [...CLAVES_CATALOGO].filter((c) => !CLAVES_SEMILLA.has(c)).sort();
     expect(sinSembrar, "claves del catálogo que la semilla no trae").toEqual([]);
+  });
+});
+
+describe("cobertura temporal de la semilla real", () => {
+  // `packages/reglas` verifica lo mismo sobre su fixture; esto lo verifica
+  // sobre lo que de verdad se siembra. Son dos archivos distintos (el motor
+  // no puede depender de Prisma para testearse) y por eso pueden divergir —
+  // esta es la mitad que importa en producción.
+  const SEMILLA = REGLAS_SEMILLA as ReglaLegal[];
+
+  it("ninguna clave deja de resolver en una fecha futura", () => {
+    const cerradas = auditarVigencias(SEMILLA, "2026-01-01", "2030-12-31").filter(
+      (h) => h.motivo === "despues-del-ultimo-tramo"
+    );
+    expect(cerradas, "claves con la ventana cerrada — tumban la nómina en esa fecha").toEqual([]);
+  });
+
+  it("las claves que las calculadoras resuelven sin condición cubren 2021-2030", () => {
+    // Estas cinco se resuelven al abrir cada tramo de días, antes de saber si
+    // el concepto aplica: un hueco acá no da un número raro, lanza excepción.
+    const huecos = auditarVigencias(SEMILLA, "2021-01-01", "2030-12-31", [
+      "divisor_hora_ordinaria",
+      "recargo_dominical",
+      "recargo_nocturno",
+      "hora_extra_diurna",
+      "hora_extra_nocturna",
+    ]);
+    expect(huecos, "fechas en que una liquidación por turnos fallaría").toEqual([]);
+  });
+
+  it("ninguna clave tiene huecos entre tramos", () => {
+    const entreTramos = auditarVigencias(SEMILLA, "1950-01-01", "2030-12-31").filter(
+      (h) => h.motivo === "entre-tramos"
+    );
+    expect(entreTramos, "tramos no contiguos dentro de una misma clave").toEqual([]);
   });
 });
 

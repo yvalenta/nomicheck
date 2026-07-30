@@ -51,14 +51,24 @@ Quién tiene derecho a cada uno y cómo entran a la base de cada cálculo: [[01_
 
 | Concepto | `clave` | Valor 2026 | Norma |
 |---|---|---|---|
-| Jornada máxima semanal | — (constante estructural) | **42 horas** | Ley 2101 de 2021 (reducción gradual: 47h → 46h → 44h → **42h desde el 15 de julio de 2026**) |
+| Jornada máxima semanal | — (constante estructural) | **42 horas** desde el 15 de julio de 2026 | Ley 2101 de 2021, art. 3 |
 | Horario nocturno | — (constante estructural) | **7:00 p.m. a 6:00 a.m.** | Ley 2466 de 2025, vigente desde el **25 de diciembre de 2025** (antes era de 9:00 p.m. a 6:00 a.m.) |
-| Divisor de la hora ordinaria — hasta 14-jul-2026 (jornada 44h) | `divisor_hora_ordinaria` | **220** | Ley 2101 de 2021 |
-| Divisor de la hora ordinaria — desde 15-jul-2026 (jornada 42h) | `divisor_hora_ordinaria` | **210** | Ley 2101 de 2021 |
+
+**La reducción de jornada fue en cuatro escalones, no de un salto.** Cada uno cambia el divisor de la hora ordinaria (`clave`: `divisor_hora_ordinaria`), y cada uno entró a regir un 15 de julio:
+
+| Vigencia | Jornada semanal | Divisor | Norma |
+|---|---|---|---|
+| Hasta el 14 de julio de 2023 | 48 horas | **240** | CST art. 161 |
+| 15 de julio de 2023 – 14 de julio de 2024 | 47 horas | **235** | Ley 2101 de 2021, art. 3 |
+| 15 de julio de 2024 – 14 de julio de 2025 | 46 horas | **230** | Ley 2101 de 2021, art. 3 |
+| 15 de julio de 2025 – 14 de julio de 2026 | 44 horas | **220** | Ley 2101 de 2021, art. 3 |
+| **Desde el 15 de julio de 2026** | **42 horas** | **210** | Ley 2101 de 2021, art. 3 |
+
+*El divisor baja cuando baja la jornada: el salario mensual no se toca, así que el valor de la hora ordinaria **sube** en cada escalón. Es la lectura del Ministerio del Trabajo, y es la postura que el motor implementa. Una liquidación retroactiva tiene que usar el divisor de su fecha, no el de hoy — con el de hoy, un periodo de 2024 subestimaría el valor de la hora en casi un 9%.*
 
 > ✏️ Este es un cambio crítico frente a la versión anterior de este baúl: el horario nocturno **ya no empieza a las 9:00 p.m., sino a las 7:00 p.m.** Cualquier cálculo hecho con el horario viejo subestima el recargo nocturno de los trabajadores. Ver la regla en [[01_Ingresos_y_Jornada]].
 
-> 🔢 **Sobre el divisor:** el valor de una hora ordinaria es `Salario mensual / divisor_hora_ordinaria`. El divisor **no es un número redondo elegido a dedo**: 210 = 42 horas semanales × 5 semanas comerciales. Es el mismo resultado que `(Salario / 30 días) / 7 horas al día`, pero como un solo parámetro con vigencia, para que una liquidación retroactiva de junio de 2026 siga usando 220 y no 210.
+> 🔢 **Sobre el divisor:** el valor de una hora ordinaria es `Salario mensual / divisor_hora_ordinaria`. El divisor **no es un número redondo elegido a dedo**: son las horas semanales × 5 semanas comerciales (42 × 5 = 210). Es el mismo resultado que `(Salario / 30 días) / 7 horas al día`, pero como un solo parámetro con vigencia, para que una liquidación de junio de 2026 siga usando 220 y una de 2024 use 230.
 
 ---
 
@@ -66,16 +76,16 @@ Quién tiene derecho a cada uno y cómo entran a la base de cada cálculo: [[01_
 
 La Ley 2466 de 2025 subió el recargo dominical/festivo de forma gradual. **No existe un único porcentaje**: depende de la fecha en la que se trabajó. `clave`: `recargo_dominical`.
 
-| Vigencia | Recargo dominical/festivo |
-|---|---|
-| Hasta el 30 de junio de 2025 | 75% |
-| 1 de julio de 2025 – 30 de junio de 2026 | 80% |
-| **1 de julio de 2026 – 30 de junio de 2027 (vigente hoy)** | **90%** |
-| Desde el 1 de julio de 2027 | 100% |
+| Vigencia | Recargo dominical/festivo | Norma |
+|---|---|---|
+| 1 de enero de 2003 – 30 de junio de 2025 | 75% | Ley 789 de 2002, art. 26 (CST art. 179) |
+| 1 de julio de 2025 – 30 de junio de 2026 | 80% | Ley 2466 de 2025, art. 2 |
+| **1 de julio de 2026 – 30 de junio de 2027 (vigente hoy)** | **90%** | Ley 2466 de 2025, art. 2 |
+| Desde el 1 de julio de 2027 | 100% | Ley 2466 de 2025, art. 2 |
 
 > ⚠️ **Regla de bloqueo actualizada:** al liquidar cualquier turno dominical o festivo, el sistema debe verificar la **fecha exacta** del turno y aplicar el porcentaje correspondiente a esa fecha, no solo el porcentaje "actual". Esto es indispensable para liquidaciones retroactivas o correcciones de nómina de meses anteriores.
 
-> 🔧 **Deuda conocida (no es un error de este archivo):** la semilla legal solo trae hoy los tramos del **80%** y del **90%**. Los tramos del 75% (hasta jun-2025) y del 100% (desde jul-2027) están en esta tabla pero **no** en la base, así que una liquidación fechada antes del 1-jul-2025 o después del 30-jun-2027 no encuentra regla vigente. Ver [[07_Trazabilidad_Codigo]].
+> 🔎 **Por qué los cuatro tramos están sembrados y no solo el vigente.** El motor resuelve esta clave **incondicionalmente** al abrir cada tramo de días, antes de saber si alguien trabajó domingo — y el resolutor lanza excepción si no encuentra vigencia. Con solo los tramos de 2025-2027 en la base, toda liquidación por turnos fechada fuera de esa ventana se caía, y el 1-jul-2027 se habría caído la nómina completa. Los cuatro tramos están sembrados y hay un test que verifica que ninguna clave quede con la ventana cerrada hacia el futuro ([[07_Trazabilidad_Codigo]] §5).
 
 *Nota: el recargo nocturno ordinario (35%) y la hora extra nocturna (75%) no cambiaron de porcentaje, solo cambió el horario en el que empiezan a contar (ver §3).*
 

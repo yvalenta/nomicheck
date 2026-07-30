@@ -97,9 +97,28 @@ El instrumento que vigila esto es `apps/api/src/services/__tests__/vaultSincroni
 *   una `clave` de `REGLAS_SEMILLA` no aparece documentada en el baúl (se sembró un valor sin explicarlo);
 *   el baúl documenta una `clave` que no existe en la semilla ni en el catálogo (quedó prosa sobre algo que se borró);
 *   un enlace interno del baúl apunta a un archivo que no existe;
-*   un archivo del baúl queda huérfano, sin que nadie lo enlace.
+*   un archivo del baúl queda huérfano, sin que nadie lo enlace;
+*   **una clave deja de resolver en alguna fecha** — ventana cerrada hacia el futuro, hueco entre tramos, o piso posterior a 2021 en las claves que las calculadoras resuelven sin condición.
 
 Es deliberadamente un test y no un linter aparte: corre con `pnpm test`, en el mismo lugar donde ya se verifica que el motor no se rompa.
+
+### El chequeo de vigencias, y por qué es el más importante
+
+`crearResolutorReglas().en()` **lanza excepción** si no encuentra una fila vigente para la fecha pedida. Y `calculadoraTurnos` resuelve cinco claves —`divisor_hora_ordinaria`, `recargo_dominical`, `recargo_nocturno`, `hora_extra_diurna`, `hora_extra_nocturna`— al abrir **cada tramo de días**, antes de saber si el concepto siquiera aplica. Consecuencias de un hueco:
+
+*   No produce un número raro que alguien note revisando: **tumba la liquidación completa**.
+*   Falla por la fecha del **periodo liquidado**, no por la de hoy. El bug queda dormido hasta que alguien liquida un mes viejo — o hasta que llega la fecha.
+
+Por eso la utilidad `auditarVigencias(reglas, desde, hasta, claves?)` vive en el motor (`utils.ts`) y no en el test: la usan los dos lados (el fixture de `packages/reglas` y la semilla real en `apps/api`), y un futuro panel admin puede llamarla antes de guardar una fila.
+
+Esto encontró y cerró dos bugs con fecha:
+
+| Clave | Qué pasaba |
+|---|---|
+| `recargo_dominical` | Solo estaban sembrados los tramos de 2025-07-01 a 2027-06-30. Toda liquidación por turnos anterior a jul-2025 ya fallaba, y el **1-jul-2027** habría fallado la nómina entera. Cerrado: los cuatro tramos sembrados |
+| `divisor_hora_ordinaria` | Una sola fila de 220 cubría 2021-01-01 a 2026-07-14, aplicando la jornada de 44h a periodos en que la jornada legal era de 48, 47 o 46 horas — subestimaba el valor de la hora hasta un 9% en retroactivos de 2021 a jul-2025. Cerrado: los cinco escalones de la Ley 2101 sembrados ([[05_Valores_Actualizables]] §3) |
+
+Ningún golden test del motor cambió al corregirlos, lo que confirma el diagnóstico: las fechas afectadas eran justamente las que ninguna prueba ejercitaba.
 
 > 🗓️ **Dos fechas distintas, a propósito.** [[05_Valores_Actualizables]] lleva la fecha de la última **verificación legal** de los valores. `REGLAS_VERIFICADAS_AL` lleva la del catálogo **sembrado**. Cuando difieren, el baúl va adelante del catálogo — y eso es información, no un error: significa que hay un paso 2 pendiente.
 
@@ -129,9 +148,9 @@ Devengo y recargos, deducciones de ley, tope de deducciones, los dos regímenes 
 | Deuda | Detalle |
 |---|---|
 | **Piso de 1 SMLMV en descuentos por convenio** | [[02_Descuentos_al_Trabajador]] documenta la regla legal completa; el motor aplica solo el tope del 50% del devengado, sin el piso. Divergencia conocida y anotada en los dos lados |
-| **Tramos faltantes del recargo dominical** | La semilla trae 80% y 90%. Faltan el 75% (hasta jun-2025) y el 100% (desde jul-2027). Una liquidación fechada fuera de esa ventana no resuelve regla vigente — y [[05_Valores_Actualizables]] §4 exige explícitamente soportar fechas retroactivas |
 | **Aportes patronales como constantes, no como parámetros** | Los porcentajes de [[06_Aportes_Patronales_y_Parafiscales]] viven en `constantes.ts`, sin vigencia. La exoneración del art. 114-1 ya se movió dos veces por ley; cuando se mueva otra vez no habrá forma de liquidar retroactivamente el periodo anterior |
-| **Cuatro lugares describen los mismos parámetros** | [[05_Valores_Actualizables]], `semillaLegal.ts`, `catalogoReglas.ts` y el `CATALOGO_PUBLICO` de `parametrosSnapshotService.ts`. El test de §5 cubre hoy el primero contra el segundo; los otros dos siguen a mano |
+| **Cinco lugares describen los mismos parámetros** | [[05_Valores_Actualizables]], `semillaLegal.ts`, el fixture `__tests__/fixtures.ts` del motor, `catalogoReglas.ts` y el `CATALOGO_PUBLICO` de `parametrosSnapshotService.ts`. El test de §5 cubre el baúl contra la semilla, y audita vigencias en los dos catálogos por separado — pero que el fixture y la semilla tengan los **mismos valores** sigue siendo a mano. El fixture existe por una razón válida (el motor no debe depender de Prisma para testearse), así que la salida no es borrarlo sino generarlo |
+| **Pisos de vigencia en valores anuales** | `smlmv`, `auxilio_transporte` y `uvt` arrancan en 2026-01-01, así que **el sistema solo puede liquidar desde 2026**: verificado contra la BD de dev, un `POST /batch/liquidar` con periodo de marzo de 2024 devuelve `internal_error` por estas tres claves (ya no por el recargo dominical ni por el divisor). A diferencia de esos dos, esto **no se cierra razonando**: hace falta sembrar el valor real de cada decreto anual. Es la única barrera que queda para liquidaciones retroactivas de años anteriores |
 
 ## 7. Cómo lo usa la app, y cómo lo usa el API
 

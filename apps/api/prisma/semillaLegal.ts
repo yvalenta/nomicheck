@@ -15,20 +15,50 @@
 export const REGLAS_SEMILLA = [
   { clave: "smlmv", valor: 1750905, vigenteDesde: "2026-01-01", fuente: "Decreto 1469 de 2025" },
   { clave: "auxilio_transporte", valor: 249095, vigenteDesde: "2026-01-01", fuente: "Decreto 1470 de 2025" },
-  // Recargo dominical/festivo: tramo hasta jun-2026
+  // Recargo dominical/festivo: los CUATRO tramos, no solo los vigentes.
+  //
+  // Las calculadoras resuelven esta clave de forma incondicional por cada
+  // tramo de días (calculadoraTurnos.ts), antes de mirar si alguien trabajó
+  // domingo — y el resolutor LANZA si no hay vigencia. Con solo los tramos
+  // de 2025-2027 sembrados, toda liquidación por turnos fechada fuera de esa
+  // ventana se caía: las retroactivas anteriores a jul-2025 ya lo hacían, y
+  // el 1-jul-2027 se habría caído la nómina entera, con o sin dominical.
+  // Sembrar los tramos de los extremos no altera ningún cálculo que hoy
+  // funcione: cubren fechas donde antes solo había excepción.
+  { clave: "recargo_dominical", valor: 0.75, vigenteDesde: "2003-01-01", vigenteHasta: "2025-06-30", fuente: "Ley 789 de 2002, art. 26 (CST art. 179)" },
   { clave: "recargo_dominical", valor: 0.80, vigenteDesde: "2025-07-01", vigenteHasta: "2026-06-30", fuente: "Ley 2466 de 2025, art. 2" },
-  // Recargo dominical/festivo: desde jul-2026
   { clave: "recargo_dominical", valor: 0.90, vigenteDesde: "2026-07-01", vigenteHasta: "2027-06-30", fuente: "Ley 2466 de 2025, art. 2" },
+  { clave: "recargo_dominical", valor: 1.00, vigenteDesde: "2027-07-01", fuente: "Ley 2466 de 2025, art. 2" },
+
+  // Recargo nocturno: el 35% no lo creó la Ley 2466 de 2025 — viene del CST
+  // art. 168 desde la Ley 50 de 1990. Lo que la Ley 2466 cambió fue la
+  // FRANJA (21:00→19:00), no el porcentaje. Por eso hay dos filas con el
+  // mismo valor: sin la primera, una liquidación anterior al 25-dic-2025
+  // lanzaba por falta de vigencia.
+  { clave: "recargo_nocturno", valor: 0.35, vigenteDesde: "1991-01-01", vigenteHasta: "2025-12-24", fuente: "CST art. 168, mod. Ley 50 de 1990, art. 24" },
   { clave: "recargo_nocturno", valor: 0.35, vigenteDesde: "2025-12-25", fuente: "Ley 2466 de 2025, art. 3" },
   { clave: "hora_extra_diurna", valor: 0.25, vigenteDesde: "2020-01-01", fuente: "CST art. 168" },
   { clave: "hora_extra_nocturna", valor: 0.75, vigenteDesde: "2020-01-01", fuente: "CST art. 168" },
   { clave: "aporte_salud_empleado", valor: 0.04, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993" },
   { clave: "aporte_pension_empleado", valor: 0.04, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993" },
   { clave: "fondo_solidaridad_umbral_smlmv", valor: 4, vigenteDesde: "2020-01-01", fuente: "Ley 100 de 1993, art. 27" },
-  // Divisor hora ordinaria: jornada 44h hasta 14-jul-2026
-  { clave: "divisor_hora_ordinaria", valor: 220, vigenteDesde: "2021-01-01", vigenteHasta: "2026-07-14", fuente: "Ley 2101 de 2021" },
-  // Divisor hora ordinaria: jornada 42h desde 15-jul-2026
-  { clave: "divisor_hora_ordinaria", valor: 210, vigenteDesde: "2026-07-15", fuente: "Ley 2101 de 2021" },
+  // Divisor de hora ordinaria = horas semanales x 5 semanas comerciales.
+  //
+  // La Ley 2101 de 2021 no bajó la jornada de 44h a 42h de un salto: la bajó
+  // en CUATRO escalones (48 → 47 → 46 → 44 → 42), cada uno un 15 de julio.
+  // La semilla tenía una sola fila de 220 cubriendo 2021-01-01 a 2026-07-14,
+  // o sea que aplicaba la jornada de 44h a periodos en que la jornada legal
+  // era de 48, 47 o 46 horas — subestimando el valor de la hora ordinaria
+  // hasta un 9% en cualquier liquidación retroactiva de 2021 a jul-2025.
+  //
+  // (Se mantiene la postura ya adoptada por el motor: reducir la jornada
+  // reduce el divisor, así que el valor de la hora sube y el salario mensual
+  // no se toca. Es la lectura del Ministerio del Trabajo.)
+  { clave: "divisor_hora_ordinaria", valor: 240, vigenteDesde: "1991-01-01", vigenteHasta: "2023-07-14", fuente: "CST art. 161 (jornada de 48 horas, antes de la Ley 2101 de 2021)" },
+  { clave: "divisor_hora_ordinaria", valor: 235, vigenteDesde: "2023-07-15", vigenteHasta: "2024-07-14", fuente: "Ley 2101 de 2021, art. 3 (jornada de 47 horas)" },
+  { clave: "divisor_hora_ordinaria", valor: 230, vigenteDesde: "2024-07-15", vigenteHasta: "2025-07-14", fuente: "Ley 2101 de 2021, art. 3 (jornada de 46 horas)" },
+  { clave: "divisor_hora_ordinaria", valor: 220, vigenteDesde: "2025-07-15", vigenteHasta: "2026-07-14", fuente: "Ley 2101 de 2021, art. 3 (jornada de 44 horas)" },
+  { clave: "divisor_hora_ordinaria", valor: 210, vigenteDesde: "2026-07-15", fuente: "Ley 2101 de 2021, art. 3 (jornada de 42 horas)" },
 
   // Tope de deducciones sobre el salario devengado — protege el mínimo
   // vital. Usado hoy para recortar el aporte AFC (deducción por convenio)

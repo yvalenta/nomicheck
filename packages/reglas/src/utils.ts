@@ -61,6 +61,96 @@ export function reglaEn(
   return crearResolutorReglas(reglas).en(clave, fecha);
 }
 
+/** Un intervalo de fechas sin regla vigente para una clave. */
+export interface HuecoVigencia {
+  clave: string;
+  /** Primera fecha sin cobertura (YYYY-MM-DD). */
+  desde: string;
+  /** Última fecha sin cobertura, o `null` si el hueco llega hasta el final del rango auditado. */
+  hasta: string | null;
+  motivo: "antes-del-primer-tramo" | "entre-tramos" | "despues-del-ultimo-tramo";
+}
+
+// Audita la cobertura temporal de un catálogo de reglas: para cada clave,
+// qué intervalos del rango [desde, hasta] NO tienen ninguna fila vigente.
+//
+// Existe porque `crearResolutorReglas().en()` LANZA cuando no encuentra
+// vigencia, y las calculadoras resuelven varias claves de forma
+// incondicional al inicio de cada tramo de días — antes de saber si el
+// concepto aplica. Una clave con la ventana cerrada no degrada el cálculo:
+// lo tumba entero. Y como la fecha del fallo es la del periodo liquidado,
+// no la de hoy, el problema es invisible hasta que alguien liquida el mes
+// equivocado (o hasta que llega la fecha).
+//
+// Caso real: `recargo_dominical` tenía tramos solo entre 2025-07-01 y
+// 2027-06-30. Toda liquidación por turnos fechada fuera de esa ventana
+// lanzaba, hubiera o no trabajo dominical.
+export function auditarVigencias(
+  reglas: ReglaLegal[],
+  desde: string,
+  hasta: string,
+  claves?: string[]
+): HuecoVigencia[] {
+  const porClave = new Map<string, ReglaLegal[]>();
+  for (const r of reglas) {
+    if (!porClave.has(r.clave)) porClave.set(r.clave, []);
+    porClave.get(r.clave)!.push(r);
+  }
+
+  const diaSiguiente = (f: string): string => {
+    const d = new Date(`${f}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const huecos: HuecoVigencia[] = [];
+  for (const clave of claves ?? [...porClave.keys()]) {
+    const tramos = [...(porClave.get(clave) ?? [])].sort((a, b) =>
+      a.vigenteDesde.localeCompare(b.vigenteDesde)
+    );
+    if (tramos.length === 0) {
+      huecos.push({ clave, desde, hasta, motivo: "antes-del-primer-tramo" });
+      continue;
+    }
+
+    if (tramos[0].vigenteDesde > desde) {
+      huecos.push({
+        clave,
+        desde,
+        hasta: tramos[0].vigenteDesde,
+        motivo: "antes-del-primer-tramo",
+      });
+    }
+
+    for (let i = 0; i < tramos.length - 1; i++) {
+      const fin = tramos[i].vigenteHasta;
+      // Un tramo abierto (`vigenteHasta` ausente) cubre todo lo que sigue:
+      // el resolutor toma el más reciente vigente, así que no hay hueco.
+      if (!fin) continue;
+      const esperado = diaSiguiente(fin);
+      if (tramos[i + 1].vigenteDesde > esperado) {
+        huecos.push({
+          clave,
+          desde: esperado,
+          hasta: tramos[i + 1].vigenteDesde,
+          motivo: "entre-tramos",
+        });
+      }
+    }
+
+    const ultimo = tramos[tramos.length - 1];
+    if (ultimo.vigenteHasta && ultimo.vigenteHasta < hasta) {
+      huecos.push({
+        clave,
+        desde: diaSiguiente(ultimo.vigenteHasta),
+        hasta: null,
+        motivo: "despues-del-ultimo-tramo",
+      });
+    }
+  }
+  return huecos;
+}
+
 // Valida que una fecha YYYY-MM-DD exista realmente en el calendario:
 // "2026-02-30" pasa un regex de formato pero Date la desborda a marzo en
 // silencio — el round-trip la detecta porque la fecha normalizada difiere.
