@@ -173,13 +173,31 @@ export function construirOpenApi(): Record<string, unknown> {
       description:
         "Los 25 parámetros que el motor resuelve, cada uno con su unidad, su descripción y su " +
         "referencia legal, firmados y con el hash del catálogo.\n\n" +
-        "**Limitación conocida:** sirve solo los valores VIGENTES HOY. No acepta una fecha, así " +
-        "que la historia de vigencias (que sí existe en el catálogo, desde 2020) no es " +
-        "consultable por acá todavía.\n\n" +
+        "Con `?fecha=YYYY-MM-DD` resuelve contra la **historia de vigencias**, sembrada desde " +
+        "2020: pedir `2024-03-15` devuelve el SMLMV y el auxilio que regían ese día, no los de " +
+        "hoy. Es lo que necesita una liquidación retroactiva — y sobre todo quien AUDITA una " +
+        "liquidación retroactiva que calculó otro. Sin el parámetro, hoy.\n\n" +
+        "Las claves sin valor en la fecha pedida no se omiten en silencio: vuelven en " +
+        "`noVigentes` con el motivo. Pedir 2021 devuelve 22 parámetros y no 25, porque los " +
+        "topes de retención arrancan en 2023 (Ley 2277 de 2022), y una lista más corta no se " +
+        "nota si nadie la nombra.\n\n" +
         SOBRE_DESC,
       tags: ["catálogo"],
+      parameters: [
+        {
+          name: "fecha",
+          in: "query",
+          required: false,
+          schema: { type: "string", format: "date" },
+          description:
+            "Día al que resolver los valores (YYYY-MM-DD). Omitido = hoy. La fecha viaja " +
+            "firmada en `vigenteDesde`, así que un snapshot de 2024 no se puede hacer pasar " +
+            "por uno de hoy.",
+        },
+      ],
       responses: {
-        "200": { description: "Snapshot firmado." },
+        "200": { description: "Snapshot firmado, resuelto a `vigenteDesde`." },
+        "400": { description: "`invalid_input` — `fecha` no es YYYY-MM-DD." },
         "500": { description: "`parametros_no_disponibles`." },
       },
     },

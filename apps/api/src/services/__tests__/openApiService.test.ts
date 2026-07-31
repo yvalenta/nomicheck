@@ -83,11 +83,14 @@ describe("documento OpenAPI", () => {
     }
   });
 
-  it("el catálogo de parámetros declara su límite en vez de callarlo", () => {
-    // Sirve solo los valores vigentes hoy; la historia de vigencias existe en
-    // el catálogo pero no es consultable por ahí. Decirlo es la diferencia
-    // entre una limitación conocida y una sorpresa.
-    const desc = (doc.paths["/parametros"].get as unknown as { description: string }).description;
-    expect(desc).toContain("VIGENTES HOY");
+  it("el catálogo de parámetros documenta la consulta por fecha", () => {
+    const op = doc.paths["/parametros"].get as unknown as {
+      description: string;
+      parameters: { name: string; in: string }[];
+    };
+    expect(op.description).toContain("historia de vigencias");
+    expect(op.parameters.some((p) => p.name === "fecha" && p.in === "query")).toBe(true);
+    // Y que las claves ausentes se nombran en vez de desaparecer.
+    expect(op.description).toContain("noVigentes");
   });
 });

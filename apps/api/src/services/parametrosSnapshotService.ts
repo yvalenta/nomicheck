@@ -26,11 +26,21 @@ export interface ParametroPublicado {
 export interface ParametrosSnapshotOutput {
   version: "1";
   generadoEn: string;
+  /** Fecha a la que se resolvieron los valores. Sin `?fecha=`, es hoy. */
   vigenteDesde: string;
   reglasVerificadasAl: string;
   reglasHash: string;
   disclaimer: string;
   parametros: ParametroPublicado[];
+  /**
+   * Claves del catálogo que NO tenían valor vigente en `vigenteDesde`.
+   *
+   * Antes se descartaban en silencio. Con fecha eso se vuelve trampa: pedir
+   * 2021 devuelve 22 parámetros en vez de 25 —los topes de retención arrancan
+   * en 2023— y una lista más corta no se nota. Decir cuáles faltan y por qué
+   * es la diferencia entre un límite conocido y una sorpresa.
+   */
+  noVigentes: { clave: string; motivo: string }[];
   derivados: {
     auxilioTransporteTopePesos: number;
     ibcTopePesos: number;
@@ -204,20 +214,34 @@ const CATALOGO_PUBLICO: Array<Omit<ParametroPublicado, "valor">> = [
   },
 ];
 
-export async function generarParametrosSnapshot(): Promise<ParametrosSnapshotOutput> {
+/**
+ * @param fecha  Día al que resolver los valores (YYYY-MM-DD). Sin fecha, hoy.
+ *
+ * Aceptar una fecha es lo que convierte esto de un snapshot en un catálogo
+ * consultable: la historia de vigencias ya está sembrada desde 2020, pero sin
+ * este parámetro no había forma de preguntarle nada. Una liquidación
+ * retroactiva necesita el SMLMV de SU año, y el que lo necesita no siempre es
+ * quien calcula — puede ser quien audita lo que otro calculó.
+ */
+export async function generarParametrosSnapshot(fecha?: string): Promise<ParametrosSnapshotOutput> {
   const { reglas, festivos } = await obtenerReglasYFestivos();
   const resolutor = crearResolutorReglas(reglas);
   const reglasHash = hashCatalogo(reglas, festivos);
-  const hoy = new Date().toISOString().slice(0, 10);
+  const enFecha = fecha ?? new Date().toISOString().slice(0, 10);
 
   const parametros: ParametroPublicado[] = [];
+  const noVigentes: { clave: string; motivo: string }[] = [];
   for (const meta of CATALOGO_PUBLICO) {
-    // Una regla del catálogo puede no estar vigente hoy (entra en vigor a
-    // futuro, o fue derogada). Se omite en vez de publicar un valor inventado.
+    // Una regla del catálogo puede no tener valor en la fecha pedida (entra en
+    // vigor después, o fue derogada). Se declara en vez de publicar un valor
+    // inventado — y en vez de callarla, que era lo de antes.
     try {
-      parametros.push({ ...meta, valor: resolutor.en(meta.clave, hoy) });
+      parametros.push({ ...meta, valor: resolutor.en(meta.clave, enFecha) });
     } catch {
-      continue;
+      noVigentes.push({
+        clave: meta.clave,
+        motivo: `Sin valor vigente al ${enFecha} en el catálogo. No se publica un valor inventado.`,
+      });
     }
   }
 
@@ -230,11 +254,12 @@ export async function generarParametrosSnapshot(): Promise<ParametrosSnapshotOut
   return firmarSnapshot({
     version: "1" as const,
     generadoEn: new Date().toISOString(),
-    vigenteDesde: hoy,
+    vigenteDesde: enFecha,
     reglasVerificadasAl: REGLAS_VERIFICADAS_AL,
     reglasHash,
     disclaimer: DISCLAIMER,
     parametros,
+    noVigentes,
     // Valores que el comprador calcularía igual, precomputados para ahorrarle
     // el paso y —más importante— para fijar la interpretación correcta de cada
     // tope (en SMLMV vs en pesos es una fuente clásica de error).

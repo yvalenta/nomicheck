@@ -31,6 +31,7 @@ import {
 } from "../services/batchCsvService.js";
 import { ejecutarBatchLiquidacionFinal } from "../services/batchLiquidacionFinalService.js";
 import { construirOpenApi } from "../services/openApiService.js";
+import { fecha } from "../validation/comunes.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
@@ -72,10 +73,21 @@ batchPublicoRouter.get("/schema/v1.json", (_req: Request, res: Response) => {
 // No recibe input: la salida es idéntica para todos los compradores mientras
 // el catálogo no cambie. Por eso es el único listing publicable como archivo
 // estático en IPFS + borde, sin dependencia de este servidor.
-batchPublicoRouter.get("/parametros", async (_req: Request, res: Response) => {
+batchPublicoRouter.get("/parametros", async (req: Request, res: Response) => {
+  // `?fecha=YYYY-MM-DD` resuelve contra la historia de vigencias sembrada desde
+  // 2020. Sin fecha, hoy — el contrato viejo sigue funcionando igual.
+  const parsed = fecha.optional().safeParse(req.query.fecha);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "invalid_input",
+      mensaje: "`fecha` debe ser una fecha válida en formato YYYY-MM-DD",
+    });
+  }
   try {
-    const salida = await generarParametrosSnapshot();
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    const salida = await generarParametrosSnapshot(parsed.data);
+    // Una fecha pasada da un resultado inmutable; hoy cambia al cambiar el
+    // catálogo. No es lo mismo y no debería cachearse igual.
+    res.setHeader("Cache-Control", parsed.data ? "public, max-age=86400" : "public, max-age=3600");
     return res.status(200).json(salida);
   } catch (err) {
     return res.status(500).json({
