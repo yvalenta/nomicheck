@@ -30,6 +30,7 @@ import {
   batchLiquidacionFinalToCsv,
 } from "../services/batchCsvService.js";
 import { ejecutarBatchLiquidacionFinal } from "../services/batchLiquidacionFinalService.js";
+import { construirOpenApi } from "../services/openApiService.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
@@ -410,6 +411,15 @@ const jsonSchemaLiquidacionFinal = zodToJsonSchema(batchLiquidacionFinalSchema, 
   name: "BatchLiquidacionFinalInput",
   target: "jsonSchema7",
   $refStrategy: "none",
+});
+
+// Documento OpenAPI de todo el wrapper. Los `/schema/v1.json` por listing se
+// quedan: describen el input de uno solo y ya hay integraciones que los citan.
+// Este es el que responde "qué sabe hacer esto y dónde", que es lo que pregunta
+// un cliente que llegó por descubrimiento federado o por MCP.
+batchPublicoRouter.get("/openapi.json", (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json(construirOpenApi());
 });
 
 batchPublicoRouter.get("/liquidacion-final/schema/v1.json", (_req: Request, res: Response) => {

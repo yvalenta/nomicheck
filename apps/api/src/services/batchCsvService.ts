@@ -333,6 +333,9 @@ export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput):
   for (const r of salida.resultados) {
     for (const s of r.supuestos) notas.push(`# supuesto [${r.externalId}]: ${s}`);
     for (const a of r.advertencias) notas.push(`# advertencia [${r.externalId}]: ${a}`);
+    // En un CSV la línea ausente es todavía más ambigua que en JSON: no hay
+    // fila, así que nada distingue "no se pidió" de "dio cero".
+    for (const n of r.noSolicitado) notas.push(`# no_calculado [${r.externalId}] ${n.codigo}: ${n.motivo}`);
   }
 
   return `${cabecera}\n${filas.join("\n")}\n${notas.length ? notas.join("\n") + "\n" : ""}`;

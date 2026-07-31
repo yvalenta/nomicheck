@@ -61,7 +61,15 @@ const empleadoLiquidacion = z
     documento: z.string().min(1).optional(),
     salarioBase: z.number().positive(),
     /** `true` resuelve el monto vigente a la fecha de retiro contra el catálogo — no se manda el valor, se manda el derecho. */
-    auxilioTransporte: z.boolean().default(false),
+    auxilioTransporte: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Se manda el DERECHO, no el monto: si es true, el servidor resuelve el valor que " +
+          "estaba vigente en la fecha de retiro contra el catálogo firmado. Una liquidación " +
+          "retroactiva de 2024 usa el auxilio de 2024. No enviar cifras propias acá — el " +
+          "número que sale queda cubierto por la firma del emisor."
+      ),
     fechaIngreso: fecha,
     fechaRetiro: fecha,
     /** Salario ordinario variable (comisiones, bonificaciones habituales). Entra a la base de las cuatro prestaciones. */
@@ -69,15 +77,40 @@ const empleadoLiquidacion = z
     /** Horas extra y trabajo en descanso obligatorio. CST art. 192 num. 1 los excluye de la base de vacaciones, pero hacen base de cesantías y prima. */
     devengosSuplementarios: z.array(devengoMensual).optional(),
     /** Hasta cuándo YA se pagó la prima. Si falta, se liquida desde el ingreso y se declara el supuesto. */
-    cortePrima: fecha.optional(),
+    cortePrima: fecha
+      .optional()
+      .describe(
+        "Hasta cuándo YA se pagó la prima. AUSENTE = se liquida desde la fecha de ingreso, y " +
+          "el supuesto sale declarado en `supuestos`. Si ya se pagó algún semestre y no se " +
+          "informa acá, la respuesta lo paga otra vez."
+      ),
     /** Hasta cuándo YA se consignaron las cesantías. Si falta, se liquida desde el ingreso y se declara el supuesto. */
-    corteCesantias: fecha.optional(),
+    corteCesantias: fecha
+      .optional()
+      .describe(
+        "Hasta cuándo YA se consignaron las cesantías al fondo. AUSENTE = se liquidan desde la " +
+          "fecha de ingreso, y el supuesto sale declarado en `supuestos`."
+      ),
     /** Días de vacaciones ya disfrutados. Si falta, se asume que no tomó ninguno y se declara. */
-    diasVacacionesTomados: z.number().min(0).optional(),
+    diasVacacionesTomados: z
+      .number()
+      .min(0)
+      .optional()
+      .describe(
+        "Días de vacaciones ya disfrutados. AUSENTE = se asume que no tomó ninguno y se " +
+          "liquidan todas las causadas; el supuesto sale declarado en `supuestos`."
+      ),
     /** Fechas sin remuneración (suspensión, licencia no remunerada) que no causan prestaciones. */
     diasSuspension: z.array(fecha).optional(),
     /** Si se omite, no se calcula indemnización. Omitirla NO significa que sea cero: significa que no se pidió. */
-    indemnizacion: indemnizacionBatch.optional(),
+    indemnizacion: indemnizacionBatch
+      .optional()
+      .describe(
+        "Opcional. AUSENTE = no se calcula indemnización, y eso NO equivale a cero: " +
+          "significa que no se pidió. Si se envía y el resultado es cero (período de prueba, " +
+          "justa causa), la línea INDEMNIZACION_DESPIDO se emite igual con su motivo legal. " +
+          "Cuando se omite, el resultado lo dice explícitamente en `noSolicitado`."
+      ),
   })
   .refine((e) => e.fechaRetiro >= e.fechaIngreso, {
     message: "fechaRetiro no puede ser anterior a fechaIngreso",
@@ -137,6 +170,16 @@ export interface ResultadoLiquidacionBatch {
   /** Defaults aplicados por falta de dato. Vacío = el comprador informó todo el historial. */
   supuestos: string[];
   advertencias: string[];
+  /**
+   * Conceptos que NO se calcularon, con el motivo.
+   *
+   * Existe porque la ausencia de una línea es ambigua para quien lee la
+   * respuesta sin haber escrito el request — que es el caso normal cuando el
+   * que llama es un agente. Sin esto, "no hay línea de indemnización" se puede
+   * leer como "la indemnización es cero", que es una conclusión distinta y
+   * puede costar plata. Vacío = se calculó todo lo que este contrato ofrece.
+   */
+  noSolicitado: { codigo: string; motivo: string }[];
 }
 
 export interface BatchLiquidacionFinalOutput {

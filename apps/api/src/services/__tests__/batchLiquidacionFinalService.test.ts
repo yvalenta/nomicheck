@@ -149,9 +149,39 @@ describe("ejecutarBatchLiquidacionFinal", () => {
     expect(r.total).toBeGreaterThan(0);
   });
 
-  it("sin bloque de indemnización no se emite la línea — omitir no es cero", async () => {
+  it("sin bloque de indemnización no se emite la línea, y la respuesta dice por qué", async () => {
+    // La ausencia de una línea es ambigua para quien lee la respuesta sin
+    // haber escrito el request — el caso normal cuando llama un agente. Que
+    // no haya línea NO puede leerse como "la indemnización es cero".
     const salida = await ejecutarBatchLiquidacionFinal(baseInput());
-    expect(valorDe(salida.resultados[0], "INDEMNIZACION_DESPIDO")).toBeUndefined();
+    const r = salida.resultados[0];
+    expect(valorDe(r, "INDEMNIZACION_DESPIDO")).toBeUndefined();
+    expect(r.noSolicitado).toHaveLength(1);
+    expect(r.noSolicitado[0].codigo).toBe("INDEMNIZACION_DESPIDO");
+    expect(r.noSolicitado[0].motivo).toContain("NO significa que la indemnización sea cero");
+  });
+
+  it("pedida y en cero es distinto de no pedida: hay línea y no hay noSolicitado", async () => {
+    const input = baseInput();
+    input.empleados[0] = {
+      ...input.empleados[0],
+      indemnizacion: { tipoContrato: "indefinido", conJustaCausa: true, enPeriodoPrueba: false },
+    };
+    const salida = await ejecutarBatchLiquidacionFinal(input);
+    const r = salida.resultados[0];
+    expect(valorDe(r, "INDEMNIZACION_DESPIDO")).toBe(0);
+    expect(r.noSolicitado).toEqual([]);
+  });
+
+  it("el schema publicado explica que omitir no es cero", async () => {
+    // El comentario en TypeScript no viaja al agente; la descripción del zod sí,
+    // porque zodToJsonSchema la emite en /schema/v1.json.
+    const { zodToJsonSchema } = await import("zod-to-json-schema");
+    const { batchLiquidacionFinalSchema } = await import("../../validation/batchLiquidacionFinal.js");
+    const json = JSON.stringify(zodToJsonSchema(batchLiquidacionFinalSchema, { $refStrategy: "none" }));
+    expect(json).toContain("NO equivale a cero");
+    expect(json).toContain("se manda el DERECHO, no el monto".slice(3, 20));
+    expect(json).toContain("AUSENTE = se liquida desde la fecha de ingreso");
   });
 
   it("no persiste nada: dos corridas del mismo input dan el mismo resultado", async () => {

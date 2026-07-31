@@ -97,6 +97,19 @@ export async function ejecutarBatchLiquidacionFinal(
       total: r.total,
       supuestos: r.supuestos,
       advertencias: r.advertencias,
+      // Decir en la respuesta lo que el schema ya dice en su descripción: la
+      // línea ausente no es una línea en cero. Quien lee esto puede ser un
+      // agente que no escribió el request.
+      noSolicitado: e.indemnizacion
+        ? []
+        : [
+            {
+              codigo: "INDEMNIZACION_DESPIDO",
+              motivo:
+                "No se envió el bloque `indemnizacion`, así que no se calculó. La ausencia de " +
+                "esta línea NO significa que la indemnización sea cero: significa que no se pidió.",
+            },
+          ],
     };
   });
 
