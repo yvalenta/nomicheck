@@ -26,7 +26,7 @@ Empezar por [[00_Indice_Nomina]] si lo que se busca es la regla; empezar por ac�
 | [[01_Ingresos_y_Jornada]] | `recargos.ts`, `auxilio.ts`, `calculadoraTurnos.ts`, `calculadoraSalarioFijo.ts` | `POST /nomina/calcular`, `POST /recargos/calcular`, `POST /batch/liquidar` |
 | [[02_Descuentos_al_Trabajador]] | `deducciones.ts` | `POST /nomina/calcular`, `POST /batch/liquidar` |
 | [[03_Beneficios_de_Ley]] | `prestaciones.ts` | `POST /prima/calcular`, `POST /cesantias/calcular`, `POST /batch/liquidar` |
-| [[04_Fin_del_Contrato]] | `indemnizacion.ts`, `liquidacionFinal.ts` (cálculo puro), `liquidacionFinalService.ts` (con historial en BD) | `POST /indemnizacion/calcular`, `POST /empresa/empleados/:id/liquidacion-final` |
+| [[04_Fin_del_Contrato]] | `indemnizacion.ts`, `liquidacionFinal.ts` (cálculo puro), `liquidacionFinalService.ts` (con historial en BD), `batchLiquidacionFinalService.ts` (stateless) | `POST /indemnizacion/calcular`, `POST /empresa/empleados/:id/liquidacion-final`, `POST /batch/liquidacion-final` |
 | [[05_Valores_Actualizables]] | `semillaLegal.ts` (valores), `catalogoReglas.ts` (metadatos), `parametrosSnapshotService.ts` (publicación) | `GET /reglas/parametros`, `GET /batch/parametros`, `GET /reglas/verificadas-al` |
 | [[06_Aportes_Patronales_y_Parafiscales]] | `costoEmpleador.ts`, `constantes.ts` | `GET /empresa/costos` |
 | **(sin archivo en el baúl)** | `retencionFuente.ts` | `POST /retencion/calcular`, `POST /batch/retencion` — ver §6 |
@@ -166,6 +166,22 @@ Ser honesto acá es el punto de todo el archivo. Un baúl que finge cubrir todo 
 
 ### ✅ Documentado e implementado, coincidiendo
 Devengo y recargos, deducciones de ley, tope de deducciones, los dos regímenes de embargo, las cuatro prestaciones (provisión y liquidación final), indemnización por despido, período de prueba, costo del empleador con exoneración, los 25 parámetros con vigencia.
+
+### 🔀 Dos caminos para la liquidación final, y por qué
+
+La misma regla se implementa dos veces a propósito, y conviene no confundirlas:
+
+| | `liquidacionFinalService.ts` | `batchLiquidacionFinalService.ts` |
+|---|---|---|
+| Quién la usa | La empresa dentro de NomiCheck | Un comprador de Execution Market |
+| De dónde sale el historial | De los recibos previos en Postgres | **Lo declara quien llama** |
+| Qué hace con el resultado | Crea un periodo de cierre y un `ReciboPago` | Lo devuelve firmado y lo olvida |
+
+No es duplicación: es que el comprador no tiene recibos nuestros. Lo que la empresa sabe por su historial, el comprador lo informa — hasta cuándo se pagó la prima, hasta cuándo se consignaron las cesantías, cuántos días de vacaciones se disfrutaron. Es la misma información que trae cualquier planilla de liquidación colombiana.
+
+Lo que **no** se declare se asume en el caso simple y **sale dicho en el campo *supuestos* de la respuesta**, nunca callado. Es la misma postura que §2 de [[05_Valores_Actualizables]] fija para la retención: mejor un número con su supuesto encima que un número plausible y mudo.
+
+El cálculo en sí no está duplicado — los dos llaman a `calcularPrestacionesSociales` de `packages/reglas`, y el stateless compone con `liquidacionFinal.ts`.
 
 ### 🟡 Implementado pero **sin archivo de reglas en el baúl**
 | Capacidad | Dónde está | Por qué importa |

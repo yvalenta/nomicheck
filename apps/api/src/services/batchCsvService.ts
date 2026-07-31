@@ -8,6 +8,7 @@ import type { BatchLiquidarOutput } from "../validation/batchPublico.js";
 import type { BatchRetencionOutput } from "../validation/batchRetencion.js";
 import type { BatchPagoOnchainOutput } from "../validation/batchPagoOnchain.js";
 import type { BatchVerificacionOutput } from "../validation/batchVerificacion.js";
+import type { BatchLiquidacionFinalOutput } from "../validation/batchLiquidacionFinal.js";
 
 function escaparCampo(v: string | number | undefined | null): string {
   if (v === undefined || v === null) return "";
@@ -271,4 +272,68 @@ export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string 
     }
   }
   return `${cabecera}\n${filas.join("\n")}\n`;
+}
+
+// ── Liquidación final ───────────────────────────────────────────────────────
+// Una fila por LÍNEA de liquidación, no por empleado: es el formato que un
+// contador pega junto a su planilla y cuadra concepto por concepto. El total
+// se repite en cada fila del mismo empleado para poder filtrar por externalId
+// sin perderlo. Los supuestos van al final, como comentarios `#`: son la
+// diferencia entre una cifra y una cifra que sabés sobre qué se construyó.
+export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput): string {
+  const cabecera = [
+    `# NomiCheck liquidación final batch export — version ${salida.version}`,
+    `# empresa: ${salida.empresa.nombre} (NIT ${salida.empresa.nit})`,
+    `# generado_en: ${salida.generadoEn}`,
+    `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
+    `# reglas_hash: ${salida.reglasHash}`,
+    `# habeas_data: ${salida.habeasData.norma}`,
+    `# signature_algo: ${salida.signature.algo}`,
+    `# signature_public_key_id: ${salida.signature.publicKeyId}`,
+    `# signature_value: ${salida.signature.valor}`,
+    `# disclaimer: ${salida.disclaimer}`,
+  ].join("\n");
+
+  const columnas = [
+    "external_id",
+    "nombre",
+    "documento",
+    "fecha_ingreso",
+    "fecha_retiro",
+    "codigo",
+    "concepto",
+    "valor",
+    "ley",
+    "total_liquidacion",
+  ];
+
+  const filas: string[] = [columnas.join(",")];
+  for (const r of salida.resultados) {
+    for (const l of r.lineas) {
+      filas.push(
+        [
+          r.externalId,
+          r.nombre,
+          r.documento,
+          r.fechaIngreso,
+          r.fechaRetiro,
+          l.codigo,
+          l.concepto,
+          l.valorCalculado,
+          l.ley,
+          r.total,
+        ]
+          .map(escaparCampo)
+          .join(",")
+      );
+    }
+  }
+
+  const notas: string[] = [];
+  for (const r of salida.resultados) {
+    for (const s of r.supuestos) notas.push(`# supuesto [${r.externalId}]: ${s}`);
+    for (const a of r.advertencias) notas.push(`# advertencia [${r.externalId}]: ${a}`);
+  }
+
+  return `${cabecera}\n${filas.join("\n")}\n${notas.length ? notas.join("\n") + "\n" : ""}`;
 }

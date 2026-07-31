@@ -27,7 +27,10 @@ import {
   batchRetencionToCsv,
   batchPagoOnchainToCsv,
   batchVerificacionToCsv,
+  batchLiquidacionFinalToCsv,
 } from "../services/batchCsvService.js";
+import { ejecutarBatchLiquidacionFinal } from "../services/batchLiquidacionFinalService.js";
+import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
 import {
@@ -387,6 +390,110 @@ batchPublicoRouter.post("/verificar/csv", async (req: Request, res: Response) =>
     const csv = batchVerificacionToCsv(salida);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="nomicheck-verificacion.csv"`);
+    return res.status(200).send(csv);
+  } catch (e) {
+    return res.status(500).json({
+      error: "internal_error",
+      mensaje: e instanceof Error ? e.message : "Error inesperado",
+    });
+  }
+});
+
+// ── Liquidación final de contrato ───────────────────────────────────────────
+// El documento que produce una terminación real: las cuatro prestaciones
+// pendientes, más la indemnización si se pide. A diferencia de
+// /empresa/empleados/:id/liquidacion-final, que lee el historial de recibos en
+// Postgres, acá el historial de cortes lo DECLARA quien llama — el comprador
+// no tiene recibos nuestros. Lo que no declare se asume en el caso simple y
+// sale dicho en `supuestos`.
+const jsonSchemaLiquidacionFinal = zodToJsonSchema(batchLiquidacionFinalSchema, {
+  name: "BatchLiquidacionFinalInput",
+  target: "jsonSchema7",
+  $refStrategy: "none",
+});
+
+batchPublicoRouter.get("/liquidacion-final/schema/v1.json", (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json(jsonSchemaLiquidacionFinal);
+});
+
+// Dos empleados que muestran los dos extremos del contrato: uno con el
+// historial completo (sin supuestos) y otro sin nada declarado, para que se
+// vea qué aparece en `supuestos` cuando el comprador no informa los cortes.
+const EJEMPLO_LIQUIDACION_FINAL = {
+  version: "1",
+  buyer: { noExternalLlm: true },
+  empresa: { nombre: "Buyer Demo", nit: "900123456-7", sector: "servicios" },
+  empleados: [
+    {
+      externalId: "E-1",
+      nombre: "Ana Ejemplo",
+      documento: "1000000001",
+      salarioBase: 1_850_000,
+      auxilioTransporte: true,
+      fechaIngreso: "2024-03-01",
+      fechaRetiro: "2026-07-30",
+      devengosSuplementarios: [{ mes: "2026-07", valor: 241_943 }],
+      cortePrima: "2026-06-30",
+      corteCesantias: "2025-12-31",
+      diasVacacionesTomados: 15,
+    },
+    {
+      externalId: "E-2",
+      salarioBase: 1_750_905,
+      auxilioTransporte: true,
+      fechaIngreso: "2026-01-15",
+      fechaRetiro: "2026-07-30",
+      indemnizacion: { tipoContrato: "fijo", fechaVencimientoPactada: "2026-12-31" },
+    },
+  ],
+};
+
+batchPublicoRouter.get("/liquidacion-final/ejemplo", async (_req: Request, res: Response) => {
+  try {
+    const parsed = batchLiquidacionFinalSchema.parse(EJEMPLO_LIQUIDACION_FINAL);
+    const salida = await ejecutarBatchLiquidacionFinal(parsed);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(200).json({
+      instrucciones:
+        "Ejemplo del contrato de liquidación final v1. POST el campo `input` a /api/batch/liquidacion-final y contrasta con `output`. Fijate en `supuestos`: E-1 declara todo su historial y sale vacío; E-2 no declara cortes y ahí se dice qué se asumió.",
+      input: EJEMPLO_LIQUIDACION_FINAL,
+      output: salida,
+    });
+  } catch (e) {
+    return res.status(500).json({
+      error: "internal_error",
+      mensaje: e instanceof Error ? e.message : "Error inesperado",
+    });
+  }
+});
+
+batchPublicoRouter.post("/liquidacion-final", async (req: Request, res: Response) => {
+  const parsed = batchLiquidacionFinalSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", detalle: parsed.error.flatten() });
+  }
+  try {
+    const salida = await ejecutarBatchLiquidacionFinal(parsed.data);
+    return res.status(200).json(salida);
+  } catch (e) {
+    return res.status(500).json({
+      error: "internal_error",
+      mensaje: e instanceof Error ? e.message : "Error inesperado",
+    });
+  }
+});
+
+batchPublicoRouter.post("/liquidacion-final/csv", async (req: Request, res: Response) => {
+  const parsed = batchLiquidacionFinalSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", detalle: parsed.error.flatten() });
+  }
+  try {
+    const salida = await ejecutarBatchLiquidacionFinal(parsed.data);
+    const csv = batchLiquidacionFinalToCsv(salida);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="nomicheck-liquidacion-final.csv"`);
     return res.status(200).send(csv);
   } catch (e) {
     return res.status(500).json({
