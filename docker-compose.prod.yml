@@ -40,6 +40,10 @@ x-env: &env
   # efímero por sesión y un output firmado hoy deja de verificar tras el
   # próximo redeploy. Ver batchSignatureService.ts.
   NOMICHECK_BATCH_SIGNING_KEY_PEM: ${NOMICHECK_BATCH_SIGNING_KEY_PEM:?debe estar en .env — genera con generateKeyPairSync("ed25519")}
+  # El commit desplegado, que `deploy.sh` exporta después del pull. Sin default a
+  # propósito: si alguien levanta el stack a mano sin exportarlo, /api/health
+  # responde `sha: null` —"no sé"— en vez de afirmar un commit que nadie midió.
+  GIT_SHA: ${GIT_SHA:-}
   CORS_ORIGIN: ${CORS_ORIGIN:-https://nomicheck.ynt.codes}
   PORT: 3002
   NODE_ENV: production

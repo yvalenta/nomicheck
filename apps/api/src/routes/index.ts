@@ -117,8 +117,22 @@ const limitadorBatch = rateLimit({
   message: { error: "Demasiadas solicitudes al wrapper batch — reintenta en un minuto." },
 });
 
+// `sha` es el commit que quedó desplegado, y existe para que una guarda EXTERNA
+// pueda comparar lo servido contra la punta del repo sin entrar al VPS. Hasta
+// que existió, el sha desplegado solo se sabía entrando por SSH: se escribía a
+// mano en la documentación de nomicheck_ops y estuvo días falso con todos sus
+// auditores en verde.
+//
+// `?? null` y no un default: si el deploy no lo inyectó, la respuesta tiene que
+// decir "no sé" y no inventar un valor plausible. La guarda del otro lado
+// distingue los dos casos — un null degrada a instantánea, un sha distinto de la
+// punta es rojo.
 router.get("/health", (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString() });
+  res.json({
+    ok: true,
+    ts: new Date().toISOString(),
+    sha: process.env.GIT_SHA ?? null,
+  });
 });
 
 // Verificador anónimo — sin auth.

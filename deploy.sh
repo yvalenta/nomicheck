@@ -60,6 +60,16 @@ fi
 echo "→ Pull de cambios..."
 git -C "$APP_DIR" pull --ff-only
 
+# ── El sha que se está desplegando ───────────────────────────────────────────
+# Se calcula DESPUÉS del pull —es el commit que va a correr, no el que corría— y
+# se exporta para que Compose lo inyecte en la API, que lo publica en
+# /api/health. Sin esto el sha desplegado solo se sabe entrando a este VPS, y un
+# dato que sólo vive acá es un dato que la documentación copia a mano y deja
+# envejecer: ya estuvo días afirmando un commit falso.
+GIT_SHA="$(git -C "$APP_DIR" rev-parse HEAD)"
+export GIT_SHA
+echo "→ Desplegando ${GIT_SHA:0:7}"
+
 BUILD_FLAG=()
 [[ "${1:-}" == "--no-build" ]] || BUILD_FLAG=(--build)
 
