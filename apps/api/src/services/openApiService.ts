@@ -233,9 +233,14 @@ export function construirOpenApi(): Record<string, unknown> {
       title: "NomiCheck — motor de nómina colombiana verificable",
       version: "1.0.0",
       description:
-        "Cálculos de nómina y retención colombianos, determinísticos y con procedencia: cada " +
-        "línea cita su norma, cada respuesta lleva el hash del catálogo legal que la produjo y " +
-        "va firmada con Ed25519.\n\n" +
+        "La ley laboral colombiana como catálogo fechado y verificable, más el motor que la " +
+        "aplica.\n\n" +
+        "**El catálogo es el sustrato.** Cualquier parámetro legal resoluble a cualquier fecha " +
+        "desde 2020 —salario mínimo, auxilio, UVT, recargos, divisor de jornada, topes—, cada " +
+        "uno con la norma que lo fijó y la ventana en que rigió. Los números son públicos; la " +
+        "historia fechada, con fuente, mantenida y firmada, no lo es.\n\n" +
+        "Encima de él, cinco cálculos determinísticos: cada línea cita su norma, cada respuesta " +
+        "lleva el hash del catálogo que la produjo y va firmada con Ed25519.\n\n" +
         "**Sin estado.** Entra JSON, sale JSON: el input se procesa en memoria y se descarta, " +
         "nunca se escribe en una base (Ley 1581 de 2012, habeas data).\n\n" +
         `Catálogo legal verificado al ${REGLAS_VERIFICADAS_AL}. El spec humano de cada regla ` +
@@ -268,9 +273,15 @@ export function construirOpenApi(): Record<string, unknown> {
     // linter lo exige explícito en vez de por omisión — con razón: "no dice
     // nada" y "dice que es abierto" no son lo mismo para quien integra.
     security: [],
+    // El catálogo va primero: no es metadata de los cálculos, es de donde salen.
     tags: [
-      { name: "listings", description: "Los cinco cálculos que el wrapper vende." },
-      { name: "catálogo", description: "Metadatos para verificar lo que los listings devuelven." },
+      {
+        name: "catálogo",
+        description:
+          "Los parámetros legales fechados y firmados, y lo necesario para verificar cualquier " +
+          "respuesta sin volver a llamar al servidor.",
+      },
+      { name: "listings", description: "Los cinco cálculos construidos sobre ese catálogo." },
     ],
     paths,
   };
