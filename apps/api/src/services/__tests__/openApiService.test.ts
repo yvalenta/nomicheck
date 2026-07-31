@@ -21,13 +21,20 @@ const doc = construirOpenApi() as {
 // Los mismos id que el agent card A2A y el catálogo ARD publican como
 // `skills[].id` / `capabilities`. Si acá cambia uno, hay que cambiarlo allá —
 // y este test es el que lo recuerda.
-const SKILLS_ANUNCIADAS = [
+// Los cinco cálculos: POST con gemela CSV.
+const LISTINGS_ANUNCIADOS = [
   "withholding-tax",
   "payslip-verification",
   "payroll-settlement",
   "final-settlement",
   "usdc-contractor-payout",
 ];
+
+// Capacidades de catálogo: se anuncian igual, pero son GET y no tienen CSV.
+// Van aparte porque el test anterior exigía una gemela `-csv` a todo lo
+// anunciado, y eso habría bloqueado anunciar `legal-parameters` — que es
+// justamente la capacidad menos replicable del conjunto.
+const CATALOGO_ANUNCIADO = ["legal-parameters"];
 
 describe("documento OpenAPI", () => {
   it("es OpenAPI 3.0 con servidor y seguridad declarados", () => {
@@ -38,11 +45,18 @@ describe("documento OpenAPI", () => {
     expect(doc.components.securitySchemes).toHaveProperty("x402");
   });
 
-  it("cada skill anunciada tiene su operación", () => {
+  it("cada listing anunciado tiene su operación y su gemela CSV", () => {
     const ids = Object.values(doc.paths).flatMap((m) => Object.values(m).map((o) => o.operationId));
-    for (const skill of SKILLS_ANUNCIADAS) {
+    for (const skill of LISTINGS_ANUNCIADOS) {
       expect(ids, `la skill "${skill}" se anuncia pero no está en el OpenAPI`).toContain(skill);
       expect(ids, `falta la gemela CSV de "${skill}"`).toContain(`${skill}-csv`);
+    }
+  });
+
+  it("cada capacidad de catálogo anunciada tiene su operación", () => {
+    const ids = Object.values(doc.paths).flatMap((m) => Object.values(m).map((o) => o.operationId));
+    for (const cap of CATALOGO_ANUNCIADO) {
+      expect(ids, `"${cap}" se anuncia en el agent card y no está en el OpenAPI`).toContain(cap);
     }
   });
 
