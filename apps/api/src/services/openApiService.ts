@@ -155,6 +155,20 @@ export function construirOpenApi(): Record<string, unknown> {
     // propósito, y un `security` global los marcaría como pagos.
     const seguridad = cobra(op.ruta) ? { security: [{ x402: [] }] } : {};
 
+    // Extensión `x-` con el precio EN NÚMERO. La descripción del 402 ya lo dice
+    // en prosa, y esa prosa es para humanos: un cliente que quiera pintar
+    // "gratis" o "US$0,02" tendría que parsear una frase en español, que es la
+    // clase de acoplamiento que se rompe al reescribir una palabra. Sale de
+    // `PRECIOS_USD`, así que sigue habiendo un solo sitio donde vive el precio.
+    const x402 = {
+      "x-x402": {
+        cobra: cobra(op.ruta),
+        precioUsd: precioDe(op.ruta) ?? null,
+        red: muro.activo ? muro.red.caip2 : null,
+        asset: muro.activo ? muro.red.asset : null,
+      },
+    };
+
     paths[op.ruta] = {
       post: {
         operationId: op.id,
@@ -164,6 +178,7 @@ export function construirOpenApi(): Record<string, unknown> {
         requestBody: cuerpo,
         responses: respuestas,
         ...seguridad,
+        ...x402,
       },
     };
 
@@ -184,6 +199,7 @@ export function construirOpenApi(): Record<string, unknown> {
         // el 402 es lo que impide que un cliente lo descubra a los golpes.
         responses: { "200": { description: "CSV." }, "400": respuestas["400"], "402": respuestas["402"] },
         ...seguridad,
+        ...x402,
       },
     };
   }

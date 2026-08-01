@@ -478,7 +478,7 @@ batchPublicoRouter.get("/liquidacion-final/ejemplo", async (_req: Request, res: 
     res.setHeader("Cache-Control", "public, max-age=300");
     return res.status(200).json({
       instrucciones:
-        "Ejemplo del contrato de liquidación final v1. POST el campo `input` a /api/batch/liquidacion-final y contrasta con `output`. Fijate en `supuestos`: E-1 declara todo su historial y sale vacío; E-2 no declara cortes y ahí se dice qué se asumió.",
+        "Ejemplo del contrato de liquidación final v1. POST el campo `input` a /api/batch/liquidacion-final y contrasta con `output`. Fíjate en `supuestos`: E-1 declara todo su historial y sale vacío; E-2 no declara cortes y ahí se dice qué se asumió.",
       input: EJEMPLO_LIQUIDACION_FINAL,
       output: salida,
     });

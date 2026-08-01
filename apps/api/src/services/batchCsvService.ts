@@ -279,7 +279,7 @@ export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string 
 // contador pega junto a su planilla y cuadra concepto por concepto. El total
 // se repite en cada fila del mismo empleado para poder filtrar por externalId
 // sin perderlo. Los supuestos van al final, como comentarios `#`: son la
-// diferencia entre una cifra y una cifra que sabés sobre qué se construyó.
+// diferencia entre una cifra y una cifra que sabes sobre qué se construyó.
 export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput): string {
   const cabecera = [
     `# NomiCheck liquidación final batch export — version ${salida.version}`,

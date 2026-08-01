@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NomiCheck — catálogo de la API</title>
+    <meta
+      name="description"
+      content="Contrato OpenAPI de los wrappers públicos de NomiCheck: nómina colombiana determinística con salida firmada."
+    />
+    <!--
+      Página INDEPENDIENTE, fuera del bundle de la SPA.
+
+      Vive en `public/` y no como ruta de React a propósito: Swagger UI pesa más
+      que la landing entera, y meterlo en el bundle haría que quien solo quiere
+      calcular su liquidación se lo baje igual. Acá lo carga únicamente quien
+      entra a leer el contrato.
+
+      Los assets se sirven desde `/docs/assets/`, copiados de `swagger-ui-dist`
+      por el plugin de `vite.config.ts` — self-hosted y no desde un CDN: si el
+      CDN se cae, la documentación del producto se cae con él, y este repo mide
+      lo que sirve, no lo que espera que otro sirva.
+    -->
+    <link rel="stylesheet" href="/docs/assets/swagger-ui.css" />
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap"
+      as="style"
+      onload="this.rel='stylesheet'"
+    />
+    <style>
+      :root {
+        --navy: #0b1120;
+        --indigo: #5b50e8;
+        --papel: #faf7f0;
+      }
+      body {
+        margin: 0;
+        background: #f7f8fc;
+      }
+      .barra {
+        background: var(--navy);
+        color: #fff;
+        padding: 18px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .barra a {
+        color: #fff;
+        text-decoration: none;
+      }
+      .marca {
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+      .marca span {
+        color: rgba(255, 255, 255, 0.45);
+        font-weight: 500;
+      }
+      .acciones {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 12px;
+      }
+      .acciones a {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        padding: 6px 10px;
+        color: rgba(255, 255, 255, 0.85);
+        transition: border-color 0.15s;
+      }
+      .acciones a:hover {
+        border-color: rgba(255, 255, 255, 0.5);
+        color: #fff;
+      }
+      .nota {
+        max-width: 1160px;
+        margin: 18px auto 0;
+        padding: 0 24px;
+        font:
+          13px/1.6 system-ui,
+          sans-serif;
+        color: #64748b;
+      }
+      .nota code {
+        background: #eef0f7;
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-size: 12px;
+      }
+      /* Swagger trae su propio verde; se alinea al índigo de la marca para que
+         no se vea como otra web pegada adentro. */
+      .swagger-ui .btn.execute {
+        background: var(--indigo);
+        border-color: var(--indigo);
+      }
+      .swagger-ui .topbar {
+        display: none;
+      }
+      #swagger {
+        max-width: 1160px;
+        margin: 0 auto;
+      }
+      #fallo {
+        display: none;
+        max-width: 1160px;
+        margin: 40px auto;
+        padding: 24px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #fff;
+        font:
+          14px/1.6 system-ui,
+          sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="barra">
+      <a class="marca" href="/servicios">NomiCheck <span>· catálogo de la API</span></a>
+      <div class="acciones">
+        <a href="/servicios">← Servicios</a>
+        <a href="/api/batch/openapi.json">openapi.json</a>
+        <a href="/api/batch/publickey">Llave pública</a>
+        <a href="https://ynt.codes/verificar" target="_blank" rel="noreferrer">Verificador</a>
+      </div>
+    </div>
+
+    <p class="nota">
+      Contrato de los wrappers públicos, generado de los mismos validadores que corren en
+      producción. Los <code>GET</code> de integración son gratis; lo que cobra lo dice cada
+      operación en <code>x-x402</code>, y el precio sale del servidor, no de esta página.
+      <strong>«Try it out» ejecuta contra producción de verdad.</strong>
+    </p>
+
+    <div id="swagger"></div>
+
+    <div id="fallo">
+      <strong>No se pudo cargar el visor.</strong>
+      <p>
+        El contrato sigue disponible en crudo:
+        <a href="/api/batch/openapi.json">/api/batch/openapi.json</a>. Un visor que no carga no
+        debería dejarte sin el documento.
+      </p>
+    </div>
+
+    <script src="/docs/assets/swagger-ui-bundle.js" charset="UTF-8"></script>
+    <script>
+      // Si el bundle no cargó, se DICE y se ofrece el JSON crudo. Un contenedor
+      // vacío se lee como "no hay API".
+      if (typeof SwaggerUIBundle === "undefined") {
+        document.getElementById("fallo").style.display = "block";
+      } else {
+        SwaggerUIBundle({
+          url: "/api/batch/openapi.json",
+          dom_id: "#swagger",
+          deepLinking: true,
+          docExpansion: "list",
+          defaultModelsExpandDepth: 1,
+          tryItOutEnabled: true,
+          supportedSubmitMethods: ["get", "post"],
+          presets: [SwaggerUIBundle.presets.apis],
+        });
+      }
+    </script>
+  </body>
+</html>

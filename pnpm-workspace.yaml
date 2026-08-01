@@ -4,5 +4,10 @@ packages:
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
+  # Telemetría de instalación, que entró como dependencia transitiva de
+  # `swagger-ui-dist` (la página `/docs/`). En `false` a propósito: su script de
+  # post-install reporta la instalación a un servidor de terceros, y nada de lo
+  # que hace hace falta para servir el visor del catálogo.
+  '@scarf/scarf': false
   esbuild: true
   prisma: true

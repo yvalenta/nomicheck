@@ -15,6 +15,7 @@ const PortalColaborador = lazy(() => import('./PortalColaborador.tsx'))
 const AdminPlataforma = lazy(() => import('./AdminPlataforma.tsx'))
 const Login = lazy(() => import('./Login.tsx'))
 const Lanzamiento = lazy(() => import('./lanzamiento/Lanzamiento.tsx'))
+const Servicios = lazy(() => import('./servicios/Servicios.tsx'))
 
 // Fallback mientras baja el chunk del portal. Deliberadamente mínimo y sin
 // layout propio: aparece por milisegundos en red normal y no debe provocar
@@ -40,6 +41,11 @@ function Raiz() {
   // en el futuro se abren variantes `/lanzamientos/{campana}` cuando el
   // volumen justifique A/B por audiencia.
   if (window.location.pathname.startsWith('/lanzamiento')) return <Lanzamiento />
+  // `/servicios` — el mismo motor visto desde las tres formas de usarlo
+  // (persona, empresa, agente). Va aparte de `/lanzamiento`, que es la campaña
+  // B2C escrita contra `sdd/marketing/`: esta habla de capacidades y precios, y
+  // lee el catálogo del OpenAPI vivo en vez de declararlo.
+  if (window.location.pathname.startsWith('/servicios')) return <Servicios />
   if (window.location.pathname.startsWith('/login')) return <Login />
   if (window.location.pathname.startsWith('/empresa')) {
     return (

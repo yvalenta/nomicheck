@@ -158,6 +158,44 @@ describe("el muro en el documento servido", () => {
     expect(csv.responses["402"]).toBeDefined();
   });
 
+  it("publica el precio en NUMERO, no solo en la prosa del 402", () => {
+    // Un cliente que quiera pintar el catálogo no puede depender de parsear
+    // una frase en español: se rompe al reescribir una palabra.
+    const d = conMuro(true);
+    const x = (d.paths["/verificar"].post as unknown as Record<string, unknown>)["x-x402"];
+    expect(x).toEqual({
+      cobra: true,
+      precioUsd: PRECIOS_USD["/verificar"],
+      red: "eip155:8453",
+      asset: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+    });
+  });
+
+  it("con el muro apagado dice que no cobra, y el precio sigue visible", () => {
+    // `cobra: false` con `precioUsd` presente es la verdad completa: hoy no se
+    // paga, y esto es lo que costaría. Omitir el precio obligaría a adivinar.
+    const d = conMuro(false);
+    const x = (d.paths["/verificar"].post as unknown as Record<string, unknown>)["x-x402"] as {
+      cobra: boolean;
+      precioUsd: number | null;
+      red: string | null;
+    };
+    expect(x.cobra).toBe(false);
+    expect(x.precioUsd).toBe(PRECIOS_USD["/verificar"]);
+    expect(x.red).toBeNull();
+  });
+
+  it("la ruta gratis a propósito se declara sin precio, no con precio cero", () => {
+    // `/liquidacion-final` no está en PRECIOS_USD. Un 0 diría "cuesta cero";
+    // `null` dice "no tiene precio", que es lo que se decidió.
+    const d = conMuro(true);
+    const x = (d.paths["/liquidacion-final"].post as unknown as Record<string, unknown>)[
+      "x-x402"
+    ] as { cobra: boolean; precioUsd: number | null };
+    expect(x.cobra).toBe(false);
+    expect(x.precioUsd).toBeNull();
+  });
+
   it("los GET de integración siguen gratis con el muro encendido", () => {
     // Ponerle muro a la llave pública rompería el producto: nadie podría
     // verificar una salida firmada sin pagar otra vez.
