@@ -103,6 +103,32 @@ for _ in $(seq 1 30); do
       echo "  Hasta entonces, nada fuera de este VPS puede comprobar qué commit corre." >&2
     fi
 
+    # ── ¿El muro x402 cobra, si se pidió que cobre? ──────────────────────────
+    # Misma trampa que el sha, y por eso la misma forma de comprobarla: la
+    # INTENCIÓN vive en ~/docker-lab/.env, pero Compose solo entrega al
+    # contenedor las variables que el servicio LISTA. Un stack sin esas líneas
+    # deja el muro apagado y se ve idéntico a "todavía no se desplegó" — con la
+    # diferencia de que acá lo que no pasa es que nadie paga.
+    #
+    # Se mide lo SERVIDO: el endpoint tiene que contestar 402 sin pago.
+    if grep -qE '^X402_ACTIVO=true' "$LAB_DIR/.env" 2>/dev/null; then
+      CODIGO_402="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+        http://localhost:3002/api/batch/verificar \
+        -H 'content-type: application/json' -d '{}' 2>/dev/null || true)"
+      if [[ "$CODIGO_402" == "402" ]]; then
+        echo "✓ el muro x402 cobra: /api/batch/verificar responde 402 sin pago"
+      else
+        echo "⚠ $LAB_DIR/.env pide X402_ACTIVO=true pero lo servido NO cobra" >&2
+        echo "  (/api/batch/verificar responde ${CODIGO_402:-sin respuesta}, no 402)." >&2
+        echo "  Agregá estas líneas al servicio nomicheck-api de $LAB_DIR/docker-compose.yml:" >&2
+        echo "      X402_ACTIVO: \${X402_ACTIVO:-}" >&2
+        echo "      X402_PAY_TO: \${X402_PAY_TO:-}" >&2
+        echo "      X402_RED: \${X402_RED:-}" >&2
+        echo "      NOMICHECK_PUBLIC_ORIGIN: \${NOMICHECK_PUBLIC_ORIGIN:-}" >&2
+        echo "  Sin ellas el muro está apagado y ningún comprador paga nunca." >&2
+      fi
+    fi
+
     "${COMPOSE[@]}" ps "${SERVICES[@]}"
     exit 0
   fi
@@ -110,5 +136,10 @@ for _ in $(seq 1 30); do
 done
 
 echo "✗ Timeout — últimos logs de la API:" >&2
+# Si el muro está encendido, la causa más probable del timeout está en los logs
+# de arriba y es deliberada: `montarMuroX402` REVIENTA al arrancar si la config
+# está mal (payTo que no es una dirección, o la wallet comprometida), en vez de
+# fallar recién cuando llegue el primer comprador. Se apaga con X402_ACTIVO=false
+# en ~/docker-lab/.env y otro deploy.
 "${COMPOSE[@]}" logs nomicheck-api --tail 30
 exit 1

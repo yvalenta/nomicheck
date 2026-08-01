@@ -10,6 +10,7 @@
 // no encuentra la puerta.
 import { describe, expect, it } from "vitest";
 import { construirOpenApi } from "../openApiService.js";
+import { PRECIOS_USD } from "../../lib/x402Config.js";
 
 const doc = construirOpenApi() as {
   openapi: string;
@@ -106,5 +107,64 @@ describe("documento OpenAPI", () => {
     expect(op.parameters.some((p) => p.name === "fecha" && p.in === "query")).toBe(true);
     // Y que las claves ausentes se nombran en vez de desaparecer.
     expect(op.description).toContain("noVigentes");
+  });
+});
+
+// Este documento lo SIRVE `/api/batch/openapi.json`, así que una frase escrita a
+// mano sobre el estado del muro se convierte en una mentira publicada el día que
+// se encienda — y el OpenAPI no lo relee nadie. Estos tests sujetan que lo que
+// se sirve salga de la config y no de la memoria de quien lo escribió.
+describe("el muro en el documento servido", () => {
+  const conMuro = (activo: boolean) => {
+    const antes = process.env.X402_ACTIVO;
+    process.env.X402_ACTIVO = activo ? "true" : "false";
+    try {
+      return JSON.parse(JSON.stringify(construirOpenApi())) as typeof doc & {
+        components: { securitySchemes: { x402: { description: string } } };
+      };
+    } finally {
+      if (antes === undefined) delete process.env.X402_ACTIVO;
+      else process.env.X402_ACTIVO = antes;
+    }
+  };
+
+  it("apagado, dice que responde sin pago y ninguna operación exige x402", () => {
+    const d = conMuro(false);
+    expect(d.components.securitySchemes.x402.description).toContain("apagado");
+    expect(JSON.stringify(d.paths)).not.toContain('"security"');
+  });
+
+  it("encendido, publica el precio real y marca las operaciones que cobran", () => {
+    const d = conMuro(true);
+    const post = d.paths["/verificar"].post as unknown as {
+      security?: unknown[];
+      responses: Record<string, { description: string }>;
+    };
+    expect(post.security).toEqual([{ x402: [] }]);
+    // El precio sale de PRECIOS_USD, no de un literal escrito acá al lado.
+    expect(post.responses["402"].description).toContain(PRECIOS_USD["/verificar"].toFixed(2));
+    expect(d.components.securitySchemes.x402.description).not.toContain("apagado");
+  });
+
+  it("el /csv cobra igual que su ruta base, y lo documenta", () => {
+    // Si el CSV no anunciara su 402, pedirlo parecería la forma gratis de
+    // saltarse el muro hasta que el servidor contesta 402 sin avisar.
+    const d = conMuro(true);
+    const csv = d.paths["/verificar/csv"].post as unknown as {
+      security?: unknown[];
+      responses: Record<string, { description: string }>;
+    };
+    expect(csv.security).toEqual([{ x402: [] }]);
+    expect(csv.responses["402"]).toBeDefined();
+  });
+
+  it("los GET de integración siguen gratis con el muro encendido", () => {
+    // Ponerle muro a la llave pública rompería el producto: nadie podría
+    // verificar una salida firmada sin pagar otra vez.
+    const d = conMuro(true);
+    for (const ruta of ["/parametros", "/publickey"]) {
+      const get = d.paths[ruta]?.get as unknown as { security?: unknown[] } | undefined;
+      if (get) expect(get.security).toBeUndefined();
+    }
   });
 });

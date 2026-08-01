@@ -19,18 +19,33 @@ function aMicroUsdc(usd: number): string {
   return Math.round(usd * 1_000_000).toString();
 }
 
+/**
+ * Dominio EIP-712 del token, que es lo que el comprador necesita para firmar el
+ * `transferWithAuthorization`. Sale de la cadena (`name()` y `version()` del
+ * contrato), no de la intuición: en Base mainnet el USDC se llama `"USD Coin"`
+ * y en Base Sepolia se llama `"USDC"`. Copiar uno del otro produce una firma
+ * con el dominio equivocado.
+ */
+export interface DominioEip712 {
+  name: string;
+  version: string;
+}
+
 export interface RedX402 {
   /** CAIP-2, que es lo que el facilitador espera en `network`. */
   caip2: string;
   /** Contrato del token. USDC nativo de Circle, nunca bridged. */
   asset: string;
   nombre: string;
+  /** `name()`/`version()` del contrato de arriba, leídos de la cadena. */
+  eip712: DominioEip712;
 }
 
 export const BASE_MAINNET: RedX402 = {
   caip2: "eip155:8453",
   asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   nombre: "base",
+  eip712: { name: "USD Coin", version: "2" },
 };
 
 // Base Sepolia, para probar el flujo completo sin mover dinero real.
@@ -38,6 +53,8 @@ export const BASE_SEPOLIA: RedX402 = {
   caip2: "eip155:84532",
   asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   nombre: "base-sepolia",
+  // OJO: acá dice "USDC", no "USD Coin". Medido con `eth_call` el 2026-07-31.
+  eip712: { name: "USDC", version: "2" },
 };
 
 /**
@@ -46,18 +63,34 @@ export const BASE_SEPOLIA: RedX402 = {
  * comprobante. El catálogo del Bazaar se mueve entre $0,05 y $1,00, así que
  * arrancamos abajo — subir después es fácil, bajar quema.
  *
+ * Precio de ESTRENO, decidido el 2026-07-31: por debajo del piso del catálogo a
+ * propósito, para que la primera compra real cueste casi nada mientras se
+ * comprueba que el riel entero funciona. La proporción 2,5× entre el
+ * comprobante y los wrappers es la del diseño original.
+ *
  * Solo POST. Los GET (`/schema/v1.json`, `/ejemplo`, `/publickey`,
  * `/parametros`, `/health`) quedan GRATIS a propósito: son los que permiten
  * integrar antes de pagar y verificar la firma después. Ponerles muro
  * rompería el producto — nadie puede comprobar una salida firmada si la llave
  * pública está detrás del mismo pago.
+ *
+ * `/liquidacion-final` TAMBIÉN queda gratis, y también a propósito. Se desplegó
+ * el 2026-07-30, después de que se escribiera este muro, así que al principio su
+ * ausencia acá era un olvido; el 2026-07-31 se decidió dejarla afuera y
+ * convertirla en carnada de integración: es el cálculo más vistoso de los cinco
+ * —cesantías, intereses, prima, vacaciones e indemnización, cada concepto desde
+ * su propio corte— y probarlo sin pagar es lo que hace que alguien vuelva a
+ * pagar por los otros cuatro.
+ *
+ * Está escrito acá, y sujetado por un test, porque un endpoint sin precio se lee
+ * exactamente igual esté decidido o esté olvidado.
  */
 export const PRECIOS_USD: Record<string, number> = {
-  "/liquidar": 0.1,
-  "/retencion": 0.1,
-  "/verificar": 0.1,
-  "/pago-onchain": 0.1,
-  "/comprobante": 0.25, // cruza tres capas y hace una llamada RPC
+  "/liquidar": 0.02,
+  "/retencion": 0.02,
+  "/verificar": 0.02,
+  "/pago-onchain": 0.02,
+  "/comprobante": 0.05, // cruza tres capas y hace una llamada RPC
 };
 
 /**
@@ -148,6 +181,17 @@ export function requisitosDePago(cfg: ConfigX402, ruta: string) {
     description: DESCRIPCIONES[ruta],
     mimeType: "application/json",
     maxTimeoutSeconds: 30,
+    // Sin esto NADIE PUEDE PAGAR, y el fallo es del otro lado: el comprador
+    // arma el dominio EIP-712 con lo que encuentre acá, y si no encuentra nada
+    // adivina. Nosotros seguimos viendo un 402 impecable.
+    //
+    // El facilitador de Ultravioleta NO lo agrega —medido contra `/accepts`, su
+    // `extra` trae solo la lista `tokens`— pero sí FUSIONA el que le mandemos.
+    // Todo el catálogo que leen los clientes publica estos dos campos.
+    extra: {
+      ...cfg.red.eip712,
+      assetTransferMethod: "eip3009",
+    },
   };
 }
 

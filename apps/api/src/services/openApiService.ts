@@ -18,6 +18,7 @@ import { batchVerificacionSchema } from "../validation/batchVerificacion.js";
 import { batchPagoOnchainSchema } from "../validation/batchPagoOnchain.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
+import { PRECIOS_USD, leerConfigX402 } from "../lib/x402Config.js";
 
 const BASE_URL = "https://nomicheck.ynt.codes/api/batch";
 
@@ -117,6 +118,14 @@ export function construirOpenApi(): Record<string, unknown> {
   const paths: Record<string, unknown> = {};
   const schemas: Record<string, unknown> = {};
 
+  // El estado del muro NO se escribe a mano acá. Este documento lo SIRVE un
+  // endpoint público, así que una frase como "hoy está apagado" se vuelve una
+  // mentira publicada el día que se encienda — y nadie relee el OpenAPI. Se lee
+  // de la misma config que monta el muro, que es la única que sabe la verdad.
+  const muro = leerConfigX402();
+  const precioDe = (ruta: string): number | undefined => PRECIOS_USD[ruta];
+  const cobra = (ruta: string): boolean => muro.activo && precioDe(ruta) !== undefined;
+
   for (const op of OPERACIONES) {
     // Una sola copia del schema, referenciada por la operación JSON y por su
     // gemela CSV: comparten input, así que duplicarlo seria invitar a que se
@@ -130,13 +139,21 @@ export function construirOpenApi(): Record<string, unknown> {
       "200": { description: "Resultado firmado." },
       "400": { description: "`invalid_input` — el body no cumple el contrato v1." },
       "402": {
-        description:
-          "Pago requerido (x402). Solo cuando el muro está encendido; hoy está apagado y estas " +
-          "operaciones responden sin pagar. El cuerpo del 402 trae `accepts` con la red, el " +
-          "token y el monto — ver `securitySchemes.x402`.",
+        description: cobra(op.ruta)
+          ? `Pago requerido (x402): USD ${precioDe(op.ruta)?.toFixed(2)} por llamada en ` +
+            `\`${muro.red.caip2}\`. El 402 trae \`accepts\` con la red, el token, el monto y el ` +
+            "dominio EIP-712 con el que se firma — ver `securitySchemes.x402`."
+          : "Pago requerido (x402). Solo cuando el muro está encendido; ahora está apagado y " +
+            "estas operaciones responden sin pagar. El cuerpo del 402 trae `accepts` con la " +
+            "red, el token y el monto — ver `securitySchemes.x402`.",
       },
       "500": { description: "`internal_error`." },
     };
+
+    // `security` va POR OPERACIÓN y no arriba: los GET de integración
+    // (`/publickey`, `/parametros`, `/schema/v1.json`, `/ejemplo`) son gratis a
+    // propósito, y un `security` global los marcaría como pagos.
+    const seguridad = cobra(op.ruta) ? { security: [{ x402: [] }] } : {};
 
     paths[op.ruta] = {
       post: {
@@ -146,6 +163,7 @@ export function construirOpenApi(): Record<string, unknown> {
         tags: ["listings"],
         requestBody: cuerpo,
         responses: respuestas,
+        ...seguridad,
       },
     };
 
@@ -161,7 +179,11 @@ export function construirOpenApi(): Record<string, unknown> {
           "se pierda al pegarlo en un correo o adjuntarlo a una liquidación.",
         tags: ["listings"],
         requestBody: cuerpo,
-        responses: { "200": { description: "CSV." }, "400": respuestas["400"] },
+        // El `/csv` tiene el MISMO muro y el MISMO precio que su ruta base: si
+        // no, pedir el CSV sería la forma gratis de saltárselo. Documentar acá
+        // el 402 es lo que impide que un cliente lo descubra a los golpes.
+        responses: { "200": { description: "CSV." }, "400": respuestas["400"], "402": respuestas["402"] },
+        ...seguridad,
       },
     };
   }
@@ -263,15 +285,23 @@ export function construirOpenApi(): Record<string, unknown> {
           bearerFormat: "x402-payment",
           description:
             "Pago por llamada sobre HTTP 402 (x402). El servidor responde 402 con `accepts` " +
-            "—red, token y monto—, el cliente paga y reintenta adjuntando el comprobante. " +
-            "**Hoy el muro está apagado**, así que estas operaciones responden sin pago; el " +
-            "esquema queda declarado para que un cliente sepa qué esperar cuando se encienda.",
+            "—red, token, monto y el dominio EIP-712 del token en `extra`—, el cliente firma " +
+            "una autorización EIP-3009 y reintenta adjuntándola. El pago es inmediato y final: " +
+            "no hay escrow ni disputa, y por eso toda salida viaja firmada.\n\n" +
+            (muro.activo
+              ? `Muro **encendido** en \`${muro.red.caip2}\`, token \`${muro.red.asset}\`. Las ` +
+                "operaciones marcadas con este esquema cobran; el resto sigue siendo gratis."
+              : "**Ahora el muro está apagado**, así que estas operaciones responden sin pago; " +
+                "el esquema queda declarado para que un cliente sepa qué esperar cuando se " +
+                "encienda."),
         },
       },
     },
-    // Vacío = sin autenticación requerida. Es el estado real de hoy, y el
-    // linter lo exige explícito en vez de por omisión — con razón: "no dice
-    // nada" y "dice que es abierto" no son lo mismo para quien integra.
+    // Vacío = el DEFAULT del documento es sin autenticación, y el linter lo
+    // exige explícito en vez de por omisión — con razón: "no dice nada" y "dice
+    // que es abierto" no son lo mismo para quien integra. Lo que cobra lo dice
+    // cada operación en su propio `security`, porque los GET de integración
+    // siguen siendo gratis con el muro encendido.
     security: [],
     // El catálogo va primero: no es metadata de los cálculos, es de donde salen.
     tags: [

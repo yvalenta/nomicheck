@@ -119,8 +119,8 @@ describe("leerConfigX402", () => {
 
 describe("requisitosDePago", () => {
   it("convierte dólares a micro-USDC", () => {
-    expect(requisitosDePago(base(), "/verificar").maxAmountRequired).toBe("100000");
-    expect(requisitosDePago(base(), "/comprobante").maxAmountRequired).toBe("250000");
+    expect(requisitosDePago(base(), "/verificar").maxAmountRequired).toBe("20000");
+    expect(requisitosDePago(base(), "/comprobante").maxAmountRequired).toBe("50000");
   });
 
   it("revienta ante una ruta sin precio en vez de cobrar cero", () => {
@@ -133,6 +133,32 @@ describe("requisitosDePago", () => {
       "eip155:84532",
     );
   });
+
+  // Sin el dominio EIP-712 el comprador firma con el dominio equivocado y el
+  // `transferWithAuthorization` se rechaza. El fallo es del otro lado: acá el
+  // 402 se ve perfecto y simplemente nadie paga nunca. El facilitador de
+  // Ultravioleta no lo agrega, así que tiene que salir de acá.
+  it("publica el dominio EIP-712 del token, que es lo que el comprador firma", () => {
+    expect(requisitosDePago(base(), "/verificar").extra).toEqual({
+      name: "USD Coin",
+      version: "2",
+      assetTransferMethod: "eip3009",
+    });
+  });
+
+  it("cada red publica el suyo — en Sepolia el USDC NO se llama igual", () => {
+    // `name()` medido en cadena: 8453 dice "USD Coin", 84532 dice "USDC".
+    // Copiar uno del otro es una firma inválida en silencio.
+    expect(requisitosDePago(base({ red: BASE_SEPOLIA }), "/verificar").extra.name).toBe("USDC");
+    expect(BASE_MAINNET.eip712.name).not.toBe(BASE_SEPOLIA.eip712.name);
+  });
+
+  it("ninguna red se queda sin dominio", () => {
+    for (const red of [BASE_MAINNET, BASE_SEPOLIA]) {
+      expect(red.eip712.name).toBeTruthy();
+      expect(red.eip712.version).toBeTruthy();
+    }
+  });
 });
 
 describe("cobertura de rutas", () => {
@@ -144,6 +170,18 @@ describe("cobertura de rutas", () => {
       expect(() => requisitosDePago(base(), ruta)).not.toThrow();
     }
     expect(RUTAS_CON_MURO).toEqual(Object.keys(PRECIOS_USD));
+  });
+
+  it("/liquidacion-final está gratis porque se decidió, no porque se olvidó", () => {
+    // Quedó afuera por olvido cuando se desplegó (2026-07-30, después de que se
+    // escribiera el muro) y el 2026-07-31 se decidió dejarla así: es la carnada
+    // de integración. Este test es lo que separa la decisión del olvido — si
+    // alguien la quiere cobrar, tiene que venir a borrarlo, que es justo el
+    // momento en que va a leer el porqué.
+    expect(RUTAS_CON_MURO).not.toContain("/liquidacion-final");
+    expect(rutasPublicasConMuro().map((r) => r.publica)).not.toContain(
+      "/api/batch/liquidacion-final",
+    );
   });
 
   it("los GET de integración y verificación quedan fuera del muro", () => {
