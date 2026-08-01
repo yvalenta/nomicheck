@@ -80,8 +80,29 @@ echo "→ Levantando servicios (${SERVICES[*]})..."
 # ── Healthcheck ──────────────────────────────────────────────────────────────
 echo "→ Esperando healthcheck de la API..."
 for _ in $(seq 1 30); do
-  if curl -sf http://localhost:3002/api/health > /dev/null 2>&1; then
+  if SALUD="$(curl -sf http://localhost:3002/api/health 2>/dev/null)"; then
     echo "✓ NomiCheck API lista en http://localhost:3002"
+
+    # ── ¿Lo servido dice qué commit es? ──────────────────────────────────────
+    # Exportar GIT_SHA acá no basta: Compose solo pasa al contenedor las
+    # variables que su servicio LISTA, y el stack que manda es
+    # ~/docker-lab/docker-compose.yml, que no vive en este repo. Sin esa línea
+    # la variable se queda en este script y /api/health responde `sha: null`.
+    #
+    # Se comprueba contra lo SERVIDO y no contra lo que este script cree haber
+    # hecho: un deploy que "exportó la variable" y no la entregó se ve idéntico
+    # a uno que sí, y esa diferencia es justo la que dejó a la documentación
+    # afirmando un commit falso durante días.
+    SHA_SERVIDO="$(printf '%s' "$SALUD" | sed -n 's/.*"sha":"\([0-9a-f]*\)".*/\1/p')"
+    if [[ "$SHA_SERVIDO" == "$GIT_SHA" ]]; then
+      echo "✓ /api/health publica el sha desplegado (${GIT_SHA:0:7})"
+    else
+      echo "⚠ /api/health NO publica el sha desplegado — responde '${SHA_SERVIDO:-null}'." >&2
+      echo "  Agregá esta línea al servicio nomicheck-api de $LAB_DIR/docker-compose.yml:" >&2
+      echo "      GIT_SHA: \${GIT_SHA:-}" >&2
+      echo "  Hasta entonces, nada fuera de este VPS puede comprobar qué commit corre." >&2
+    fi
+
     "${COMPOSE[@]}" ps "${SERVICES[@]}"
     exit 0
   fi
