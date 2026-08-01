@@ -107,6 +107,19 @@
         max-width: 1160px;
         margin: 0 auto;
       }
+      /* La marca, con el mismo tratamiento que en la app: 9px, versalitas,
+         tracking amplio y muy bajo contraste. Es una firma, no un renglón. */
+      .pie {
+        max-width: 1160px;
+        margin: 0 auto;
+        padding: 24px;
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        font-size: 9px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: rgba(22, 32, 58, 0.25);
+      }
       #fallo {
         display: none;
         max-width: 1160px;
@@ -150,7 +163,14 @@
       </p>
     </div>
 
+    <footer class="pie">
+      <span>© <span id="anio"></span> Ynt-labs</span>
+    </footer>
+
     <script src="/docs/assets/swagger-ui-bundle.js" charset="UTF-8"></script>
+    <script>
+      document.getElementById("anio").textContent = String(new Date().getFullYear());
+    </script>
     <script>
       // Si el bundle no cargó, se DICE y se ofrece el JSON crudo. Un contenedor
       // vacío se lee como "no hay API".

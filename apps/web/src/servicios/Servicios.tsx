@@ -468,10 +468,18 @@ export default function Servicios() {
         </div>
       </section>
 
-      <footer className="max-w-6xl mx-auto px-6 py-10">
+      <footer className="max-w-6xl mx-auto px-6 py-10 flex flex-col gap-6">
         <p className="text-xs text-[color:var(--color-muted)] leading-relaxed max-w-3xl">
           {t.footer}
         </p>
+        {/* La marca, igual que en los cuatro portales — pero con un color que
+            SÍ resuelve: `text-base-content/25` es un token de DaisyUI que este
+            tema no define, así que compila a cero CSS y el texto termina
+            saliendo a color heredado y opacidad plena. El diseño pide un
+            susurro (9px, 25%), no un renglón más. */}
+        <span className="font-display text-[9px] font-medium uppercase tracking-[0.2em] text-[color:var(--color-ink)]/25">
+          © {new Date().getFullYear()} Ynt-labs
+        </span>
       </footer>
     </div>
   );
