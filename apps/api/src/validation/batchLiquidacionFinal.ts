@@ -139,11 +139,28 @@ export const batchLiquidacionFinalSchema = z.object({
     wallet: walletEvm.optional(),
     noExternalLlm: z.boolean().default(true),
   }),
-  empresa: z.object({
-    nombre: z.string().min(1),
-    nit: z.string().min(1),
-    sector: z.string().min(1).optional(),
-  }),
+  // OPCIONAL, y ese es el punto. `empresa` no entra en ningún cálculo: se
+  // copia tal cual a la salida. Exigirla obligaba a quien no la tiene —una
+  // persona calculando su propia liquidación— a inventar un NIT, y esta
+  // respuesta VIAJA FIRMADA: un dato falso adentro convierte la firma en el
+  // aval de una mentira, que es exactamente lo contrario de lo que este
+  // producto vende.
+  //
+  // Ausente se dice por AUSENCIA, no con un "(no declarada)" de relleno:
+  // mismo criterio que `noSolicitado`, donde omitir `indemnizacion` significa
+  // que no se pidió y no que valga cero. Los otros tres listings
+  // (`retencion`, `verificacion`, `pago-onchain`) nunca la pidieron. `/liquidar`
+  // sí la sigue exigiendo, y ahí es coherente: ese endpoint liquida LA NÓMINA
+  // DE UNA EMPRESA en un periodo, así que sin empresa no hay pregunta.
+  // Relajar un requisito es compatible hacia atrás: quien ya la manda sigue
+  // funcionando igual.
+  empresa: z
+    .object({
+      nombre: z.string().min(1),
+      nit: z.string().min(1),
+      sector: z.string().min(1).optional(),
+    })
+    .optional(),
   // Mismo tope que los otros listings: un order del marketplace es una unidad
   // de trabajo acotada, y evita un input abusivo contra un proceso CPU-bound.
   empleados: z.array(empleadoLiquidacion).min(1).max(500),
@@ -189,7 +206,9 @@ export interface BatchLiquidacionFinalOutput {
   reglasHash: string;
   disclaimer: string;
   habeasData: HabeasDataConstancia;
-  empresa: { nombre: string; nit: string };
+  /** Ausente cuando quien llama no la declaró. Se OMITE en vez de
+   *  rellenarse: el sobre se firma sobre este objeto. */
+  empresa?: { nombre: string; nit: string };
   resultados: ResultadoLiquidacionBatch[];
   signature: FirmaOutput;
 }

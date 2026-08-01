@@ -57,6 +57,46 @@ function baseInput(): BatchLiquidacionFinalInput {
 const valorDe = (r: { lineas: { codigo: string; valorCalculado: number }[] }, codigo: string) =>
   r.lineas.find((l) => l.codigo === codigo)?.valorCalculado;
 
+// La empresa es OPCIONAL, y la calculadora pública de `/servicios` la omite.
+// Antes mandaba "(no declarada)" de relleno porque el contrato la exigía, y ese
+// texto quedaba DENTRO de una respuesta firmada: la firma terminaba avalando un
+// dato que nadie dio. Lo que se prueba acá es que ausente se dice por ausencia.
+describe("empresa no declarada", () => {
+  const sinEmpresa = (): BatchLiquidacionFinalInput => {
+    const i = baseInput();
+    delete (i as { empresa?: unknown }).empresa;
+    return i;
+  };
+
+  it("calcula igual sin empresa: no entra en ningún número", async () => {
+    const con = await ejecutarBatchLiquidacionFinal(baseInput());
+    const sin = await ejecutarBatchLiquidacionFinal(sinEmpresa());
+    expect(sin.resultados[0].total).toBe(con.resultados[0].total);
+  });
+
+  it("OMITE la clave en vez de emitir null o un texto de relleno", async () => {
+    // `null` o "(no declarada)" serían un dato inventado bajo la firma. La
+    // clave ausente es la única forma de decir "no me lo dieron".
+    const salida = await ejecutarBatchLiquidacionFinal(sinEmpresa());
+    expect("empresa" in salida).toBe(false);
+    expect(JSON.stringify(salida)).not.toContain("no declarada");
+  });
+
+  it("la firma sigue verificando sin la clave", async () => {
+    // El sobre firma el payload completo: quitar un campo cambia lo firmado.
+    const salida = await ejecutarBatchLiquidacionFinal(sinEmpresa());
+    expect(verificarFirma({ ...salida, signature: undefined }, salida.signature)).toBe(true);
+  });
+
+  it("el CSV no escribe una cabecera de empresa vacía", async () => {
+    // `# empresa: undefined (NIT undefined)` se lee como un dato roto, no como
+    // un dato ausente — y este CSV lo pega un contador junto a su planilla.
+    const csv = batchLiquidacionFinalToCsv(await ejecutarBatchLiquidacionFinal(sinEmpresa()));
+    expect(csv).not.toContain("undefined");
+    expect(csv).not.toContain("# empresa:");
+  });
+});
+
 describe("ejecutarBatchLiquidacionFinal", () => {
   it("emite el sobre verificable v1: hash, fecha, disclaimer, habeas data y firma", async () => {
     const salida = await ejecutarBatchLiquidacionFinal(baseInput());

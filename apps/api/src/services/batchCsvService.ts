@@ -283,7 +283,13 @@ export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string 
 export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput): string {
   const cabecera = [
     `# NomiCheck liquidación final batch export — version ${salida.version}`,
-    `# empresa: ${salida.empresa.nombre} (NIT ${salida.empresa.nit})`,
+    // La empresa es opcional en el contrato: cuando no se declaró, la línea NO
+    // se escribe. Escribir `# empresa: undefined (NIT undefined)` sería peor
+    // que no escribirla — parece un dato roto en vez de un dato ausente, y este
+    // CSV lo pega un contador junto a su planilla.
+    ...(salida.empresa
+      ? [`# empresa: ${salida.empresa.nombre} (NIT ${salida.empresa.nit})`]
+      : []),
     `# generado_en: ${salida.generadoEn}`,
     `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
     `# reglas_hash: ${salida.reglasHash}`,

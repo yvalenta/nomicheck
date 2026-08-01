@@ -102,16 +102,11 @@ export default function CalculadoraLiquidacion({ t }: { t: Textos }) {
         body: JSON.stringify({
           version: "1",
           buyer: { noExternalLlm: true },
-          // El contrato exige `empresa`, y la calculadora pública no la pide:
-          // para el cálculo no cambia nada y para la persona es fricción —
-          // el NIT del empleador no se sabe de memoria.
-          //
-          // Va escrito "(no declarada)" y NO un NIT inventado. Esta respuesta
-          // sale FIRMADA: meterle un dato falso convertiría la firma en el aval
-          // de una mentira, que es exactamente lo contrario de lo que vende
-          // este producto. Así, lo que queda firmado es la verdad — que no se
-          // declaró.
-          empresa: { nombre: "(no declarada)", nit: "(no declarado)" },
+          // No se manda `empresa`: la calculadora pública no la pide y el
+          // contrato ya no la exige. Se dice por AUSENCIA — antes viajaba un
+          // "(no declarada)" de relleno dentro de una respuesta FIRMADA, y un
+          // dato inventado adentro convierte la firma en el aval de una
+          // mentira. Ausente es la verdad; un texto de relleno, no.
           empleados: [
             {
               externalId: "web",

@@ -120,7 +120,11 @@ export async function ejecutarBatchLiquidacionFinal(
     reglasHash,
     disclaimer: DISCLAIMER,
     habeasData: construirHabeasData(),
-    empresa: { nombre: input.empresa.nombre, nit: input.empresa.nit },
+    // Spread condicional: si no se declaró, la clave NO EXISTE en la salida.
+    // Poner `null` o un texto de relleno sería firmar un dato que nadie dio.
+    ...(input.empresa
+      ? { empresa: { nombre: input.empresa.nombre, nit: input.empresa.nit } }
+      : {}),
     resultados,
   };
   return { ...sinFirma, signature: firmarPayload(sinFirma) };
