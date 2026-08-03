@@ -45,6 +45,7 @@ import {
 import { seguirPago } from "../services/seguimientoPagoService.js";
 import { comprobanteSchema, seguimientoQuerySchema } from "../validation/comprobante.js";
 import { ErrorRedNoSoportada, resolverRedPago } from "../lib/pagosConfig.js";
+import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../lib/ejemplosBatch.js";
 
 export const batchPublicoRouter = Router();
 
@@ -253,20 +254,6 @@ batchPublicoRouter.get("/retencion/schema/v1.json", (_req: Request, res: Respons
   return res.status(200).json(jsonSchemaRetencion);
 });
 
-const EJEMPLO_RETENCION = {
-  version: "1",
-  buyer: { noExternalLlm: true },
-  personas: [
-    { externalId: "P-1", ingresoLaboralMensual: 8_000_000, declaraRenta: false },
-    {
-      externalId: "P-2",
-      ingresoLaboralMensual: 12_000_000,
-      declaraRenta: true,
-      aportesVoluntariosAfc: 1_000_000,
-      tieneDependientes: true,
-    },
-  ],
-};
 
 batchPublicoRouter.get("/retencion/ejemplo", async (_req: Request, res: Response) => {
   try {
@@ -337,26 +324,6 @@ batchPublicoRouter.get("/verificar/schema/v1.json", (_req: Request, res: Respons
   return res.status(200).json(jsonSchemaVerificacion);
 });
 
-const EJEMPLO_VERIFICACION = {
-  version: "1",
-  buyer: { noExternalLlm: true },
-  comprobantes: [
-    {
-      externalId: "CMP-1",
-      salarioBasicoMensual: 2_000_000,
-      recibeAuxilioTransporte: true,
-      periodoDesde: "2026-07-01",
-      periodoHasta: "2026-07-31",
-      declarado: [
-        { nombre: "Salario básico", valor: 2_000_000 },
-        { nombre: "Auxilio de transporte", valor: 200_000 },
-        // Deducido de más a propósito — el ejemplo debe mostrar un veredicto
-        // con discrepancia, no solo el camino feliz.
-        { nombre: "Salud", valor: 100_000 },
-      ],
-    },
-  ],
-};
 
 batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response) => {
   try {

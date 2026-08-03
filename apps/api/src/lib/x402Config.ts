@@ -15,6 +15,8 @@
 // enciende con una variable de entorno cuando se decida.
 
 /** Precio en unidades mínimas del token (USDC tiene 6 decimales). */
+import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "./ejemplosBatch.js";
+
 function aMicroUsdc(usd: number): string {
   return Math.round(usd * 1_000_000).toString();
 }
@@ -241,6 +243,71 @@ export function requisitosDePago(cfg: ConfigX402, ruta: string) {
     extra: {
       ...cfg.red.eip712,
       assetTransferMethod: "eip3009",
+    },
+  };
+}
+
+/**
+ * Extensión `bazaar`: lo que hace que un recurso ENTRE al catálogo de Coinbase.
+ *
+ * No hay endpoint de registro. Un recurso se cataloga cuando el facilitador de
+ * CDP **liquida un pago** para él y encuentra esta declaración; la aceptación
+ * vuelve en el header `EXTENSION-RESPONSES`. O sea que la primera venta real es
+ * el acto que nos lista, y no se puede comprobar antes.
+ *
+ * Va **solo para las rutas cuyo ejemplo servimos de verdad**. Las otras
+ * quedarían con un contrato inventado por nadie, y publicarle a un agente una
+ * forma que el endpoint rechaza es cobrarle un 400: paga primero y descubre
+ * después. Cuando `/liquidar`, `/pago-onchain` y `/comprobante` tengan su
+ * `/ejemplo`, entran acá y no antes.
+ *
+ * El ejemplo NO se copia: sale de `ejemplosBatch.ts`, el mismo que sirve
+ * `GET /<ruta>/ejemplo`. CDP valida el ejemplo contra el schema de forma
+ * ESTRICTA, así que dos copias divergentes = extensión rechazada.
+ */
+const EJEMPLOS_BAZAAR: Record<string, unknown> = {
+  "/verificar": EJEMPLO_VERIFICACION,
+  "/retencion": EJEMPLO_RETENCION,
+};
+
+export function extensionBazaar(ruta: string): Record<string, unknown> | undefined {
+  const ejemplo = EJEMPLOS_BAZAAR[ruta];
+  if (ejemplo === undefined) return undefined;
+
+  return {
+    discoverable: true,
+    info: {
+      input: { type: "http", method: "POST", bodyType: "json", body: ejemplo },
+      output: { type: "json" },
+    },
+    schema: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        input: {
+          type: "object",
+          // `additionalProperties: false` es lo que hace que el schema sirva de
+          // contrato: sin eso un agente puede mandar cualquier cosa y creer que
+          // la declaramos.
+          additionalProperties: false,
+          required: ["type", "method", "body"],
+          properties: {
+            type: { type: "string", enum: ["http"] },
+            method: { type: "string", enum: ["POST"] },
+            bodyType: { type: "string", enum: ["json"] },
+            body: {
+              type: "object",
+              required: ["version"],
+              properties: {
+                version: { type: "string", enum: ["1"] },
+                buyer: {
+                  type: "object",
+                  properties: { noExternalLlm: { type: "boolean" } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   };
 }

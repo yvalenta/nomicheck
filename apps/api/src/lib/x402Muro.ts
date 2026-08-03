@@ -22,6 +22,7 @@ import {
   leerConfigX402,
   problemasDeConfig,
   requisitosDePago,
+  extensionBazaar,
   RUTAS_CON_MURO,
   perfilFacilitador,
   type ConfigX402,
@@ -118,7 +119,14 @@ function fetchDelFacilitador(
   red: RedX402,
   perfil: PerfilFacilitador,
   recursoDe: () => string,
+  bazaar?: Record<string, unknown>,
 ): typeof fetch {
+  // `extensions` va en el PaymentRequired (hermano de `accepts`) y se copia al
+  // PaymentPayload que llega al facilitador. Lo inyectamos NOSOTROS en los dos
+  // en vez de esperar que el comprador lo devuelva: es nuestra declaración, y
+  // hacerla depender de que un cliente ajeno la reboté bien es regalar el
+  // catálogo a la implementación del otro.
+  const extensiones = bazaar ? { bazaar } : undefined;
   return async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
     const ruta = new URL(url).pathname;
@@ -136,6 +144,7 @@ function fetchDelFacilitador(
           x402Version: 2,
           resource: pedido.resource ?? { url: recursoDe() },
           accepts: pedido.accepts ?? [],
+          ...(extensiones ? { extensions: extensiones } : {}),
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
@@ -147,9 +156,16 @@ function fetchDelFacilitador(
       // Los DOS facilitadores exigen `x402Version` en el nivel superior y
       // faremeter no lo manda en ninguno de los dos casos — cambia el número,
       // no el hueco.
+      const pp = original.paymentPayload as Record<string, unknown> | undefined;
       const cuerpo = perfil.traduceAV1
         ? aFormatoV1(original, red)
-        : { x402Version: perfil.versionEnCuerpo, ...original };
+        : {
+            x402Version: perfil.versionEnCuerpo,
+            ...original,
+            ...(extensiones && pp
+              ? { paymentPayload: { ...pp, extensions: extensiones } }
+              : {}),
+          };
 
       const cabeceras = new Headers(init.headers);
       if (perfil.autenticaCdp) {
@@ -186,8 +202,12 @@ function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<Reque
         // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
         // manda al facilitador lo que realmente configuramos.
         acceptsOverride: accepts.map(common.relaxedRequirementsToV2),
-        fetch: fetchDelFacilitador(cfg.red, perfilFacilitador(cfg.facilitatorURL), () =>
-          `${cfg.origenPublico}${publica}`),
+        fetch: fetchDelFacilitador(
+          cfg.red,
+          perfilFacilitador(cfg.facilitatorURL),
+          () => `${cfg.origenPublico}${publica}`,
+          extensionBazaar(precio),
+        ),
       });
       return createMiddleware({
         x402Handlers: [handler],

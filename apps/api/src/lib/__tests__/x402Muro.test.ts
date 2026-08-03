@@ -10,7 +10,13 @@
 // abajo, mientras su `/accepts` acepta los de v2. faremeter 0.22.0 —la última
 // publicada— manda v2 siempre.
 import { describe, expect, it } from "vitest";
-import { BASE_MAINNET, BASE_SEPOLIA, perfilFacilitador } from "../x402Config.js";
+import {
+  BASE_MAINNET,
+  BASE_SEPOLIA,
+  extensionBazaar,
+  perfilFacilitador,
+} from "../x402Config.js";
+import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../ejemplosBatch.js";
 import { aFormatoV1 } from "../x402Muro.js";
 
 /** Lo que faremeter 0.22.0 manda de verdad, copiado de la corrida real. */
@@ -153,5 +159,61 @@ describe("perfilFacilitador", () => {
     const p = perfilFacilitador("no-es-una-url");
     expect(p.traduceAV1).toBe(false);
     expect(p.autenticaCdp).toBe(false);
+  });
+});
+
+// La extensión que nos mete al catálogo de Coinbase. Lo que se declara acá es
+// el contrato que un agente lee ANTES de pagar: si miente, el comprador paga y
+// recibe un 400, y del lado de él parece que el roto es él.
+describe("extensionBazaar", () => {
+  it("solo declara rutas cuyo ejemplo servimos de verdad", () => {
+    // `/liquidar`, `/pago-onchain` y `/comprobante` no tienen `/ejemplo`
+    // publicado. Declararlos exigiría inventarles la forma de entrada, y una
+    // forma inventada en el catálogo se cobra igual que una buena.
+    expect(extensionBazaar("/verificar")).toBeDefined();
+    expect(extensionBazaar("/retencion")).toBeDefined();
+    expect(extensionBazaar("/liquidar")).toBeUndefined();
+    expect(extensionBazaar("/pago-onchain")).toBeUndefined();
+    expect(extensionBazaar("/comprobante")).toBeUndefined();
+  });
+
+  it("publica EXACTAMENTE el mismo ejemplo que sirve /ejemplo", () => {
+    // El día que se separen, el Bazaar anuncia una forma que el endpoint
+    // rechaza. Los dos leen `ejemplosBatch.ts`; esto lo comprueba.
+    const ext = extensionBazaar("/verificar") as {
+      info: { input: { body: unknown } };
+    };
+    expect(ext.info.input.body).toBe(EJEMPLO_VERIFICACION);
+    const ret = extensionBazaar("/retencion") as { info: { input: { body: unknown } } };
+    expect(ret.info.input.body).toBe(EJEMPLO_RETENCION);
+  });
+
+  it("el ejemplo cumple el schema que se declara al lado", () => {
+    // CDP valida esto ESTRICTO y rechaza la extensión si no cuadra — y el
+    // rechazo solo se ve al liquidar, o sea después de cobrar.
+    const ext = extensionBazaar("/verificar") as {
+      info: { input: Record<string, unknown> };
+      schema: { properties: { input: { properties: Record<string, unknown>; required: string[] } } };
+    };
+    const declarados = Object.keys(ext.schema.properties.input.properties);
+    // `additionalProperties: false` => toda clave del ejemplo tiene que estar
+    // declarada, o la validación falla.
+    for (const clave of Object.keys(ext.info.input)) {
+      expect(declarados).toContain(clave);
+    }
+    for (const requerido of ext.schema.properties.input.required) {
+      expect(ext.info.input[requerido]).toBeDefined();
+    }
+  });
+
+  it("se declara descubrible y como POST con cuerpo JSON", () => {
+    const ext = extensionBazaar("/verificar") as {
+      discoverable: boolean;
+      info: { input: { method: string; type: string; bodyType: string } };
+    };
+    expect(ext.discoverable).toBe(true);
+    expect(ext.info.input.method).toBe("POST");
+    expect(ext.info.input.type).toBe("http");
+    expect(ext.info.input.bodyType).toBe("json");
   });
 });
