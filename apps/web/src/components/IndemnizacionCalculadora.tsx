@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronDown, Clock, Gavel, Info, Scale, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Clock, Gavel, Info, Scale, TriangleAlert } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import { calcularIndemnizacion, type ParametrosPublicos, type ResultadoIndemnizacion } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
+import IndemnizacionResultado, { IndemnizacionSinLugar } from "./IndemnizacionResultado.tsx";
 
 type TipoContrato = "indefinido" | "fijo" | "obra_labor" | "tiempo_parcial";
 
@@ -34,10 +35,6 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
   const [error, setError] = useState<string | null>(null);
   const [calculando, setCalculando] = useState(false);
   const [desgloseAbierto, setDesgloseAbierto] = useState(false);
-  // Los datos TAL COMO se enviaron. Sin esto, editar el formulario después de
-  // calcular dejaría el desglose describiendo un cálculo que no es el que se
-  // está mostrando.
-  const [usados, setUsados] = useState<{ salario: number; desde: string; hasta: string; etiquetaDesde: string } | null>(null);
 
   const conTermino = tipoContrato === "fijo" || tipoContrato === "obra_labor";
   const listo =
@@ -86,12 +83,6 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
             enPeriodoPrueba,
           };
       setResultado(await calcularIndemnizacion(datos));
-      setUsados({
-        salario: Number(salarioMensual),
-        desde: conTermino ? fechaTerminacion : fechaIngreso,
-        hasta: conTermino ? fechaVencimientoPactada : fechaTerminacion,
-        etiquetaDesde: conTermino ? "Terminado el" : "Ingresó el",
-      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
     } finally {
@@ -224,18 +215,23 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
         </div>
       )}
 
-      {resultado &&
-        (resultado.valor === 0 ? (
-          <SinIndemnizacion resultado={resultado} onVerOtras={onAtras} />
-        ) : (
-          <ConIndemnizacion
-            resultado={resultado}
-            usados={usados}
-            abierto={desgloseAbierto}
-            onAlternar={() => setDesgloseAbierto((v) => !v)}
-            onVerOtras={onAtras}
-          />
-        ))}
+      {resultado && (
+        <Aparecer>
+          {resultado.valor === 0 ? (
+            <IndemnizacionSinLugar resultado={resultado}>
+              <AlcanceNota onVerOtras={onAtras} />
+            </IndemnizacionSinLugar>
+          ) : (
+            <IndemnizacionResultado
+              resultado={resultado}
+              abierto={desgloseAbierto}
+              onAlternar={() => setDesgloseAbierto((v) => !v)}
+            >
+              <AlcanceNota onVerOtras={onAtras} />
+            </IndemnizacionResultado>
+          )}
+        </Aparecer>
+      )}
 
       <button
         onClick={onAtras}
@@ -288,120 +284,5 @@ function AlcanceNota({ onVerOtras }: { onVerOtras: () => void }) {
         Ver las calculadoras de prima y cesantías →
       </button>
     </div>
-  );
-}
-
-/** Fila etiqueta/valor del desglose. */
-function Fila({ etiqueta, valor, fuerte = false }: { etiqueta: string; valor: string; fuerte?: boolean }) {
-  return (
-    <div className="flex justify-between items-baseline gap-4 py-1.5">
-      <span className={`text-xs ${fuerte ? "font-semibold text-ink" : "text-muted"}`}>{etiqueta}</span>
-      <span className={`text-xs tabular-nums shrink-0 ${fuerte ? "font-bold text-ink" : "font-medium text-ink"}`}>
-        {valor}
-      </span>
-    </div>
-  );
-}
-
-/** $0 con motivo legal — una respuesta, no una calculadora que falló. */
-function SinIndemnizacion({
-  resultado,
-  onVerOtras,
-}: {
-  resultado: ResultadoIndemnizacion;
-  onVerOtras: () => void;
-}) {
-  return (
-    <Aparecer>
-      <PaycheckCard titulo="Resultado">
-        <div className="px-3 pt-1 pb-3">
-          <div className="flex gap-3">
-            <div className="w-9 h-9 rounded-lg bg-slate-100 text-muted flex items-center justify-center shrink-0">
-              <Info size={18} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-base font-bold text-ink">No hay lugar a indemnización</p>
-              <p className="text-sm text-muted mt-1 leading-relaxed">{resultado.explicacion}</p>
-              <p className="text-xs text-muted mt-2 font-medium">{resultado.ley}</p>
-            </div>
-          </div>
-        </div>
-        <AlcanceNota onVerOtras={onVerOtras} />
-      </PaycheckCard>
-    </Aparecer>
-  );
-}
-
-/** El caso con valor: cifra grande + desglose expandible de dónde sale. */
-function ConIndemnizacion({
-  resultado,
-  usados,
-  abierto,
-  onAlternar,
-  onVerOtras,
-}: {
-  resultado: ResultadoIndemnizacion;
-  usados: { salario: number; desde: string; hasta: string; etiquetaDesde: string } | null;
-  abierto: boolean;
-  onAlternar: () => void;
-  onVerOtras: () => void;
-}) {
-  // Se deriva del propio resultado, no se recalcula la regla: el motor es la
-  // fuente de verdad y acá solo se reparte su total entre sus días. Va con "≈"
-  // porque el total viene redondeado al peso.
-  const porDia = resultado.diasIndemnizacion > 0 ? resultado.valor / resultado.diasIndemnizacion : 0;
-
-  return (
-    <Aparecer>
-      <PaycheckCard titulo="Resultado aproximado">
-        <div className="px-3 pt-2 pb-1">
-          <p className="text-3xl font-bold text-ink tabular-nums tracking-tight">{formatCOP(resultado.valor)}</p>
-          <p className="text-sm text-muted mt-1">
-            {resultado.diasIndemnizacion} días de salario · {resultado.ley}
-          </p>
-        </div>
-
-        <button
-          onClick={onAlternar}
-          aria-expanded={abierto}
-          className="mx-3 mt-2 mb-1 flex w-[calc(100%-1.5rem)] items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold text-mint-dark hover:bg-slate-50 transition-colors duration-200"
-        >
-          Cómo se calculó
-          <ChevronDown
-            size={16}
-            className={`transition-transform duration-300 ease-out ${abierto ? "rotate-180" : ""}`}
-          />
-        </button>
-
-        {/* 0fr → 1fr anima la altura sin medirla en JS ni fijar un max-height a ojo. */}
-        <div
-          className={`mx-3 grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
-            abierto ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-          }`}
-        >
-          <div className="overflow-hidden">
-            <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 mb-2">
-              {usados && (
-                <>
-                  <Fila etiqueta="Salario mensual" valor={formatCOP(usados.salario)} />
-                  <Fila etiqueta={usados.etiquetaDesde} valor={usados.desde} />
-                  <Fila etiqueta="Hasta" valor={usados.hasta} />
-                  <div className="border-t border-slate-200 my-1" />
-                </>
-              )}
-              <Fila etiqueta="Días de indemnización" valor={String(resultado.diasIndemnizacion)} />
-              <Fila etiqueta="Valor de cada día" valor={`≈ ${formatCOP(Math.round(porDia))}`} />
-              <div className="border-t border-slate-200 my-1" />
-              <Fila etiqueta="Total" valor={formatCOP(resultado.valor)} fuerte />
-              <p className="text-xs text-muted leading-relaxed mt-2 pt-2 border-t border-slate-200">
-                {resultado.explicacion}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <AlcanceNota onVerOtras={onVerOtras} />
-      </PaycheckCard>
-    </Aparecer>
   );
 }

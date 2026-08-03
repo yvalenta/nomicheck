@@ -42,11 +42,46 @@ export interface DatosIndemnizacionIndefinido {
 
 export type DatosIndemnizacion = DatosIndemnizacionTermino | DatosIndemnizacionIndefinido;
 
+/**
+ * Los números que la `explicacion` ya afirma en prosa, pero estructurados.
+ *
+ * Existe para que la interfaz pueda dibujar de dónde sale el total —línea de
+ * tiempo, reparto por año, curva de antigüedad— sin volver a implementar la
+ * regla ni, peor, parsear el texto. Son los coeficientes que ESTE cálculo usó,
+ * no una segunda opinión: si la regla cambia, el gráfico cambia con ella.
+ */
+export type DesgloseIndemnizacion =
+  | { base: "sin_lugar"; motivo: "periodo_prueba" | "justa_causa" }
+  | {
+      base: "termino_definido";
+      salarioDiario: number;
+      diasFaltantes: number;
+      fechaTerminacion: string;
+      fechaVencimientoPactada: string;
+    }
+  | {
+      base: "indefinido";
+      salarioDiario: number;
+      fechaIngreso: string;
+      fechaTerminacion: string;
+      diasServidos: number;
+      aniosServidos: number;
+      /** SMLMV vigente a la fecha de terminación, el que decidió el umbral. */
+      smlmv: number;
+      umbralSmlmv: number;
+      sobreUmbral: boolean;
+      diasPrimerAnio: number;
+      diasPorAnioAdicional: number;
+      /** Días aportados por la antigüedad que pasa del primer año (proporcionales). */
+      diasAdicionales: number;
+    };
+
 export interface ResultadoIndemnizacion {
   diasIndemnizacion: number;
   valor: number;
   explicacion: string;
   ley: string;
+  desglose: DesgloseIndemnizacion;
 }
 
 function esTerminoDefinido(datos: DatosIndemnizacion): datos is DatosIndemnizacionTermino {
@@ -82,6 +117,7 @@ export function calcularIndemnizacion(
       explicacion:
         "Terminado dentro del período de prueba: cualquiera de las partes puede darlo por terminado unilateralmente, sin previo aviso y sin lugar a indemnización — no depende de que haya justa causa.",
       ley: "CST art. 80",
+      desglose: { base: "sin_lugar", motivo: "periodo_prueba" },
     };
   }
 
@@ -91,6 +127,7 @@ export function calcularIndemnizacion(
       valor: 0,
       explicacion: "Con justa causa comprobada no hay lugar a indemnización.",
       ley: "CST art. 62",
+      desglose: { base: "sin_lugar", motivo: "justa_causa" },
     };
   }
 
@@ -105,13 +142,21 @@ export function calcularIndemnizacion(
         `La fecha de vencimiento pactada (${datos.fechaVencimientoPactada}) no es posterior a la fecha de terminación (${datos.fechaTerminacion}) — el contrato ya se habría cumplido`
       );
     }
-    const valor = redondearPeso((datos.salarioMensual / DIAS_MES_COMERCIAL) * diasFaltantes);
+    const salarioDiario = datos.salarioMensual / DIAS_MES_COMERCIAL;
+    const valor = redondearPeso(salarioDiario * diasFaltantes);
     const etiqueta = datos.tipoContrato === "fijo" ? "a término fijo" : "por obra o labor";
     return {
       diasIndemnizacion: diasFaltantes,
       valor,
       explicacion: `Contrato ${etiqueta}: se debe el salario de los ${diasFaltantes} días que faltaban para cumplir el plazo pactado (hasta ${datos.fechaVencimientoPactada}).`,
       ley: "CST art. 64, num. 1",
+      desglose: {
+        base: "termino_definido",
+        salarioDiario: redondearPeso(salarioDiario),
+        diasFaltantes,
+        fechaTerminacion: datos.fechaTerminacion,
+        fechaVencimientoPactada: datos.fechaVencimientoPactada,
+      },
     };
   }
 
@@ -133,12 +178,14 @@ export function calcularIndemnizacion(
     ? INDEMNIZACION_DIAS_ANIO_ADICIONAL_SOBRE_UMBRAL
     : INDEMNIZACION_DIAS_ANIO_ADICIONAL_BAJO_UMBRAL;
 
-  const dias =
+  const diasAdicionales =
     diasServidos <= DIAS_ANIO_COMERCIAL
-      ? diasPrimerAnio
-      : diasPrimerAnio + diasPorAnioAdicional * ((diasServidos - DIAS_ANIO_COMERCIAL) / DIAS_ANIO_COMERCIAL);
+      ? 0
+      : diasPorAnioAdicional * ((diasServidos - DIAS_ANIO_COMERCIAL) / DIAS_ANIO_COMERCIAL);
+  const dias = diasPrimerAnio + diasAdicionales;
 
-  const valor = redondearPeso((datos.salarioMensual / DIAS_MES_COMERCIAL) * dias);
+  const salarioDiario = datos.salarioMensual / DIAS_MES_COMERCIAL;
+  const valor = redondearPeso(salarioDiario * dias);
   const aniosServidos = redondearPeso((diasServidos / DIAS_ANIO_COMERCIAL) * 100) / 100;
 
   return {
@@ -150,5 +197,19 @@ export function calcularIndemnizacion(
       `${diasPrimerAnio} días del primer año` +
       (diasServidos > DIAS_ANIO_COMERCIAL ? ` + ${diasPorAnioAdicional} días por cada año adicional (proporcional).` : "."),
     ley: "CST art. 64, modificado por la Ley 50 de 1990, art. 6",
+    desglose: {
+      base: "indefinido",
+      salarioDiario: redondearPeso(salarioDiario),
+      fechaIngreso: datos.fechaIngreso,
+      fechaTerminacion: datos.fechaTerminacion,
+      diasServidos,
+      aniosServidos,
+      smlmv,
+      umbralSmlmv: INDEMNIZACION_UMBRAL_SALARIO_SMLMV,
+      sobreUmbral,
+      diasPrimerAnio,
+      diasPorAnioAdicional,
+      diasAdicionales: Math.round(diasAdicionales * 100) / 100,
+    },
   };
 }

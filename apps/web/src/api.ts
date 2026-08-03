@@ -82,11 +82,38 @@ export type DatosIndemnizacion =
       enPeriodoPrueba?: boolean;
     };
 
+/** Espejo de `DesgloseIndemnizacion` del motor: los coeficientes que ESE cálculo
+ *  usó, para poder graficarlos sin re-implementar la regla acá. */
+export type DesgloseIndemnizacion =
+  | { base: "sin_lugar"; motivo: "periodo_prueba" | "justa_causa" }
+  | {
+      base: "termino_definido";
+      salarioDiario: number;
+      diasFaltantes: number;
+      fechaTerminacion: string;
+      fechaVencimientoPactada: string;
+    }
+  | {
+      base: "indefinido";
+      salarioDiario: number;
+      fechaIngreso: string;
+      fechaTerminacion: string;
+      diasServidos: number;
+      aniosServidos: number;
+      smlmv: number;
+      umbralSmlmv: number;
+      sobreUmbral: boolean;
+      diasPrimerAnio: number;
+      diasPorAnioAdicional: number;
+      diasAdicionales: number;
+    };
+
 export interface ResultadoIndemnizacion {
   diasIndemnizacion: number;
   valor: number;
   explicacion: string;
   ley: string;
+  desglose: DesgloseIndemnizacion;
 }
 
 // Calculadora aparte de indemnización por terminación (SDD §14) — no es
