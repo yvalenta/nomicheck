@@ -173,7 +173,21 @@ function fetchDelFacilitador(
         if (!cred) throw new Error("facilitador CDP sin CDP_API_KEY_ID / CDP_API_KEY_SECRET");
         cabeceras.set("authorization", `Bearer ${jwtCdp(cred, "POST", ruta)}`);
       }
-      return fetch(input, { ...init, headers: cabeceras, body: JSON.stringify(cuerpo) });
+      const res = await fetch(input, { ...init, headers: cabeceras, body: JSON.stringify(cuerpo) });
+
+      // `EXTENSION-RESPONSES` es el ÚNICO canal por el que se sabe si el
+      // Bazaar aceptó la declaración: no hay endpoint de registro ni de
+      // consulta, y el catálogo tarda en reflejarlo. Sin registrarlo, una
+      // extensión rechazada se ve exactamente igual que una aceptada — el pago
+      // liquida en los dos casos y nadie se entera de que no entramos.
+      if (extensiones) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[x402] ${ruta} → ${res.status} · EXTENSION-RESPONSES: ` +
+            (res.headers.get("extension-responses") ?? "(el facilitador no mandó ninguno)"),
+        );
+      }
+      return res;
     }
 
     // ── Todo lo demás ───────────────────────────────────────────────────────
