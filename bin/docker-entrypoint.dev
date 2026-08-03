@@ -24,11 +24,22 @@ pnpm --filter @pv/api exec prisma generate
 # compose del VPS — el mismo archivo fuera de los repos que ya nos mordio con
 # `GIT_SHA`.
 if [[ -n "${VITE_SUPABASE_URL:-}" && -n "${VITE_SUPABASE_ANON_KEY:-}" ]]; then
-  echo "[web] construyendo apps/web..."
-  pnpm --filter @pv/web build
-  rm -rf apps/api/web-dist
-  cp -r apps/web/dist apps/api/web-dist
-  echo "[web] servida desde apps/api/web-dist"
+  # NUNCA fatal. Este script corre con `-e` y es el PID 1 del contenedor: un
+  # `tsc` en rojo mataba el arranque entero y con el la API, el muro x402 y el
+  # verificador publico. Paso el 2026-08-03 — la web es secundaria y no puede
+  # llevarse puesto el riel de cobro. Si falla, se dice y se sigue sin web.
+  #
+  # `@pv/reglas` va ANTES: la web lo importa, y el `command:` del compose que lo
+  # construye corre DESPUES de este entrypoint (`exec "${@}"` es la ultima
+  # linea). Sin esto, `tsc -b` no encuentra sus tipos y falla siempre.
+  if pnpm --filter @pv/reglas build && pnpm --filter @pv/web build; then
+    rm -rf apps/api/web-dist
+    cp -r apps/web/dist apps/api/web-dist
+    echo "[web] servida desde apps/api/web-dist"
+  else
+    echo "[web] EL BUILD FALLO — la API arranca igual, sin web." >&2
+    echo "[web] Se sirve /api normalmente; /, /servicios y /docs/ daran 404." >&2
+  fi
 else
   # No se construye a medias: `createClient(undefined, ...)` revienta al cargar
   # el modulo, y como `supabase.ts` se importa estatico desde App.tsx eso rompe
