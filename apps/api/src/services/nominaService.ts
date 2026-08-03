@@ -17,6 +17,25 @@ import { prisma } from "../lib/prisma.js";
 // como respaldo para ediciones por fuera de la API (seed, SQL directo);
 // el CRUD admin de reglas (Fase 8) deberá llamar invalidarCacheReglas().
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Cuánto se sigue sirviendo el catálogo vencido cuando la base NO responde.
+//
+// POR QUÉ EXISTE. Al vencer el TTL, la siguiente petición iba a Supabase y, si
+// esa consulta fallaba, el endpoint devolvía 500. Se vio en producción el
+// 2026-08-03: `/api/batch/verificar/ejemplo` —público, auditado y de solo
+// lectura— dio un 500 y a los segundos veinte 200 seguidos. No era el ejemplo:
+// era el refresco del caché cayendo justo en esa petición.
+//
+// Servir el catálogo anterior es correcto, no un parche: cada respuesta declara
+// el `reglasHash` con el que se calculó y viaja firmada, así que un consumidor
+// puede ver EXACTAMENTE qué catálogo se usó. Un dato viejo y declarado es
+// verificable; un 500 no le sirve a nadie.
+//
+// El tope existe para que una caída larga siga siendo visible: media hora
+// cubre de sobra un hipo del pooler, y más allá de eso la base está caída de
+// verdad y eso tiene que doler.
+const GRACIA_SIN_BASE_MS = 30 * 60 * 1000;
+
 let cacheReglas: { datos: { reglas: ReglaLegal[]; festivos: Festivo[] }; expira: number } | null =
   null;
 
@@ -32,10 +51,31 @@ export function invalidarCacheReglas(): void {
 export async function obtenerReglasYFestivos(): Promise<{ reglas: ReglaLegal[]; festivos: Festivo[] }> {
   if (cacheReglas && Date.now() < cacheReglas.expira) return cacheReglas.datos;
 
-  const [reglasDb, festivos] = await Promise.all([
-    prisma.reglaLegal.findMany(),
-    prisma.festivo.findMany(),
-  ]);
+  let reglasDb;
+  let festivos;
+  try {
+    [reglasDb, festivos] = await Promise.all([
+      prisma.reglaLegal.findMany(),
+      prisma.festivo.findMany(),
+    ]);
+  } catch (e) {
+    // Sin catálogo previo no hay nada que servir: el error sube tal cual y el
+    // llamador devuelve 500, que acá SÍ es la respuesta honesta.
+    if (!cacheReglas) throw e;
+
+    const vencido = Date.now() - cacheReglas.expira;
+    if (vencido > GRACIA_SIN_BASE_MS) throw e;
+
+    // Se avisa en cada refresco fallido, no una sola vez: un catálogo que se
+    // sirve vencido en silencio es indistinguible de uno fresco, y ese es
+    // justamente el modo de falla que no se quiere.
+    console.warn(
+      `[reglas] la base no respondió; sirviendo el catálogo de hace ${Math.round(
+        (vencido + CACHE_TTL_MS) / 1000
+      )} s. Motivo: ${e instanceof Error ? e.message : e}`
+    );
+    return cacheReglas.datos;
+  }
   // Prisma modela los campos opcionales como `string | null`; el motor de
   // reglas (TS puro, sin Prisma) espera `string | undefined`.
   const reglas = reglasDb.map((r) => ({
