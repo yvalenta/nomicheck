@@ -124,6 +124,7 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
     prima,
     vacaciones,
     diasVacacionesCausados: Math.round(diasVacacionesCausados * 100) / 100,
+    baseCesantiasYPrima: redondearPeso(salarioConAuxilio),
     advertencias,
   };
 }

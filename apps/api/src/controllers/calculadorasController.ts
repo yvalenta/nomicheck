@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import {
+  PCT_INTERES_CESANTIAS,
   calcularPrestacionesSociales,
   calcularRecargos as calcularRecargosReglas,
   calcularRetencionFuente,
@@ -101,6 +102,14 @@ export async function calcularCesantias(req: Request, res: Response) {
       interesesCesantias: r.interesesCesantias,
       diasTrabajadosAcumulado: r.diasTrabajadosAcumulado,
       auxilioIncluido: auxilioTransporte ?? 0,
+      // La base y el periodo van explícitos porque son la otra mitad de la
+      // respuesta: sin ellos, el resultado dice cuánto pero no sobre qué. Los
+      // toma del motor y del pedido — no se recomponen en la web, donde el
+      // "salario + auxilio" volvería a ser una regla escrita dos veces.
+      baseMensual: r.baseCesantiasYPrima,
+      tasaInteresAnual: PCT_INTERES_CESANTIAS,
+      fechaIngreso,
+      fechaCorte,
       advertencias,
       explicacion:
         "Un mes de salario por año trabajado (proporcional por días sobre año de 360). El auxilio de transporte hace parte de la base. Los intereses son el 12% anual sobre el saldo, proporcionales al tiempo.",

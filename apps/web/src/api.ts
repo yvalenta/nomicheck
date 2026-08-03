@@ -170,6 +170,11 @@ export interface ResultadoCesantias {
   interesesCesantias: number;
   diasTrabajadosAcumulado: number;
   auxilioIncluido: number;
+  /** Salario + auxilio con el que se liquidó — la base, no el salario a secas. */
+  baseMensual: number;
+  tasaInteresAnual: number;
+  fechaIngreso: string;
+  fechaCorte: string;
   advertencias: string[];
   explicacion: string;
   ley: string;

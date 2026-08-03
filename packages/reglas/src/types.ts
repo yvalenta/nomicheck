@@ -301,6 +301,16 @@ export interface ResultadoPrestaciones {
   vacaciones: number;
   /** Días de vacación causados por el tiempo servido (15 hábiles por año, CST art. 186), antes de restar los disfrutados. */
   diasVacacionesCausados: number;
+  /**
+   * La base mensual con la que se liquidaron cesantías y prima: salario +
+   * promedio de trabajo suplementario + auxilio de transporte.
+   *
+   * Se devuelve porque es la mitad de la respuesta a "¿de dónde sale este
+   * número?" y no se puede reconstruir desde afuera sin repetir tres reglas
+   * (Ley 1ª de 1963 art. 7, CST art. 253, el promedio de suplementario). NO es
+   * la base de vacaciones, que excluye auxilio y suplementario.
+   */
+  baseCesantiasYPrima: number;
   advertencias: string[];
 }
 
