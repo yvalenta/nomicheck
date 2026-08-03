@@ -83,6 +83,35 @@ for _ in $(seq 1 30); do
   if SALUD="$(curl -sf http://localhost:3002/api/health 2>/dev/null)"; then
     echo "✓ NomiCheck API lista en http://localhost:3002"
 
+    # ── ¿Puede SERVIR, o solo levantó? ───────────────────────────────────────
+    # `/api/health` es estático: `{ok, ts, sha}`, sin tocar la base. Dice que el
+    # proceso arrancó, no que pueda contestar. `/api/batch/health` sí consulta
+    # el ledger de reglas, o sea Prisma y Supabase.
+    #
+    # La diferencia costó plata el 2026-08-03: este script dio "API lista", se
+    # hizo el primer pago x402 real, el muro COBRÓ, y el handler murió contra
+    # una conexión a Supabase que todavía no existía. El comprador pagó y
+    # recibió un 500 — y en x402 el cobro es inmediato y final, así que no hay
+    # forma de devolvérselo.
+    #
+    # No es un detalle del deploy: el muro cobra ANTES de ejecutar el handler
+    # (faremeter liquida en `capture()` y recién después llama a `next()`), así
+    # que cualquier ventana en que la API acepte tráfico sin poder servirlo es
+    # una ventana en la que se cobra por nada. Se cierra acá, esperando.
+    for _ in $(seq 1 20); do
+      if curl -sf http://localhost:3002/api/batch/health >/dev/null 2>&1; then
+        echo "✓ la API llega a la base: /api/batch/health responde"
+        break
+      fi
+      sleep 2
+    done
+    if ! curl -sf http://localhost:3002/api/batch/health >/dev/null 2>&1; then
+      echo "⚠ la API levantó pero NO llega a la base." >&2
+      echo "  Los endpoints con muro van a COBRAR y devolver 500: el comprador" >&2
+      echo "  paga y no recibe nada, y el cobro x402 no se puede deshacer." >&2
+      echo "  Apagá el muro (X402_ACTIVO=false en $APP_DIR/.env) hasta resolverlo." >&2
+    fi
+
     # ── ¿Lo servido dice qué commit es? ──────────────────────────────────────
     # Exportar GIT_SHA acá no basta: Compose solo pasa al contenedor las
     # variables que su servicio LISTA, y el stack que manda es
