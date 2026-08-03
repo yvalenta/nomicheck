@@ -194,9 +194,19 @@ export interface HorasRecargo {
   extrasDominicalesNocturnas?: number;
 }
 
+export interface LineaRecargo {
+  /** RECARGO_* o HORA_EXTRA_* — es lo que distingue "solo el porcentaje" de "hora completa + recargo". */
+  codigo: string;
+  concepto: string;
+  horas?: number;
+  recargoPct?: number;
+  valorCalculado: number;
+  ley?: string;
+}
+
 export interface ResultadoRecargos {
   valorHoraOrdinaria: number;
-  lineas: { concepto: string; horas?: number; recargoPct?: number; valorCalculado: number; ley?: string }[];
+  lineas: LineaRecargo[];
   total: number;
 }
 

@@ -4,6 +4,7 @@ import { formatCOP } from "@pv/reglas";
 import { calcularRecargos, type HorasRecargo, type ParametrosPublicos, type ResultadoRecargos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
+import RecargosResultado from "./RecargosResultado.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -50,6 +51,10 @@ export default function RecargosCalculadora({ parametros, onAtras }: Props) {
   const [resultado, setResultado] = useState<ResultadoRecargos | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [calculando, setCalculando] = useState(false);
+  // El salario TAL COMO se envió: el resultado no lo trae, y leerlo del
+  // formulario dejaría el "+X% sobre tu salario" describiendo otro cálculo si
+  // alguien edita el campo después de calcular.
+  const [salarioUsado, setSalarioUsado] = useState<number | null>(null);
 
   const hayHoras = Object.values(horas).some((v) => Number(v) > 0);
   const listo = Number(salarioMensual) > 0 && fechaReferencia && hayHoras;
@@ -72,6 +77,7 @@ export default function RecargosCalculadora({ parametros, onAtras }: Props) {
           horas: horasNumericas,
         })
       );
+      setSalarioUsado(Number(salarioMensual));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
     } finally {
@@ -160,32 +166,10 @@ export default function RecargosCalculadora({ parametros, onAtras }: Props) {
       {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
 
       {resultado && (
-        <PaycheckCard titulo="Resultado aproximado">
-          <div className="px-3 pb-3 pt-1 flex flex-col gap-2">
-            <div className="flex justify-between items-baseline">
-              <span className="text-sm text-muted">Valor hora ordinaria</span>
-              <span className="text-sm font-medium text-ink tabular-nums">{formatCOP(resultado.valorHoraOrdinaria)}</span>
-            </div>
-            {resultado.lineas.map((l) => (
-              <div key={l.concepto} className="flex justify-between items-baseline gap-2">
-                <span className="text-sm text-muted">
-                  {l.concepto}
-                  {l.horas !== undefined && ` · ${l.horas} h`}
-                  {l.recargoPct !== undefined && ` · ${Math.round(l.recargoPct * 100)}%`}
-                </span>
-                <span className="text-sm font-medium text-ink tabular-nums">{formatCOP(l.valorCalculado)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between items-baseline border-t border-slate-100 pt-2 mt-1">
-              <span className="text-base font-bold text-ink">Total recargos y extras</span>
-              <span className="text-lg font-bold text-ink tabular-nums">{formatCOP(resultado.total)}</span>
-            </div>
-            <p className="text-xs text-muted mt-1">
-              Los recargos sobre horas ordinarias suman solo el porcentaje (la hora base ya está en tu
-              salario); las horas extra se pagan completas más su recargo.
-            </p>
-          </div>
-        </PaycheckCard>
+        // El salario va aparte porque el resultado no lo trae: sirve para decir
+        // cuánto suma el mes, y se toma el que se envió, no el del formulario
+        // por si se editó después de calcular.
+        <RecargosResultado resultado={resultado} salarioMensual={salarioUsado ?? undefined} />
       )}
 
       <button
