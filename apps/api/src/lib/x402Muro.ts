@@ -24,6 +24,7 @@ import {
   requisitosDePago,
   RUTAS_CON_MURO,
   type ConfigX402,
+  type RedX402,
 } from "./x402Config.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
@@ -46,6 +47,62 @@ export function rutasPublicasConMuro(): { publica: string; precio: string }[] {
 }
 
 /**
+ * Traduce a v1 el cuerpo que faremeter manda a `/settle` y `/verify`.
+ *
+ * El facilitador de Ultravioleta **habla dos versiones distintas según el
+ * endpoint**, y eso no está documentado en ningún lado: `/accepts` contesta v2
+ * y acepta CAIP-2, pero `/settle` y `/verify` solo saben deserializar v1.
+ * Medido el 2026-08-03 contra el facilitador real, endpoint por endpoint:
+ *
+ *   network `eip155:8453` -> `unknown variant, expected one of ... base ...`
+ *   `amount`              -> `missing field maxAmountRequired`
+ *   sin `x402Version`     -> `missing field x402Version`
+ *
+ * Con las tres corregidas la petición pasa el deserializador y llega a validar
+ * la firma on-chain. faremeter 0.22.0 —la última publicada— manda v2 siempre y
+ * lo dice en su propio código ("always sends v2 format requests"), así que sin
+ * esta traducción NINGÚN pago puede liquidarse jamás por este facilitador: el
+ * comprador firma bien, y el 500 aparece de nuestro lado.
+ *
+ * Lo que se anuncia al comprador NO se toca: el 402 público sigue siendo v2 con
+ * CAIP-2, que es lo que pide el Bazaar. El remiendo vive acá abajo, en el
+ * transporte, y se quita entero el día que el facilitador se ponga de acuerdo
+ * consigo mismo.
+ */
+export function aFormatoV1(cuerpo: Record<string, unknown>, red: RedX402): unknown {
+  const req = (cuerpo.paymentRequirements ?? {}) as Record<string, unknown>;
+  const pp = (cuerpo.paymentPayload ?? {}) as Record<string, unknown>;
+  const recurso = (pp.resource ?? {}) as Record<string, unknown>;
+
+  return {
+    x402Version: 1,
+    paymentRequirements: {
+      scheme: req.scheme,
+      // `nombre` es el mismo campo que ya existía en `RedX402`; no se inventa
+      // un nombre de red acá, que sería otro sitio donde desincronizarse.
+      network: red.nombre,
+      maxAmountRequired: req.amount,
+      resource: recurso.url,
+      description: recurso.description ?? "",
+      mimeType: "application/json",
+      payTo: req.payTo,
+      maxTimeoutSeconds: req.maxTimeoutSeconds,
+      asset: req.asset,
+      extra: req.extra,
+    },
+    paymentPayload: {
+      x402Version: 1,
+      scheme: req.scheme,
+      network: red.nombre,
+      // `payload` ya trae `{signature, authorization}`, que es idéntico en las
+      // dos versiones. La firma cubre el `transferWithAuthorization`, no estos
+      // sobres, así que traducir el envoltorio no la invalida.
+      payload: pp.payload,
+    },
+  };
+}
+
+/**
  * El facilitador de Ultravioleta responde `/accepts` sin el objeto `resource`
  * de nivel superior, y el validador v2 de faremeter lo exige: sin este parche
  * cada petición con muro muere en 500 en vez de contestar 402.
@@ -54,10 +111,17 @@ export function rutasPublicasConMuro(): { publica: string; precio: string }[] {
  * facilitador devuelva `resource`; la prueba de que hace falta es pedirle
  * `/accepts` y mirar si el campo está.
  */
-function fetchQueRemiendaAccepts(recursoDe: () => string): typeof fetch {
+function fetchDelFacilitador(red: RedX402, recursoDe: () => string): typeof fetch {
   return async (input, init) => {
+    const url = String(input instanceof Request ? input.url : input);
+
+    if ((url.endsWith("/settle") || url.endsWith("/verify")) && typeof init?.body === "string") {
+      const traducido = aFormatoV1(JSON.parse(init.body) as Record<string, unknown>, red);
+      return fetch(input, { ...init, body: JSON.stringify(traducido) });
+    }
+
     const res = await fetch(input, init);
-    if (!String(input instanceof Request ? input.url : input).endsWith("/accepts") || !res.ok) {
+    if (!url.endsWith("/accepts") || !res.ok) {
       return res;
     }
     const cuerpo = (await res.json()) as Record<string, unknown>;
@@ -81,7 +145,7 @@ function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<Reque
         // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
         // manda al facilitador lo que realmente configuramos.
         acceptsOverride: accepts.map(common.relaxedRequirementsToV2),
-        fetch: fetchQueRemiendaAccepts(() => `${cfg.origenPublico}${publica}`),
+        fetch: fetchDelFacilitador(cfg.red, () => `${cfg.origenPublico}${publica}`),
       });
       return createMiddleware({
         x402Handlers: [handler],
@@ -137,7 +201,28 @@ export function montarMuroX402(app: Express): void {
       m = muroDe(cfg, precio, req.path);
       cache.set(req.path, m);
     }
-    m.then((muro) => muro(req, res, next)).catch(next);
+    m.then((muro) => muro(req, res, next)).catch((err: unknown) => {
+      // Cuando la liquidación revienta, faremeter lanza y sin esto Express
+      // contesta su HTML genérico de 500. El comprador recibía
+      // `<pre>Internal Server Error</pre>` y no podía distinguir "no pagaste"
+      // de "pagaste y algo falló" — que es exactamente la diferencia que
+      // decide si reintentar. Paybox lo reportó como `payment: unknown`.
+      //
+      // NO se contesta 402: un 402 significa "pagá", y si la autorización
+      // llegó a liquidarse antes del fallo, reintentar cobra DOS VECES sin
+      // forma de deshacerlo. Tampoco se entrega el recurso. 502 es la única
+      // respuesta honesta: el pago quedó en un estado que no podemos afirmar.
+      if (res.headersSent) return next(err);
+      // eslint-disable-next-line no-console
+      console.error("[x402] fallo liquidando:", err);
+      res.status(502).json({
+        error: "facilitator_error",
+        mensaje:
+          "El facilitador no confirmó el pago. NO se entregó el recurso. " +
+          "El estado del pago es desconocido: comprobá on-chain antes de reintentar.",
+        facilitador: cfg.facilitatorURL,
+      });
+    });
   });
 
   // eslint-disable-next-line no-console
