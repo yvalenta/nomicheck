@@ -210,12 +210,20 @@ export function montarMuroX402(app: Express): void {
       //
       // NO se contesta 402: un 402 significa "pagá", y si la autorización
       // llegó a liquidarse antes del fallo, reintentar cobra DOS VECES sin
-      // forma de deshacerlo. Tampoco se entrega el recurso. 502 es la única
-      // respuesta honesta: el pago quedó en un estado que no podemos afirmar.
+      // forma de deshacerlo. Tampoco se entrega el recurso.
+      //
+      // 424 y no 502, y el motivo NO es semántico: **Cloudflare se come el
+      // cuerpo de los 502/503/504**. Medido el 2026-08-03 con el muro ya
+      // desplegado — el origen servía 236 bytes de JSON y por el dominio
+      // público llegaban 16 de `text/plain` diciendo `error code: 502`. Un
+      // código que el proxy reemplaza deja al comprador igual de ciego que el
+      // 500 que esto vino a arreglar, y el cuerpo legible ES el arreglo. Los
+      // 4xx pasan intactos. `424 Failed Dependency` además dice lo que pasó:
+      // la petición dependía de una liquidación ajena, y esa falló.
       if (res.headersSent) return next(err);
       // eslint-disable-next-line no-console
       console.error("[x402] fallo liquidando:", err);
-      res.status(502).json({
+      res.status(424).json({
         error: "facilitator_error",
         mensaje:
           "El facilitador no confirmó el pago. NO se entregó el recurso. " +
