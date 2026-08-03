@@ -147,10 +147,24 @@ async function postCalculadora<T>(path: string, datos: unknown, errorDefault: st
   return body as T;
 }
 
+export interface SemestrePrima {
+  desde: string;
+  hasta: string;
+  dias: number;
+  /** Llegó al tope de 180 días: hay tiempo servido que no suma prima. */
+  topado: boolean;
+}
+
 export interface ResultadoPrima {
   prima: number;
   diasTrabajadosAcumulado: number;
   auxilioIncluido: number;
+  /** Días que efectivamente liquidaron — no siempre son los días servidos. */
+  diasPrima: number;
+  semestres: SemestrePrima[];
+  baseMensual: number;
+  fechaIngreso: string;
+  fechaCorte: string;
   advertencias: string[];
   explicacion: string;
   ley: string;

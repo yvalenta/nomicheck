@@ -196,3 +196,46 @@ describe("calcularPrestacionesSociales", () => {
     expect(r.prima).toBe(2_778);
   });
 });
+
+// El desglose por semestre es lo que hace visible el tope de 180 días: sin él,
+// "días considerados" y días que liquidaron prima se leen como el mismo número
+// y no siempre lo son.
+describe("calcularPrestacionesSociales — desglose de prima por semestre", () => {
+  it("separa un periodo que cruza el cambio de semestre", () => {
+    const r = calcularPrestacionesSociales({
+      fechaIngreso: "2026-05-01",
+      fechaCorte: "2026-08-31",
+      salarioBase: 2_000_000,
+    });
+    expect(r.semestresPrima.map((s) => [s.desde, s.dias])).toEqual([
+      ["2026-01-01", 61], // mayo y junio
+      ["2026-07-01", 62], // julio y agosto
+    ]);
+    expect(r.diasPrima).toBe(r.diasTrabajadosAcumulado);
+    expect(r.semestresPrima.every((s) => !s.topado)).toBe(true);
+  });
+
+  it("topa cada semestre en 180 días y lo dice, aunque el calendario tenga más", () => {
+    const r = calcularPrestacionesSociales({
+      fechaIngreso: "2026-01-01",
+      fechaCorte: "2026-12-31",
+      salarioBase: 2_000_000,
+    });
+    expect(r.semestresPrima.map((s) => s.dias)).toEqual([180, 180]);
+    expect(r.semestresPrima.every((s) => s.topado)).toBe(true);
+    // 365 días servidos, 360 que liquidan prima: el tope dejó cinco afuera.
+    expect(r.diasTrabajadosAcumulado).toBe(365);
+    expect(r.diasPrima).toBe(360);
+    expect(r.prima).toBe(2_000_000);
+  });
+
+  it("no emite semestres sin días causados", () => {
+    const r = calcularPrestacionesSociales({
+      fechaIngreso: "2026-08-01",
+      fechaCorte: "2026-08-31",
+      salarioBase: 2_000_000,
+    });
+    expect(r.semestresPrima).toHaveLength(1);
+    expect(r.semestresPrima[0].desde).toBe("2026-07-01");
+  });
+});

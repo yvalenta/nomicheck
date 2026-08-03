@@ -67,6 +67,14 @@ export async function calcularPrima(req: Request, res: Response) {
       prima: r.prima,
       diasTrabajadosAcumulado: r.diasTrabajadosAcumulado,
       auxilioIncluido: auxilioTransporte ?? 0,
+      // `diasPrima` puede ser menor que los días servidos: el tope de 180 por
+      // semestre se aplica adentro de cada uno. Van los dos, y el desglose,
+      // porque desde el total no se puede saber cuál semestre topó.
+      diasPrima: r.diasPrima,
+      semestres: r.semestresPrima,
+      baseMensual: r.baseCesantiasYPrima,
+      fechaIngreso,
+      fechaCorte,
       advertencias,
       explicacion:
         "Un mes de salario por año trabajado, proporcional al tiempo servido en cada semestre calendario (topado a 180 días por semestre). El auxilio de transporte hace parte de la base (Ley 1ª de 1963, art. 7). Se paga en dos cuotas: máximo el 30 de junio y el 20 de diciembre.",

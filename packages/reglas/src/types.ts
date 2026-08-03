@@ -311,7 +311,25 @@ export interface ResultadoPrestaciones {
    * la base de vacaciones, que excluye auxilio y suplementario.
    */
   baseCesantiasYPrima: number;
+  /**
+   * Días que efectivamente liquidaron prima. NO tiene por qué coincidir con
+   * `diasTrabajadosAcumulado`: el tope de 180 días por semestre calendario
+   * (CST art. 306) puede dejar días servidos fuera de la prima.
+   */
+  diasPrima: number;
+  /** Un renglón por semestre calendario con días causados — solo los que aportaron. */
+  semestresPrima: SemestrePrima[];
   advertencias: string[];
+}
+
+export interface SemestrePrima {
+  /** YYYY-01-01 o YYYY-07-01. */
+  desde: string;
+  /** YYYY-06-30 o YYYY-12-31. */
+  hasta: string;
+  dias: number;
+  /** El semestre llegó al tope de 180 días: hay tiempo servido que no suma. */
+  topado: boolean;
 }
 
 // Interfaz Strategy — las dos calculadoras implementan esto

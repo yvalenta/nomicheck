@@ -4,6 +4,7 @@ import { formatCOP } from "@pv/reglas";
 import { calcularPrima, type ParametrosPublicos, type ResultadoPrima } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateField from "./DateField.tsx";
+import PrimaResultado from "./PrimaResultado.tsx";
 
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
@@ -119,31 +120,7 @@ export default function PrimaCalculadora({ parametros, onAtras }: Props) {
 
       {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
 
-      {resultado && (
-        <PaycheckCard titulo="Resultado aproximado">
-          <div className="px-3 pb-3 pt-1 flex flex-col gap-2">
-            <div className="flex justify-between items-baseline">
-              <span className="text-sm text-muted">Días considerados</span>
-              <span className="text-sm font-medium text-ink tabular-nums">{resultado.diasTrabajadosAcumulado}</span>
-            </div>
-            {resultado.auxilioIncluido > 0 && (
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm text-muted">Auxilio de transporte en la base</span>
-                <span className="text-sm font-medium text-ink tabular-nums">{formatCOP(resultado.auxilioIncluido)}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-baseline">
-              <span className="text-base font-bold text-ink">Prima estimada</span>
-              <span className="text-lg font-bold text-ink tabular-nums">{formatCOP(resultado.prima)}</span>
-            </div>
-            {resultado.advertencias.map((a) => (
-              <p key={a} className="rounded-xl bg-amber-50 text-amber-800 text-xs p-2.5">{a}</p>
-            ))}
-            <p className="text-xs text-muted mt-1">{resultado.explicacion}</p>
-            <p className="text-xs text-muted">{resultado.ley}</p>
-          </div>
-        </PaycheckCard>
-      )}
+      {resultado && <PrimaResultado resultado={resultado} />}
 
       <button
         onClick={onAtras}

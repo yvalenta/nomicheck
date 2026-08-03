@@ -1,4 +1,4 @@
-import type { DatosPrestaciones, ResultadoPrestaciones } from "./types.js";
+import type { DatosPrestaciones, ResultadoPrestaciones, SemestrePrima } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { rangoFechas, validarPeriodo } from "./utils.js";
 import {
@@ -109,11 +109,23 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
   // Prima: suma por cada semestre calendario (ene-jun, jul-dic) traslapado
   // con el tiempo servido, cada uno topado a 180 días.
   let diasPrima = 0;
+  // El detalle por semestre se conserva, no se recompone después: el tope de
+  // 180 días se aplica DENTRO de cada uno, así que desde el total no hay forma
+  // de saber cuál semestre topó ni con cuántos días quedó.
+  const semestresPrima: SemestrePrima[] = [];
   const anioIngreso = Number(datos.fechaIngreso.slice(0, 4));
   const anioCorte = Number(datos.fechaCorte.slice(0, 4));
   for (let anio = anioIngreso; anio <= anioCorte; anio++) {
-    diasPrima += diasSemestrePrima(`${anio}-01-01`, `${anio}-06-30`, datos.fechaIngreso, datos.fechaCorte, excluir);
-    diasPrima += diasSemestrePrima(`${anio}-07-01`, `${anio}-12-31`, datos.fechaIngreso, datos.fechaCorte, excluir);
+    for (const [desde, hasta] of [
+      [`${anio}-01-01`, `${anio}-06-30`],
+      [`${anio}-07-01`, `${anio}-12-31`],
+    ] as const) {
+      const dias = diasSemestrePrima(desde, hasta, datos.fechaIngreso, datos.fechaCorte, excluir);
+      if (dias > 0) {
+        semestresPrima.push({ desde, hasta, dias, topado: dias === DIAS_MAX_SEMESTRE_PRIMA });
+        diasPrima += dias;
+      }
+    }
   }
   const prima = redondearPeso((salarioConAuxilio * diasPrima) / DIAS_ANO_COMERCIAL);
 
@@ -125,6 +137,8 @@ export function calcularPrestacionesSociales(datos: DatosPrestaciones): Resultad
     vacaciones,
     diasVacacionesCausados: Math.round(diasVacacionesCausados * 100) / 100,
     baseCesantiasYPrima: redondearPeso(salarioConAuxilio),
+    diasPrima,
+    semestresPrima,
     advertencias,
   };
 }
