@@ -11,4 +11,31 @@ pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR:-/pnpm-store}"
 # directorio acaba de reinstalarse, hay que regenerarlo en cada arranque.
 pnpm --filter @pv/api exec prisma generate
 
+# ── La web ───────────────────────────────────────────────────────────────────
+#
+# `apps/api/src/index.ts` sirve `apps/api/web-dist` cuando existe: un contenedor,
+# un puerto, sin separacion api/web en runtime. Hasta el 2026-08-03 ese
+# directorio no lo construia nadie, asi que `/`, `/servicios` y `/docs/` daban
+# 404 mientras la API funcionaba — la web existia en el repo y no en el mundo.
+#
+# Va ACA y no en el Dockerfile porque Vite hornea las `VITE_*` en el bundle en
+# tiempo de build, y esas variables llegan por el `env_file` del servicio, que
+# solo existe en runtime. Meterlo en el Dockerfile exigiria `build.args` en el
+# compose del VPS — el mismo archivo fuera de los repos que ya nos mordio con
+# `GIT_SHA`.
+if [[ -n "${VITE_SUPABASE_URL:-}" && -n "${VITE_SUPABASE_ANON_KEY:-}" ]]; then
+  echo "[web] construyendo apps/web..."
+  pnpm --filter @pv/web build
+  rm -rf apps/api/web-dist
+  cp -r apps/web/dist apps/api/web-dist
+  echo "[web] servida desde apps/api/web-dist"
+else
+  # No se construye a medias: `createClient(undefined, ...)` revienta al cargar
+  # el modulo, y como `supabase.ts` se importa estatico desde App.tsx eso rompe
+  # el bundle ENTERO — incluidas las paginas que no usan Supabase. Un 404 se
+  # diagnostica; una pagina en blanco por un throw en el import, no.
+  echo "[web] SIN CONSTRUIR: faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY." >&2
+  echo "[web] La API sigue sirviendo /api; la web va a dar 404 hasta que esten." >&2
+fi
+
 exec "${@}"

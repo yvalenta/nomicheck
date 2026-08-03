@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -26,12 +27,27 @@ montarMuroX402(app);
 
 app.use("/api", router);
 
-// En producción, esta misma imagen sirve el build estático de apps/web
-// (un solo contenedor, un solo puerto) — no hay separación api/web en runtime.
-if (process.env.NODE_ENV === "production") {
-  const webDist = path.join(__dirname, "../web-dist");
+// Esta misma imagen sirve el build estático de apps/web (un solo contenedor, un
+// solo puerto) — no hay separación api/web en runtime. Lo construye
+// `bin/docker-entrypoint.dev` al arrancar.
+//
+// La condición es que el build EXISTA, no que `NODE_ENV` diga "production".
+// Antes dependía de la variable, y eso confunde dos cosas distintas: durante
+// meses `NODE_ENV` valía "production" en el contenedor y `web-dist` no existía,
+// así que el `sendFile` del fallback tiraba sobre un archivo ausente en vez de
+// dejar pasar un 404 legible. Un directorio se puede mirar; la intención
+// declarada en una variable de entorno, no.
+const webDist = path.join(__dirname, "../web-dist");
+if (existsSync(path.join(webDist, "index.html"))) {
   app.use(express.static(webDist));
+  // Fallback de SPA: todo lo que no sea `/api` lo resuelve el router del
+  // cliente. La negación importa — sin ella, un endpoint mal escrito
+  // devolvería el HTML de la web con 200 y el cliente vería una página en vez
+  // de un error.
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(webDist, "index.html")));
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(`[web] sin build en ${webDist}: solo se sirve /api`);
 }
 
 app.listen(PORT, async () => {
