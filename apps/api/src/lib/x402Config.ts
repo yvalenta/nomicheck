@@ -163,6 +163,56 @@ export function leerConfigX402(): ConfigX402 {
 }
 
 /**
+ * Las rarezas de cada facilitador, que no son opcionales ni cosméticas: con la
+ * combinación equivocada NINGÚN pago liquida, y el 402 se sigue viendo perfecto
+ * desde acá. Todo esto está medido endpoint por endpoint el 2026-08-03.
+ *
+ * `traduceAV1` y `sintetizaAccepts` son remiendos con fecha de vencimiento: se
+ * quitan el día que el facilitador de turno se arregle. `autenticaCdp` no — es
+ * el contrato de CDP.
+ */
+export interface PerfilFacilitador {
+  url: string;
+  /** El `/settle` solo deserializa v1 aunque `/accepts` conteste v2. */
+  traduceAV1: boolean;
+  /** No existe `/accepts`: hay que responderlo nosotros. */
+  sintetizaAccepts: boolean;
+  /** Cada petición va firmada con un JWT Ed25519. */
+  autenticaCdp: boolean;
+  /** `x402Version` que el facilitador exige en el nivel superior del cuerpo. */
+  versionEnCuerpo: 1 | 2;
+}
+
+/**
+ * El perfil sale del host, no de una variable aparte: así no se pueden
+ * desincronizar la URL y sus rarezas.
+ *
+ * **El default es el estándar**, sin remiendos. Un facilitador nuevo se trata
+ * como v2 correcto hasta que se demuestre lo contrario; las excepciones se
+ * nombran una por una. Al revés —"todo lo desconocido habla v1"— un facilitador
+ * nuevo heredaría los defectos de Ultravioleta sin que nadie lo decidiera.
+ */
+export function perfilFacilitador(url: string): PerfilFacilitador {
+  const host = ((): string => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return "";
+    }
+  })();
+
+  if (host === "api.cdp.coinbase.com") {
+    // CDP habla v2 con CAIP-2 y pide `x402Version: 2` arriba, que faremeter no
+    // manda. No expone `/accepts`.
+    return { url, traduceAV1: false, sintetizaAccepts: true, autenticaCdp: true, versionEnCuerpo: 2 };
+  }
+  if (host === "facilitator.ultravioletadao.xyz") {
+    return { url, traduceAV1: true, sintetizaAccepts: false, autenticaCdp: false, versionEnCuerpo: 1 };
+  }
+  return { url, traduceAV1: false, sintetizaAccepts: false, autenticaCdp: false, versionEnCuerpo: 2 };
+}
+
+/**
  * Construye el `accepts` que el middleware publica en la respuesta 402.
  * Es también, campo por campo, lo que hay que mandarle a
  * `POST /discovery/register` del facilitador para aparecer en el Bazaar.

@@ -10,7 +10,7 @@
 // abajo, mientras su `/accepts` acepta los de v2. faremeter 0.22.0 —la última
 // publicada— manda v2 siempre.
 import { describe, expect, it } from "vitest";
-import { BASE_MAINNET, BASE_SEPOLIA } from "../x402Config.js";
+import { BASE_MAINNET, BASE_SEPOLIA, perfilFacilitador } from "../x402Config.js";
 import { aFormatoV1 } from "../x402Muro.js";
 
 /** Lo que faremeter 0.22.0 manda de verdad, copiado de la corrida real. */
@@ -105,5 +105,53 @@ describe("aFormatoV1", () => {
     };
     const t = aFormatoV1(sinDesc, BASE_MAINNET) as Traducido;
     expect(t.paymentRequirements.description).toBe("");
+  });
+});
+
+// Perfiles de facilitador. Cada campo de estos es la diferencia entre cobrar y
+// no cobrar, y ninguno se nota desde acá: el 402 se ve igual en los dos casos.
+describe("perfilFacilitador", () => {
+  const CDP = "https://api.cdp.coinbase.com/platform/v2/x402";
+  const UV = "https://facilitator.ultravioletadao.xyz";
+
+  it("a CDP no le traduce a v1: habla v2 con CAIP-2", () => {
+    // Medido: `/supported` de CDP declara eip155:8453 + exact + x402Version 2.
+    // Mandarle v1 sería romper pagos que hoy funcionan.
+    const p = perfilFacilitador(CDP);
+    expect(p.traduceAV1).toBe(false);
+    expect(p.versionEnCuerpo).toBe(2);
+  });
+
+  it("a CDP le sintetiza /accepts, que no existe", () => {
+    // 404 medido. faremeter lo pide siempre, así que sin esto ningún 402 sale.
+    expect(perfilFacilitador(CDP).sintetizaAccepts).toBe(true);
+  });
+
+  it("solo CDP lleva autenticación", () => {
+    expect(perfilFacilitador(CDP).autenticaCdp).toBe(true);
+    expect(perfilFacilitador(UV).autenticaCdp).toBe(false);
+  });
+
+  it("a Ultravioleta sí le traduce a v1", () => {
+    const p = perfilFacilitador(UV);
+    expect(p.traduceAV1).toBe(true);
+    expect(p.versionEnCuerpo).toBe(1);
+    expect(p.sintetizaAccepts).toBe(false);
+  });
+
+  it("un facilitador desconocido se trata como el ESTÁNDAR, sin remiendos", () => {
+    // Al revés —"lo desconocido habla v1"— un facilitador nuevo heredaría los
+    // defectos de Ultravioleta sin que nadie lo hubiera decidido.
+    const p = perfilFacilitador("https://facilitador.nuevo.example");
+    expect(p.traduceAV1).toBe(false);
+    expect(p.sintetizaAccepts).toBe(false);
+    expect(p.autenticaCdp).toBe(false);
+    expect(p.versionEnCuerpo).toBe(2);
+  });
+
+  it("una URL rota no habilita remiendos por accidente", () => {
+    const p = perfilFacilitador("no-es-una-url");
+    expect(p.traduceAV1).toBe(false);
+    expect(p.autenticaCdp).toBe(false);
   });
 });

@@ -23,9 +23,12 @@ import {
   problemasDeConfig,
   requisitosDePago,
   RUTAS_CON_MURO,
+  perfilFacilitador,
   type ConfigX402,
+  type PerfilFacilitador,
   type RedX402,
 } from "./x402Config.js";
+import { credencialesCdp, jwtCdp } from "./cdpAuth.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
 const PREFIJO = "/api/batch";
@@ -111,17 +114,55 @@ export function aFormatoV1(cuerpo: Record<string, unknown>, red: RedX402): unkno
  * facilitador devuelva `resource`; la prueba de que hace falta es pedirle
  * `/accepts` y mirar si el campo está.
  */
-function fetchDelFacilitador(red: RedX402, recursoDe: () => string): typeof fetch {
+function fetchDelFacilitador(
+  red: RedX402,
+  perfil: PerfilFacilitador,
+  recursoDe: () => string,
+): typeof fetch {
   return async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
+    const ruta = new URL(url).pathname;
 
-    if ((url.endsWith("/settle") || url.endsWith("/verify")) && typeof init?.body === "string") {
-      const traducido = aFormatoV1(JSON.parse(init.body) as Record<string, unknown>, red);
-      return fetch(input, { ...init, body: JSON.stringify(traducido) });
+    // ── /accepts ────────────────────────────────────────────────────────────
+    // CDP no tiene este endpoint (404 medido), y faremeter lo pide siempre: sin
+    // esto cada 402 muere antes de salir. Se responde con lo mismo que se iba a
+    // preguntar — `/accepts` es un paso de ENRIQUECIMIENTO, y nuestros
+    // requisitos ya están completos. No enriquecer es una respuesta válida;
+    // inventar campos, no.
+    if (perfil.sintetizaAccepts && ruta.endsWith("/accepts")) {
+      const pedido = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          x402Version: 2,
+          resource: pedido.resource ?? { url: recursoDe() },
+          accepts: pedido.accepts ?? [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
     }
 
+    // ── /settle y /verify ───────────────────────────────────────────────────
+    if ((ruta.endsWith("/settle") || ruta.endsWith("/verify")) && typeof init?.body === "string") {
+      const original = JSON.parse(init.body) as Record<string, unknown>;
+      // Los DOS facilitadores exigen `x402Version` en el nivel superior y
+      // faremeter no lo manda en ninguno de los dos casos — cambia el número,
+      // no el hueco.
+      const cuerpo = perfil.traduceAV1
+        ? aFormatoV1(original, red)
+        : { x402Version: perfil.versionEnCuerpo, ...original };
+
+      const cabeceras = new Headers(init.headers);
+      if (perfil.autenticaCdp) {
+        const cred = credencialesCdp();
+        if (!cred) throw new Error("facilitador CDP sin CDP_API_KEY_ID / CDP_API_KEY_SECRET");
+        cabeceras.set("authorization", `Bearer ${jwtCdp(cred, "POST", ruta)}`);
+      }
+      return fetch(input, { ...init, headers: cabeceras, body: JSON.stringify(cuerpo) });
+    }
+
+    // ── Todo lo demás ───────────────────────────────────────────────────────
     const res = await fetch(input, init);
-    if (!url.endsWith("/accepts") || !res.ok) {
+    if (!ruta.endsWith("/accepts") || !res.ok) {
       return res;
     }
     const cuerpo = (await res.json()) as Record<string, unknown>;
@@ -145,7 +186,8 @@ function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<Reque
         // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
         // manda al facilitador lo que realmente configuramos.
         acceptsOverride: accepts.map(common.relaxedRequirementsToV2),
-        fetch: fetchDelFacilitador(cfg.red, () => `${cfg.origenPublico}${publica}`),
+        fetch: fetchDelFacilitador(cfg.red, perfilFacilitador(cfg.facilitatorURL), () =>
+          `${cfg.origenPublico}${publica}`),
       });
       return createMiddleware({
         x402Handlers: [handler],
