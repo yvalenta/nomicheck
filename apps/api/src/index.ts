@@ -7,8 +7,14 @@ import cors from "cors";
 import router from "./routes/index.js";
 import { detenerBoss, getBoss } from "./lib/boss.js";
 import { delegadoCors } from "./lib/corsPublico.js";
+import { registro } from "./lib/registro.js";
 import { montarMuroX402 } from "./lib/x402Muro.js";
+import { capturarErroresDeProceso, manejadorDeErrores } from "./middleware/errores.js";
 import { registrarWorkerLiquidacion } from "./workers/liquidacionWorker.js";
+
+// Antes de todo: los errores que Express no ve (promesas sin catch, throws
+// fuera de una petición) tienen que quedar registrados desde el primer tick.
+capturarErroresDeProceso();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -46,9 +52,13 @@ if (existsSync(path.join(webDist, "index.html"))) {
   // de un error.
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(webDist, "index.html")));
 } else {
-  // eslint-disable-next-line no-console
-  console.warn(`[web] sin build en ${webDist}: solo se sirve /api`);
+  registro.warn("web", `sin build en ${webDist}: solo se sirve /api`);
 }
+
+// Último de la cadena, a propósito: es la red de seguridad de TODO lo de
+// arriba. Un error que escape de un controlador sale como 500 con id
+// registrado, no como la página HTML de Express con el stack adentro.
+app.use(manejadorDeErrores);
 
 app.listen(PORT, async () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
@@ -59,7 +69,10 @@ app.listen(PORT, async () => {
     const boss = await getBoss();
     await registrarWorkerLiquidacion(boss);
   } catch (err) {
-    console.error("[boss] fallo al arrancar workers:", err);
+    // Registrado como error de verdad, no como un console.error que se pierde:
+    // sin workers, las liquidaciones asíncronas se encolan y no corren — el
+    // servicio se ve verde y el trabajo no sale.
+    registro.error("boss", "fallo al arrancar workers: las liquidaciones encoladas NO van a correr", err);
   }
 });
 
