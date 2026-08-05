@@ -33,7 +33,27 @@ function calcularPublicKeyId(publicKeyPem: string): string {
 function keypairDesdeEnv(): Keypair | null {
   const pem = process.env.NOMICHECK_BATCH_SIGNING_KEY_PEM;
   if (!pem) return null;
-  const privateKey = createPrivateKey({ key: pem, format: "pem" });
+  let privateKey: KeyObject;
+  try {
+    privateKey = createPrivateKey({ key: pem, format: "pem" });
+  } catch (e) {
+    // El error crudo de OpenSSL ("DECODER routines::unsupported") no dice
+    // QUÉ está roto ni dónde — acá se le pone nombre para que el arranque
+    // falle señalando la variable, no con un stack críptico.
+    throw new Error(
+      `NOMICHECK_BATCH_SIGNING_KEY_PEM está configurada pero no es un PEM de llave privada válido: ${(e as Error).message}`
+    );
+  }
+  // `sign(null, …)` con una llave que NO es Ed25519 no falla: firma con el
+  // algoritmo de la llave mientras el output declara algo:"ed25519". El
+  // servidor hasta se autoverifica, pero el buyer offline con una librería
+  // Ed25519 no puede verificar nunca — fallo silencioso del peor tipo. Se
+  // rechaza acá, al arranque, con nombre.
+  if (privateKey.asymmetricKeyType !== "ed25519") {
+    throw new Error(
+      `NOMICHECK_BATCH_SIGNING_KEY_PEM no es una llave Ed25519 (es "${privateKey.asymmetricKeyType}") — el output declara algo:"ed25519" y firmar con otro tipo produce firmas que el buyer no puede verificar offline`
+    );
+  }
   const publicKey = createPublicKey(privateKey);
   const publicKeyPem = publicKey.export({ format: "pem", type: "spki" }).toString();
   return {
