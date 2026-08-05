@@ -4,27 +4,36 @@
 // sirve el valor viejo hasta que expire el TTL. El fixture NO es inventado:
 // es `prisma/semillaLegal.ts`, la misma semilla que escribe la base.
 //
-// Dos HALLAZGOS caracterizados abajo (no corregidos acá):
-//   1. Un valor NEGATIVO pasa: `nuevaReglaSchema.valor` es z.number() sin piso
-//      y el servicio no valida — un SMLMV de -5 entra al catálogo y al cache.
-//   2. Cerrar la vigencia anterior y crear la nueva NO van en una transacción:
-//      si el create falla, la clave queda con la anterior CERRADA y ninguna
-//      abierta — las fechas desde la nueva vigencia quedan sin regla y el
-//      resolutor del motor lanza "No hay regla legal vigente".
+// Dos hallazgos nacieron caracterizados acá y HOY ESTÁN CERRADOS; las pruebas
+// que los describían ahora afirman el arreglo:
+//   1. Un valor NEGATIVO pasaba (`valor: z.number()` sin piso): un SMLMV de -5
+//      entraba al catálogo y el cache se invalidaba para servirlo.
+//   2. Cerrar la vigencia anterior y crear la nueva NO iban en transacción: si
+//      el create fallaba, la clave quedaba con la anterior CERRADA y ninguna
+//      abierta, y el motor lanzaba "No hay regla legal vigente".
 //
 // Hermético: prisma mockeado; `invalidarCacheReglas` (nominaService) también,
 // porque invalidar o no invalidar ES parte del contrato bajo prueba.
+//
+// `$transaction` del mock ejecuta el callback con el MISMO cliente mockeado y
+// propaga el rechazo, que es lo que permite probar el rollback: si el create
+// lanza, la prueba ve que el cache NO se invalidó.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CATALOGO_REGLAS_LEGALES } from "@pv/reglas";
 import { REGLAS_SEMILLA } from "../../../prisma/semillaLegal.js";
+import { nuevaReglaSchema } from "../../validation/reglasAdmin.js";
 
-const { prismaMock, invalidarMock } = vi.hoisted(() => ({
-  prismaMock: {
+const { prismaMock, invalidarMock } = vi.hoisted(() => {
+  const mock: Record<string, unknown> = {
     reglaLegal: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
     festivo: { findMany: vi.fn(), create: vi.fn(), delete: vi.fn() },
-  },
-  invalidarMock: vi.fn(),
-}));
+  };
+  // El callback corre con el mismo cliente: así los `tx.reglaLegal.*` de la
+  // transacción quedan registrados en los mismos espías que ya usan las
+  // pruebas, y un rechazo adentro se propaga como lo haría un rollback.
+  mock.$transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(mock));
+  return { prismaMock: mock, invalidarMock: vi.fn() };
+});
 
 vi.mock("../../lib/prisma.js", () => ({ prisma: prismaMock }));
 vi.mock("../nominaService.js", () => ({ invalidarCacheReglas: invalidarMock }));
@@ -125,31 +134,37 @@ describe("crearVigenciaRegla", () => {
     expect(invalidarMock).toHaveBeenCalledTimes(1);
   });
 
-  it("HALLAZGO 1 caracterizado: un valor NEGATIVO entra al catálogo sin protesta", async () => {
-    // z.number() sin .nonneg + servicio sin guarda = un SMLMV de -5 se
-    // guarda y el cache se invalida para servirlo de inmediato. Ninguna
-    // regla legal colombiana es negativa; esto debería rechazarse en el
-    // schema (validation/reglasAdmin.ts, fuera del alcance de esta sesión).
-    // Cuando se arregle, esta prueba debe fallar y reescribirse como rechazo.
-    await crearVigenciaRegla({ ...nueva, valor: -5 });
-    expect(prismaMock.reglaLegal.create).toHaveBeenCalledWith({ data: expect.objectContaining({ valor: -5 }) });
-    expect(invalidarMock).toHaveBeenCalled();
+  // Nació caracterizando el hallazgo 1; hoy afirma que está cerrado. La guarda
+  // vive en el SCHEMA (`validation/reglasAdmin.ts`) y no en el servicio, así
+  // que se prueba donde vive: el servicio recibe lo ya validado.
+  it("el schema RECHAZA un valor negativo antes de que llegue al servicio", () => {
+    const r = nuevaReglaSchema.safeParse({ ...nueva, valor: -5 });
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r)).toContain("no puede ser negativo");
   });
 
-  it("HALLAZGO 2 caracterizado: si el create falla, la vigencia anterior YA quedó cerrada (sin transacción)", async () => {
-    // Cierre y alta van en dos statements sueltos. Un fallo entre ambos deja
-    // la clave sin fila abierta: toda fecha >= la nueva vigencia lanza "No
-    // hay regla legal vigente" en el motor. El arreglo natural es
-    // prisma.$transaction; mientras tanto esta prueba documenta la ventana.
+  // El cero NO es un valor faltante: `pago_onchain_prima_pct` vale 0 en la
+  // semilla real. Un piso en `> 0` habría roto el catálogo vigente, así que
+  // esta prueba fija que el piso es `>= 0` y no otro.
+  it("...pero ACEPTA el cero, que es un valor legítimo del catálogo real", () => {
+    expect(nuevaReglaSchema.safeParse({ ...nueva, valor: 0 }).success).toBe(true);
+    expect(REGLAS_SEMILLA.some((r) => r.valor === 0)).toBe(true);
+  });
+
+  it("si el create falla, la vigencia anterior NO queda cerrada: todo va en una transacción", async () => {
+    // El hallazgo 2, cerrado. Antes eran dos statements sueltos y un fallo
+    // entre ambos dejaba la clave sin fila abierta — toda fecha desde la nueva
+    // vigencia lanzaba "No hay regla legal vigente" en el motor.
     prismaMock.reglaLegal.findFirst.mockResolvedValue(SMLMV_ABIERTO);
     prismaMock.reglaLegal.create.mockRejectedValue(new Error("conexión perdida"));
+
     await expect(crearVigenciaRegla(nueva)).rejects.toThrow("conexión perdida");
-    // La anterior quedó cerrada aunque la nueva nunca nació:
-    expect(prismaMock.reglaLegal.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { vigenteHasta: "2026-12-31" } })
-    );
-    // Y el cache ni se entera (sigue sirviendo el catálogo pre-cierre hasta
-    // el TTL — el único consuelo de la ventana).
+
+    // El cierre y el alta ocurrieron DENTRO de $transaction: el rechazo del
+    // create hace rollback de los dos, así que la anterior sigue abierta.
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+    // Y el cache NO se invalida: hacerlo sobre una escritura que termina en
+    // rollback obliga a releer para volver a lo mismo, y deja creer que entró.
     expect(invalidarMock).not.toHaveBeenCalled();
   });
 });

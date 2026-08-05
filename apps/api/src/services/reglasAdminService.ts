@@ -32,18 +32,36 @@ export async function crearVigenciaRegla(datos: z.infer<typeof nuevaReglaSchema>
     where: { clave: datos.clave, vigenteHasta: null },
     orderBy: { vigenteDesde: "desc" },
   });
-  if (vigenteAnterior) {
-    if (vigenteAnterior.vigenteDesde >= datos.vigenteDesde) {
-      throw new Error(
-        `Ya existe una vigencia de "${datos.clave}" desde ${vigenteAnterior.vigenteDesde} — la nueva vigencia debe ser posterior`
-      );
-    }
-    await prisma.reglaLegal.update({
-      where: { id: vigenteAnterior.id },
-      data: { vigenteHasta: diaAnterior(datos.vigenteDesde) },
-    });
+  if (vigenteAnterior && vigenteAnterior.vigenteDesde >= datos.vigenteDesde) {
+    throw new Error(
+      `Ya existe una vigencia de "${datos.clave}" desde ${vigenteAnterior.vigenteDesde} — la nueva vigencia debe ser posterior`
+    );
   }
-  const nueva = await prisma.reglaLegal.create({ data: datos });
+
+  // Cerrar la vigencia anterior y abrir la nueva van en UNA transacción.
+  //
+  // Eran dos statements sueltos, y entre los dos existe un estado que no debe
+  // poder observarse: la clave con la anterior CERRADA y ninguna abierta. Si el
+  // `create` fallaba —una restricción, la conexión, cualquier cosa— la regla
+  // quedaba así, y el motor lanza "No hay regla legal vigente" para toda fecha
+  // desde la nueva vigencia. Un error al EDITAR el catálogo rompía el CÁLCULO
+  // de nómina.
+  //
+  // Y lo pagaba quien liquidara después, no quien editó: la peor repartición
+  // posible de las consecuencias de un error.
+  const nueva = await prisma.$transaction(async (tx) => {
+    if (vigenteAnterior) {
+      await tx.reglaLegal.update({
+        where: { id: vigenteAnterior.id },
+        data: { vigenteHasta: diaAnterior(datos.vigenteDesde) },
+      });
+    }
+    return tx.reglaLegal.create({ data: datos });
+  });
+
+  // Después del commit, nunca antes: invalidar el cache de una escritura que
+  // termina en rollback obliga a releer para volver a lo mismo y —peor— deja
+  // creer que el cambio entró.
   invalidarCacheReglas();
   return nueva;
 }
