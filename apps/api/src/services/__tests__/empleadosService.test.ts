@@ -215,20 +215,40 @@ describe("listarEmpleados", () => {
     expect(ids).not.toContain(505);
   });
 
-  it("HALLAZGO PINNEADO: el filtro ?sedeId= PISA el scoping por sedes del analista", async () => {
-    // `where.sedeId = {in: sedes}` y después `where.sedeId = f.sedeId` — la
-    // segunda asignación SOBREESCRIBE la primera, y el controlador
-    // (empleadosController.listar) pasa req.query.sedeId crudo. Un
-    // analista_rrhh limitado a la sede 10 pide ?sedeId=11 y ve la sede 11
-    // entera (misma empresa, sede fuera de su alcance — SDD §15 pilar 1).
-    //
-    // Esta prueba PINNEA el comportamiento actual a propósito: si se pone
-    // roja es porque alguien cerró el bypass (p. ej. intersectando el filtro
-    // con las sedes del usuario) — actualizala y borrá el hallazgo del
-    // reporte. NO la "arregles" para que siga verde.
+  // Este bloque nació PINNEANDO un bypass real y hoy afirma que está cerrado.
+  // El bypass: `where.sedeId = {in: sedes}` y después `where.sedeId = f.sedeId`
+  // — la segunda asignación pisaba la primera, y el controlador pasa
+  // `req.query.sedeId` crudo. Un analista_rrhh limitado a la sede 10 pedía
+  // `?sedeId=11` y veía la sede 11 entera: misma empresa, sede fuera de su
+  // alcance (SDD §15 pilar 1).
+  //
+  // Lo que se prueba ahora es el principio, no la implementación: el filtro
+  // NARROWS dentro del alcance y nunca lo reemplaza.
+
+  it("el filtro ?sedeId= dentro del alcance narrows: solo esa sede", async () => {
+    const res = await listarEmpleados(EMPRESA_A, [10, 11], { sedeId: 11, page: 1, limit: 25, skip: 0 });
+    expect(prismaMock.empleado.findMany.mock.calls[0]![0].where.sedeId).toEqual({ in: [11] });
+    expect(res.items.every((e: { sedeId: number }) => e.sedeId === 11)).toBe(true);
+  });
+
+  it("el filtro ?sedeId= FUERA del alcance no devuelve nada — no puede ensanchar", async () => {
+    // El caso del bypass: analista de la sede 10 pidiendo la 11.
     const res = await listarEmpleados(EMPRESA_A, [10], { sedeId: 11, page: 1, limit: 25, skip: 0 });
-    expect(prismaMock.empleado.findMany.mock.calls[0]![0].where.sedeId).toBe(11); // el {in:[10]} quedó pisado
-    expect(res.items.map((e: { id: number }) => e.id)).toContain(505); // Elena, sede 11: fuera del alcance del analista
+    expect(prismaMock.empleado.findMany.mock.calls[0]![0].where.sedeId).toEqual({ in: [] });
+    expect(res.items).toEqual([]);
+    // Elena (505) está en la sede 11: antes se colaba, ahora no.
+    expect(res.items.map((e: { id: number }) => e.id)).not.toContain(505);
+  });
+
+  it("sin filtro, el analista sigue viendo TODAS sus sedes", async () => {
+    await listarEmpleados(EMPRESA_A, [10, 11], { page: 1, limit: 25, skip: 0 });
+    expect(prismaMock.empleado.findMany.mock.calls[0]![0].where.sedeId).toEqual({ in: [10, 11] });
+  });
+
+  it("sin scoping (admin_empresa), el filtro ?sedeId= funciona como siempre", async () => {
+    // Que se cierre el bypass no debe recortarle nada a quien no está scoped.
+    await listarEmpleados(EMPRESA_A, null, { sedeId: 11, page: 1, limit: 25, skip: 0 });
+    expect(prismaMock.empleado.findMany.mock.calls[0]![0].where.sedeId).toBe(11);
   });
 
   it("paginación: skip/take van a la query y page/limit vuelven de eco; página fuera de rango da items vacíos con el total real", async () => {

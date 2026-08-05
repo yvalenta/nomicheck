@@ -25,8 +25,26 @@ export async function listarEmpleados(
   f: FiltrosEmpleados = { page: 1, limit: 25, skip: 0 }
 ): Promise<RespuestaPaginada<Awaited<ReturnType<typeof prisma.empleado.findFirst>>>> {
   const where: Prisma.EmpleadoWhereInput = { empresaId, eliminadoEn: null };
-  if (sedes) where.sedeId = { in: sedes };
-  if (f.sedeId !== undefined) where.sedeId = f.sedeId;
+  // El filtro del usuario NARROWS dentro del alcance; nunca lo reemplaza.
+  //
+  // Antes eran dos asignaciones seguidas —`where.sedeId = {in: sedes}` y luego
+  // `where.sedeId = f.sedeId`— y la segunda PISABA la primera: un analista_rrhh
+  // limitado a la sede 10 pedía `?sedeId=11` y veía la sede 11 entera. Misma
+  // empresa, sede fuera de su alcance: el bypass del pilar 1 del SDD §15.
+  //
+  // La intersección lo vuelve estructural en vez de dejarlo al orden de dos
+  // líneas. Un filtro fuera del alcance da `{in: []}` — cero resultados, que es
+  // la respuesta honesta ("nada que coincida DENTRO de lo tuyo") y no filtra si
+  // esa sede existe o no. Ver docs/leyes/la-operacion-olvidada.md en el repo de
+  // operación: el contraste está a treinta líneas de acá, en
+  // `empleadoAccesible`, que sí valida la pertenencia a la sede.
+  if (sedes) {
+    where.sedeId = f.sedeId !== undefined
+      ? { in: sedes.filter((s) => s === f.sedeId) }
+      : { in: sedes };
+  } else if (f.sedeId !== undefined) {
+    where.sedeId = f.sedeId;
+  }
   if (f.activo !== undefined) where.activo = f.activo;
   if (f.tipoContrato) where.tipoContrato = f.tipoContrato;
   if (f.q) {
