@@ -59,7 +59,7 @@ export async function editar(req: Request, res: Response) {
 }
 
 export async function empleadosIncluidos(req: Request, res: Response) {
-  const filas = await listarEmpleadosIncluidos(Number(req.params.id));
+  const filas = await listarEmpleadosIncluidos(req.usuario!.empresaId!, Number(req.params.id));
   res.json(filas.map((f) => f.empleadoId));
 }
 
@@ -78,7 +78,7 @@ export async function guardarEmpleadosIncluidos(req: Request, res: Response) {
 }
 
 export async function obtenerTurnos(req: Request, res: Response) {
-  res.json(await listarTurnos(Number(req.params.id)));
+  res.json(await listarTurnos(req.usuario!.empresaId!, Number(req.params.id)));
 }
 
 export async function guardarTurnos(req: Request, res: Response) {

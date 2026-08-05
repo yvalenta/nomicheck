@@ -45,7 +45,14 @@ export async function crearPeriodo(empresaId: number, datos: z.infer<typeof peri
   });
 }
 
-export function listarEmpleadosIncluidos(periodoId: number) {
+// Recibe `empresaId` y valida pertenencia ANTES de leer, igual que el resto de
+// las operaciones del periodo. No lo hacía: filtraba solo por `periodoId`, así
+// que un usuario de la empresa A con el id de un periodo de B leía quiénes
+// participan de esa nómina. Es la misma forma del agujero de
+// `invitarColaborador` (0750834): la lista de participantes de un periodo NO es
+// dato de un id, es dato de una empresa.
+export async function listarEmpleadosIncluidos(empresaId: number, periodoId: number) {
+  await obtenerPeriodo(empresaId, periodoId); // lanza si no es de esta empresa
   return prisma.periodoNominaEmpleado.findMany({ where: { periodoId }, select: { empleadoId: true } });
 }
 
@@ -73,7 +80,7 @@ export async function editarEmpleadosPeriodo(
     prisma.periodoNominaEmpleado.deleteMany({ where: { periodoId } }),
     prisma.periodoNominaEmpleado.createMany({ data: ids.map((empleadoId) => ({ periodoId, empleadoId })) }),
   ]);
-  return listarEmpleadosIncluidos(periodoId);
+  return listarEmpleadosIncluidos(empresaId, periodoId);
 }
 
 export async function obtenerPeriodo(empresaId: number, periodoId: number) {
@@ -116,7 +123,12 @@ export async function editarPeriodo(
   }
 }
 
-export function listarTurnos(periodoId: number) {
+// Mismo arreglo y mismo motivo que `listarEmpleadosIncluidos`: los turnos
+// llevan fechas, horas y `empleadoId`s de la nomina ajena. Sin la validacion de
+// pertenencia, `GET .../periodos/:id/turnos` con un id de otra empresa los
+// devolvia enteros.
+export async function listarTurnos(empresaId: number, periodoId: number) {
+  await obtenerPeriodo(empresaId, periodoId); // lanza si no es de esta empresa
   return prisma.turno.findMany({ where: { periodoId }, orderBy: { fecha: "asc" } });
 }
 
