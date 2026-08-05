@@ -1,5 +1,5 @@
-import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import type { TxAcotada } from "./alcance.js";
 
 /** Ejecuta `fn` dentro de una transacción con `app.usuario_actual` seteada
  * al usuarioId — el trigger `fn_auditar_cambio` (SDD §15, pilar 1B) lo lee
@@ -14,7 +14,7 @@ import { prisma } from "./prisma.js";
  */
 export function conAuditoria<T>(
   usuarioId: string | null,
-  fn: (tx: Prisma.TransactionClient) => Promise<T>
+  fn: (tx: TxAcotada) => Promise<T>
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
     // Parametrizar via set_config evita SQL injection — SET LOCAL en

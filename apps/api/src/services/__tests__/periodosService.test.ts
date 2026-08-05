@@ -307,7 +307,9 @@ describe("editarEmpleadosPeriodo", () => {
     // create falla, el delete se revierte y el periodo no queda vacío.
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect((prismaMock.$transaction.mock.calls[0]![0] as unknown[]).length).toBe(2);
-    expect(prismaMock.periodoNominaEmpleado.deleteMany).toHaveBeenCalledWith({ where: { periodoId: 71 } });
+    expect(prismaMock.periodoNominaEmpleado.deleteMany).toHaveBeenCalledWith({
+      where: { periodoId: 71, periodo: { empresaId: EMPRESA_A } },
+    });
     expect(prismaMock.periodoNominaEmpleado.createMany).toHaveBeenCalledWith({
       data: [{ periodoId: 71, empleadoId: 501 }],
     });
@@ -357,7 +359,9 @@ describe("reemplazarTurnos", () => {
   it("reemplaza los turnos del periodo estampando periodoId, delete + create juntos en la transacción", async () => {
     await reemplazarTurnos(EMPRESA_A, 71, [TURNO_501]);
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    expect(prismaMock.turno.deleteMany).toHaveBeenCalledWith({ where: { periodoId: 71 } });
+    expect(prismaMock.turno.deleteMany).toHaveBeenCalledWith({
+      where: { periodoId: 71, periodo: { empresaId: EMPRESA_A } },
+    });
     expect(prismaMock.turno.createMany).toHaveBeenCalledWith({ data: [{ ...TURNO_501, periodoId: 71 }] });
   });
 
@@ -417,10 +421,20 @@ describe("las dos lecturas de periodo validan pertenencia antes de leer", () => 
     expect(prismaMock.periodoNominaEmpleado.findMany).not.toHaveBeenCalled();
   });
 
-  it("con la empresa dueña, ambas leen normalmente", async () => {
+  it("con la empresa dueña, ambas leen normalmente — y el ancla viaja EN la consulta", async () => {
+    // El `obtenerPeriodo` de arriba sigue siendo el que distingue 404 de lista
+    // vacía. Pero la pertenencia ya no depende SOLO de él: va también en el
+    // `where`, que es lo que sobrevive a que alguien refactorice la línea de
+    // arriba. Sin el ancla, `lib/alcance.ts` no deja compilar la consulta.
     await listarTurnos(EMPRESA_A, 71);
     await listarEmpleadosIncluidos(EMPRESA_A, 71);
-    expect(prismaMock.turno.findMany.mock.calls[0]![0].where).toEqual({ periodoId: 71 });
-    expect(prismaMock.periodoNominaEmpleado.findMany.mock.calls[0]![0].where).toEqual({ periodoId: 71 });
+    expect(prismaMock.turno.findMany.mock.calls[0]![0].where).toEqual({
+      periodoId: 71,
+      periodo: { empresaId: EMPRESA_A },
+    });
+    expect(prismaMock.periodoNominaEmpleado.findMany.mock.calls[0]![0].where).toEqual({
+      periodoId: 71,
+      periodo: { empresaId: EMPRESA_A },
+    });
   });
 });

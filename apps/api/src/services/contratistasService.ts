@@ -45,7 +45,7 @@ export async function eliminarContratista(empresaId: number, contratistaId: numb
   const contratista = await prisma.contratista.findFirst({ where: { id: contratistaId, empresaId } });
   if (!contratista) throw new Error("Contratista no encontrado");
 
-  const recibos = await prisma.reciboPago.count({ where: { contratistaId } });
+  const recibos = await prisma.reciboPago.count({ where: { contratistaId, contratista: { empresaId } } });
   if (recibos > 0) {
     throw new ErrorConflicto(
       "El contratista tiene recibos registrados y no puede eliminarse: los registros de pago deben conservarse. Desactívalo (activo=false) para conservar el historial."

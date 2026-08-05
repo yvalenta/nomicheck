@@ -51,9 +51,17 @@ export async function crearPeriodo(empresaId: number, datos: z.infer<typeof peri
 // participan de esa nómina. Es la misma forma del agujero de
 // `invitarColaborador` (0750834): la lista de participantes de un periodo NO es
 // dato de un id, es dato de una empresa.
+//
+// El `obtenerPeriodo` de arriba sigue: distingue "no es tuyo" (404) de "es tuyo
+// y está vacío" (lista vacía), cosa que el filtro solo no puede hacer. Pero el
+// ancla ya no vive en él — va en el `where`, donde no se puede quitar por
+// accidente al refactorizar la línea de arriba.
 export async function listarEmpleadosIncluidos(empresaId: number, periodoId: number) {
   await obtenerPeriodo(empresaId, periodoId); // lanza si no es de esta empresa
-  return prisma.periodoNominaEmpleado.findMany({ where: { periodoId }, select: { empleadoId: true } });
+  return prisma.periodoNominaEmpleado.findMany({
+    where: { periodoId, periodo: { empresaId } },
+    select: { empleadoId: true },
+  });
 }
 
 // Reemplaza qué empleados quedan incluidos en el periodo — SOLO en borrador
@@ -77,7 +85,7 @@ export async function editarEmpleadosPeriodo(
   }
 
   await prisma.$transaction([
-    prisma.periodoNominaEmpleado.deleteMany({ where: { periodoId } }),
+    prisma.periodoNominaEmpleado.deleteMany({ where: { periodoId, periodo: { empresaId } } }),
     prisma.periodoNominaEmpleado.createMany({ data: ids.map((empleadoId) => ({ periodoId, empleadoId })) }),
   ]);
   return listarEmpleadosIncluidos(empresaId, periodoId);
@@ -129,7 +137,10 @@ export async function editarPeriodo(
 // devolvia enteros.
 export async function listarTurnos(empresaId: number, periodoId: number) {
   await obtenerPeriodo(empresaId, periodoId); // lanza si no es de esta empresa
-  return prisma.turno.findMany({ where: { periodoId }, orderBy: { fecha: "asc" } });
+  return prisma.turno.findMany({
+    where: { periodoId, periodo: { empresaId } },
+    orderBy: { fecha: "asc" },
+  });
 }
 
 // Reemplaza todos los turnos del periodo — solo permitido en estado
@@ -155,7 +166,7 @@ export async function reemplazarTurnos(
   }
 
   return prisma.$transaction([
-    prisma.turno.deleteMany({ where: { periodoId } }),
+    prisma.turno.deleteMany({ where: { periodoId, periodo: { empresaId } } }),
     prisma.turno.createMany({ data: turnos.map((t) => ({ ...t, periodoId })) }),
   ]);
 }

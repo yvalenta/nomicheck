@@ -9,6 +9,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { conAuditoria } from "../lib/auditoria.js";
+import type { TxAcotada } from "../lib/alcance.js";
 import { ErrorConflicto } from "./empleadosService.js";
 import { obtenerPeriodo } from "./periodosService.js";
 import { COLA_LIQUIDACION, getBoss, type DatosJobLiquidacion } from "../lib/boss.js";
@@ -18,7 +19,7 @@ import { COLA_LIQUIDACION, getBoss, type DatosJobLiquidacion } from "../lib/boss
 // matchea y Prisma lanza P2025 → ErrorConflicto → HTTP 409.
 // Exportada: pagosService la reusa para la transición liquidado → pagado.
 export async function actualizarPeriodoConVersion(
-  tx: Prisma.TransactionClient,
+  tx: TxAcotada,
   periodoId: number,
   versionActual: number,
   data: Prisma.PeriodoNominaUpdateInput
@@ -113,7 +114,9 @@ export async function revertirABorrador(empresaId: number, periodoId: number, us
   }
 
   await conAuditoria(usuarioId, async (tx) => {
-    await tx.reciboPago.deleteMany({ where: { periodoId } });
+    // El ancla importa MÁS acá que en una lectura: esto borra. Un `periodoId`
+    // ajeno no filtraría datos, los destruiría.
+    await tx.reciboPago.deleteMany({ where: { periodoId, periodo: { empresaId } } });
     await actualizarPeriodoConVersion(tx, periodoId, periodo.version, {
       estado: "borrador",
       jobId: null,

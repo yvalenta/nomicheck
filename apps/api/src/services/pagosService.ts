@@ -113,7 +113,7 @@ export async function generarBatchPago(
   const [{ reglas }, recibos] = await Promise.all([
     obtenerReglasYFestivos(),
     prisma.reciboPago.findMany({
-      where: { periodoId, contratistaId: { not: null } },
+      where: { periodoId, periodo: { empresaId }, contratistaId: { not: null } },
       include: { contratista: true },
     }),
   ]);

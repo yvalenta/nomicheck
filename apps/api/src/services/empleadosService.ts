@@ -122,8 +122,8 @@ export async function eliminarEmpleado(
   await empleadoAccesible(empresaId, empleadoId, sedes);
 
   const [recibos, turnos] = await Promise.all([
-    prisma.reciboPago.count({ where: { empleadoId } }),
-    prisma.turno.count({ where: { empleadoId } }),
+    prisma.reciboPago.count({ where: { empleadoId, empleado: { empresaId } } }),
+    prisma.turno.count({ where: { empleadoId, empleado: { empresaId } } }),
   ]);
   if (recibos + turnos > 0) {
     throw new ErrorConflicto(

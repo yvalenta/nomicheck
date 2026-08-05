@@ -1,4 +1,5 @@
 import { conAuditoria } from "../lib/auditoria.js";
+import { acotadoAparte } from "../lib/alcance.js";
 import { prisma } from "../lib/prisma.js";
 import { ErrorConflicto } from "./empleadosService.js";
 import type { crearReporteSchema } from "../validation/discrepancia.js";
@@ -8,7 +9,10 @@ import type { z } from "zod";
 // recibos — filtro por empleadoId en código (defensa adicional a RLS).
 export function listarRecibosPropios(empleadoId: number) {
   return prisma.reciboPago.findMany({
-    where: { empleadoId },
+    // El dueño acá es la persona, no la empresa: `empleadoId` sale del Empleado
+    // ligado a la sesión (`middleware/auth.ts`), no de la petición. Anclar por
+    // empresa además sería mentir sobre quién manda en este endpoint.
+    where: acotadoAparte({ empleadoId }, "empleadoId de la sesión del colaborador, no de la petición"),
     // empleado + empresa del periodo: solo para el encabezado del comprobante
     // imprimible (ComprobanteNomina) — no afecta el cálculo ni el scoping.
     include: {
@@ -26,7 +30,9 @@ export async function reportarDiscrepancia(
   reciboId: number,
   datos: z.infer<typeof crearReporteSchema>
 ) {
-  const recibo = await prisma.reciboPago.findFirst({ where: { id: reciboId, empleadoId } });
+  const recibo = await prisma.reciboPago.findFirst({
+    where: acotadoAparte({ id: reciboId, empleadoId }, "empleadoId de la sesión del colaborador"),
+  });
   if (!recibo) throw new Error("Recibo no encontrado");
   return prisma.reporteDiscrepancia.create({
     data: { reciboId, colaboradorId, tipo: datos.tipo, detalle: datos.detalle },

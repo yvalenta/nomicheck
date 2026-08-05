@@ -93,10 +93,10 @@ export async function ejecutarJobLiquidacion(datos: DatosJobLiquidacion): Promis
           },
         }),
         prisma.contratista.findMany({ where: { empresaId, activo: true } }),
-        prisma.turno.findMany({ where: { periodoId } }),
+        prisma.turno.findMany({ where: { periodoId, periodo: { empresaId } } }),
         obtenerReglasYFestivos(),
         prisma.reciboPago.findMany({
-          where: { periodoId },
+          where: { periodoId, periodo: { empresaId } },
           select: { empleadoId: true, contratistaId: true },
         }),
       ]);

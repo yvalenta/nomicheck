@@ -53,7 +53,7 @@ export async function liquidarFinal(empresaId: number, empleadoId: number) {
   }
 
   const recibosPrevios = await prisma.reciboPago.findMany({
-    where: { empleadoId },
+    where: { empleadoId, empleado: { empresaId } },
     include: { periodo: true },
     orderBy: { periodo: { fechaFin: "desc" } },
   });

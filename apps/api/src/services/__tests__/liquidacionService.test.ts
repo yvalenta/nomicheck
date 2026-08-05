@@ -158,7 +158,12 @@ describe("revertirABorrador — qué se puede deshacer", () => {
     async (estado) => {
       obtenerPeriodoMock.mockResolvedValue(periodoFixture({ estado, version: 7 }));
       await revertirABorrador(1, 55, "user-1");
-      expect(txMock.reciboPago.deleteMany).toHaveBeenCalledWith({ where: { periodoId: 55 } });
+      // El `periodo: { empresaId }` no es decoración: este deleteMany BORRA.
+      // Sin el ancla en el propio where, un periodoId ajeno destruye recibos
+      // de otra empresa (lib/alcance.ts).
+      expect(txMock.reciboPago.deleteMany).toHaveBeenCalledWith({
+        where: { periodoId: 55, periodo: { empresaId: 1 } },
+      });
       const args = txMock.periodoNomina.update.mock.calls[0][0];
       expect(args.where).toEqual({ id: 55, version: 7 });
       expect(args.data).toMatchObject({ estado: "borrador", jobId: null, progreso: 0 });
