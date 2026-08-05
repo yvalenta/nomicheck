@@ -70,12 +70,34 @@ GIT_SHA="$(git -C "$APP_DIR" rev-parse HEAD)"
 export GIT_SHA
 echo "→ Desplegando ${GIT_SHA:0:7}"
 
-BUILD_FLAG=()
-[[ "${1:-}" == "--no-build" ]] || BUILD_FLAG=(--build)
+# ── Imagen ───────────────────────────────────────────────────────────────────
+# La imagen NO se construye acá: la construye el CI en cada push y la publica en
+# GHCR, etiquetada por sha. Historia (2026-07-29): cinco deploys seguidos
+# murieron en `pnpm install` dentro del build — este enlace baja tarballs a
+# 3 KiB/s y el chequeo de cadena de suministro de pnpm (491 entradas) tardaba 14
+# minutos y expiraba. Subirle el timeout y cachear el store no alcanzó: el
+# problema era descargar 491 paquetes por este enlace en cada build. Ahora se
+# baja UNA imagen ya construida.
+#
+# Se baja por SHA, no por `latest`: el compose usa ${GIT_SHA}, así que la imagen
+# que corre es exactamente la del commit que el pull acaba de traer — no la
+# última que el CI haya publicado, que puede ser de otra rama o de un push
+# posterior. Si el CI todavía no terminó de publicar este sha, el pull falla acá
+# con un mensaje claro, ANTES de tocar el contenedor que está sirviendo.
+#
+# `--no-build` pasa a significar "sin pull": levanta con lo que ya esté local.
+if [[ "${1:-}" != "--no-build" ]]; then
+  echo "→ Bajando la imagen del CI (sha ${GIT_SHA:0:7})..."
+  if ! "${COMPOSE[@]}" pull nomicheck-api; then
+    echo "✗ No se pudo bajar la imagen ${GIT_SHA:0:7} de GHCR." >&2
+    echo "  ¿El CI de ese commit ya terminó? Miralo: gh run list --limit 3" >&2
+    exit 1
+  fi
+fi
 
 # ── Up ───────────────────────────────────────────────────────────────────────
 echo "→ Levantando servicios (${SERVICES[*]})..."
-"${COMPOSE[@]}" up -d "${BUILD_FLAG[@]}" "${SERVICES[@]}"
+"${COMPOSE[@]}" up -d "${SERVICES[@]}"
 
 # ── Healthcheck ──────────────────────────────────────────────────────────────
 echo "→ Esperando healthcheck de la API..."

@@ -82,3 +82,57 @@ jobs:
 
       - name: lint del front
         run: pnpm --filter '@pv/web' lint
+
+  # ── La imagen se construye ACÁ, no en el VPS ────────────────────────────────
+  #
+  # Historia, 2026-07-29: cinco intentos de deploy murieron en `pnpm install`
+  # dentro del build en el VPS. Su enlace baja tarballs a 3 KiB/s, y el chequeo
+  # de cadena de suministro de pnpm 11 —491 entradas contra el registro— tardaba
+  # 14 minutos y expiraba. Se le subió el timeout, se cacheó el store, y aun así
+  # no alcanzó: el problema no era ningún timeout, era descargar 491 paquetes
+  # por ese enlace en cada build. La mayoría ni le sirven a producción — vitest,
+  # jsdom, los bindings de oxlint para seis plataformas — porque son para
+  # COMPILAR, no para correr.
+  #
+  # Acá el runner tiene red rápida y es amd64 nativo, como el VPS. El VPS pasa a
+  # bajar UNA imagen ya construida en vez de 491 paquetes.
+  #
+  # Esto cierra además el hueco que dejó pasar un postinstall roto hasta el
+  # deploy: el CI daba verde sin construir la imagen, así que un Dockerfile roto
+  # no se veía hasta desplegar. Ahora un push que rompa la imagen sale rojo acá.
+  publicar-imagen:
+    # Solo tras pasar las pruebas, y nunca desde un PR (un PR de un fork no debe
+    # poder publicar una imagen que producción va a bajar).
+    needs: verificar
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/batch-stateless')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Las VITE_* van como build-arg porque Vite las incrusta en el bundle en
+      # tiempo de BUILD. Son claves publicables (el bundle servido ya las
+      # expone); viven como variables del repo para no escribirlas acá.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/nomicheck-api:latest
+            ghcr.io/${{ github.repository_owner }}/nomicheck-api:${{ github.sha }}
+          build-args: |
+            VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
