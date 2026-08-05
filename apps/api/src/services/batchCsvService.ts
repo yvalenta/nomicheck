@@ -10,17 +10,33 @@ import type { BatchPagoOnchainOutput } from "../validation/batchPagoOnchain.js";
 import type { BatchVerificacionOutput } from "../validation/batchVerificacion.js";
 import type { BatchLiquidacionFinalOutput } from "../validation/batchLiquidacionFinal.js";
 
-function escaparCampo(v: string | number | undefined | null): string {
+// Exportada solo para poder probarla directamente: es la pieza donde una
+// coma en un apellido se convierte en una fila partida, y probarla a través
+// de los cinco exports obliga a armar un payload entero por cada caso.
+export function escaparCampo(v: string | number | undefined | null): string {
   if (v === undefined || v === null) return "";
   const s = typeof v === "number" ? v.toString() : v;
   // RFC 4180: cualquier campo con coma, comilla o salto de línea se
-  // encierra entre comillas y las comillas internas se duplican.
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  // encierra entre comillas y las comillas internas se duplican. El `\r`
+  // cuenta: RFC 4180 delimita con CRLF, y un CR suelto dentro de un campo
+  // sin comillas parte la fila igual que un LF en Excel y en Numbers.
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
+// Una línea de comentario `#` no tiene forma de escapar un salto de línea:
+// lo que venga después deja de ser comentario y se lee como una FILA MÁS.
+// Y varios de los valores que se interpolan acá son del comprador, no del
+// servidor — `empresa.nombre`, `externalId`, los excluidos sin wallet —, así
+// que un nombre de empresa con `\n` inyecta filas que el contador ve
+// idénticas a las reales y que el JSON firmado no contiene. Colapsar a
+// espacio es no-op para cualquier valor de una sola línea.
+function comentarios(lineas: string[]): string {
+  return lineas.map((l) => l.replace(/[\r\n]+/g, " ")).join("\n");
+}
+
 export function batchToCsv(salida: BatchLiquidarOutput): string {
-  const cabecera = [
+  const cabecera = comentarios([
     `# NomiCheck batch export — version ${salida.version}`,
     `# generado_en: ${salida.generadoEn}`,
     `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
@@ -30,7 +46,7 @@ export function batchToCsv(salida: BatchLiquidarOutput): string {
     `# signature_public_key_id: ${salida.signature.publicKeyId}`,
     `# signature_value: ${salida.signature.valor}`,
     `# disclaimer: ${salida.disclaimer}`,
-  ].join("\n");
+  ]);
 
   const columnas = [
     "external_id",
@@ -132,7 +148,7 @@ export function batchToCsv(salida: BatchLiquidarOutput): string {
 // mensual. Mismo patrón de cabecera `#` con hash/disclaimer/firma para que el
 // contador lo abra en Excel sin perder la trazabilidad legal.
 export function batchRetencionToCsv(salida: BatchRetencionOutput): string {
-  const cabecera = [
+  const cabecera = comentarios([
     `# NomiCheck retención batch export — version ${salida.version}`,
     `# generado_en: ${salida.generadoEn}`,
     `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
@@ -142,7 +158,7 @@ export function batchRetencionToCsv(salida: BatchRetencionOutput): string {
     `# signature_public_key_id: ${salida.signature.publicKeyId}`,
     `# signature_value: ${salida.signature.valor}`,
     `# disclaimer: ${salida.disclaimer}`,
-  ].join("\n");
+  ]);
 
   const columnas = [
     "external_id",
@@ -188,7 +204,7 @@ export function batchRetencionToCsv(salida: BatchRetencionOutput): string {
 // en su columna para que el empleador lo copie a la wallet; el Safe batch JSON
 // NO cabe en CSV (es un objeto anidado) — se obtiene del endpoint JSON.
 export function batchPagoOnchainToCsv(salida: BatchPagoOnchainOutput): string {
-  const cabecera = [
+  const cabecera = comentarios([
     `# NomiCheck pago on-chain batch export — version ${salida.version}`,
     `# generado_en: ${salida.generadoEn}`,
     `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
@@ -206,7 +222,7 @@ export function batchPagoOnchainToCsv(salida: BatchPagoOnchainOutput): string {
     `# signature_public_key_id: ${salida.signature.publicKeyId}`,
     `# signature_value: ${salida.signature.valor}`,
     `# disclaimer: ${salida.disclaimer}`,
-  ].join("\n");
+  ]);
 
   const columnas = ["external_id", "destino_wallet", "monto_cop", "monto_usdc", "link_eip681"];
   const filas: string[] = [columnas.join(",")];
@@ -223,7 +239,7 @@ export function batchPagoOnchainToCsv(salida: BatchPagoOnchainOutput): string {
 // incluye las líneas sintéticas "faltante_en_comprobante" y las extralegales
 // sin cálculo, para que el contador vea el detalle completo en Excel.
 export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string {
-  const cabecera = [
+  const cabecera = comentarios([
     `# NomiCheck verificación batch export — version ${salida.version}`,
     `# generado_en: ${salida.generadoEn}`,
     `# reglas_verificadas_al: ${salida.reglasVerificadasAl}`,
@@ -233,7 +249,7 @@ export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string 
     `# signature_public_key_id: ${salida.signature.publicKeyId}`,
     `# signature_value: ${salida.signature.valor}`,
     `# disclaimer: ${salida.disclaimer}`,
-  ].join("\n");
+  ]);
 
   const columnas = [
     "external_id",
@@ -281,7 +297,7 @@ export function batchVerificacionToCsv(salida: BatchVerificacionOutput): string 
 // sin perderlo. Los supuestos van al final, como comentarios `#`: son la
 // diferencia entre una cifra y una cifra que sabes sobre qué se construyó.
 export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput): string {
-  const cabecera = [
+  const cabecera = comentarios([
     `# NomiCheck liquidación final batch export — version ${salida.version}`,
     // La empresa es opcional en el contrato: cuando no se declaró, la línea NO
     // se escribe. Escribir `# empresa: undefined (NIT undefined)` sería peor
@@ -298,7 +314,7 @@ export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput):
     `# signature_public_key_id: ${salida.signature.publicKeyId}`,
     `# signature_value: ${salida.signature.valor}`,
     `# disclaimer: ${salida.disclaimer}`,
-  ].join("\n");
+  ]);
 
   const columnas = [
     "external_id",
@@ -344,5 +360,5 @@ export function batchLiquidacionFinalToCsv(salida: BatchLiquidacionFinalOutput):
     for (const n of r.noSolicitado) notas.push(`# no_calculado [${r.externalId}] ${n.codigo}: ${n.motivo}`);
   }
 
-  return `${cabecera}\n${filas.join("\n")}\n${notas.length ? notas.join("\n") + "\n" : ""}`;
+  return `${cabecera}\n${filas.join("\n")}\n${notas.length ? comentarios(notas) + "\n" : ""}`;
 }
