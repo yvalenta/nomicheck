@@ -100,8 +100,22 @@ export type ResultadoInvitacion =
 //   - correo sin cuenta  → invitación nativa de Supabase + vínculo aceptado (unido).
 //   - cuenta existente libre → vínculo PENDIENTE (notificación in-app, la acepta el colaborador).
 //   - cuenta existente ya activa en otra empresa → se bloquea (409).
-export async function invitarColaborador(empleadoId: number, email: string): Promise<ResultadoInvitacion> {
-  const empleado = await prisma.empleado.findUnique({ where: { id: empleadoId } });
+// `empresaId` es OBLIGATORIO y entra en el `where`, no se comprueba después.
+// Hasta el 2026-08-05 esta era la ÚNICA operación sobre empleados sin scoping
+// por empresa — actualizar, eliminar, retirar y liquidar ya iban todas por
+// `req.usuario.empresaId`. El agujero era real: un admin_empresa de A, con el
+// id de un empleado de B, dejaba una cuenta elegida por él como colaborador de
+// B en una sola petición (la rama de correo nuevo acepta la invitación
+// implícitamente), y esa cuenta leía la nómina de B. Se encontró escribiendo
+// las pruebas del servicio, no en un incidente — por eso el guard vive acá y
+// no en el controller: el scoping que depende de que cada llamador se acuerde
+// ya falló una vez.
+export async function invitarColaborador(
+  empleadoId: number,
+  email: string,
+  empresaId: number
+): Promise<ResultadoInvitacion> {
+  const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
   if (!empleado) throw new Error("Empleado no encontrado");
   if (empleado.usuarioId) throw new Error("Este empleado ya tiene una cuenta vinculada");
 
@@ -182,6 +196,32 @@ export async function crearEmpresaConAdmin(datos: {
   }
 }
 
+/** Extraído de `quitarAdminEmpresa` para poder probar LA decisión de scoping
+ * sin base de datos. Dos propiedades que no se negocian:
+ *
+ *  1. Allowlist estricta de rol: solo `admin_empresa`. Cualquier otro rol
+ *     —incluido uno que se agregue en el futuro— cae en `false`. No es una
+ *     denylist de roles conocidos.
+ *  2. Pertenencia a ESA empresa, con `===`: un admin_empresa de la empresa 1
+ *     no es admin de la 2 aunque el rol alcance.
+ *
+ * El guard de `empresaId` no estaba en el original: sin él,
+ * `usuario.empresaId === empresaId` da `true` cuando ambos son `undefined`
+ * (el patrón `nil == nil` que ya causó un fail-open en este repo) y el
+ * predicado deja pasar a un no-admin. Hoy el único llamador pasa
+ * `Number(req.params.id)` —NaN en el peor caso, que ya fallaba cerrado—, así
+ * que ninguna ruta alcanzable cambia de comportamiento: solo se cierra el
+ * caso que los tipos declaran imposible.
+ */
+export function esAdminDeEmpresa(
+  usuario: { rol?: string | null; empresaId?: number | null } | null | undefined,
+  empresaId: number
+): boolean {
+  if (!usuario) return false;
+  if (typeof empresaId !== "number" || !Number.isFinite(empresaId)) return false;
+  return usuario.rol === "admin_empresa" && usuario.empresaId === empresaId;
+}
+
 // Desvincula al admin_empresa indicado (NO borra su cuenta ni su fila
 // Usuario — solo pierde el rol operativo y el empresaId, queda como
 // "individual", igual que cualquier cuenta sin empresa). Reversible: se
@@ -191,7 +231,7 @@ export async function crearEmpresaConAdmin(datos: {
 // alguien de otra empresa.
 export async function quitarAdminEmpresa(empresaId: number, usuarioId: string): Promise<void> {
   const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
-  if (!usuario || usuario.rol !== "admin_empresa" || usuario.empresaId !== empresaId) {
+  if (!esAdminDeEmpresa(usuario, empresaId)) {
     throw new Error("Ese usuario no es el admin_empresa de esta empresa");
   }
   await prisma.usuario.update({ where: { id: usuarioId }, data: { rol: "individual", empresaId: null } });
