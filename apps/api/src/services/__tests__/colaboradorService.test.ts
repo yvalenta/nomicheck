@@ -20,6 +20,10 @@ const { prismaMock, txMock } = vi.hoisted(() => {
   const txMock = {
     empleado: { update: vi.fn() },
     usuario: { update: vi.fn() },
+    // `conAuditoria` corre DE VERDAD en estas pruebas —no se mockea— porque lo
+    // que hay que demostrar es que el actor llega a `app.usuario_actual`, que
+    // es de donde el trigger lo lee. Mockear el wrapper probaría el mock.
+    $executeRaw: vi.fn(),
   };
   return {
     txMock,
@@ -190,20 +194,27 @@ describe("aceptarInvitacion", () => {
     });
   });
 
-  it("HALLAZGO VIGENTE: la aceptación escribe en Empleado SIN conAuditoria — el trigger registra el cambio sin actor", async () => {
-    // `Empleado` es tabla auditada (trigger auditoria_Empleado). El actor solo
-    // llega a la auditoría si el write corre dentro de `conAuditoria(usuarioId,
-    // ...)`, que setea `app.usuario_actual` en la transacción. Acá se usa
-    // `prisma.$transaction` pelado, así que la fila de auditoría de este
-    // cambio de membresía queda con usuarioId = NULL: quién aceptó no se
-    // puede reconstruir desde la auditoría inmutable. Esta prueba CARACTERIZA
-    // el comportamiento de hoy; cuando se arregle (envolver en conAuditoria),
-    // debe fallar y reescribirse.
+  it("la aceptación pasa por conAuditoria: el actor llega a app.usuario_actual", async () => {
+    // `Empleado` es tabla auditada (trigger auditoria_Empleado, SDD §15 pilar
+    // 1B). El actor solo llega si el write corre dentro de
+    // `conAuditoria(usuarioId, ...)`, que hace `set_config('app.usuario_actual',
+    // ...)` en la misma transacción — es de ahí que el trigger lo lee.
+    //
+    // Antes usaba `prisma.$transaction` pelado y la fila de auditoría quedaba
+    // con `usuarioId = NULL`: constancia de que alguien aceptó, y ninguna de
+    // quién.
+    //
+    // Se afirma sobre el SQL emitido y no sobre "se llamó a conAuditoria":
+    // lo que el trigger necesita es el set_config, no el nombre de la función.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture()).mockResolvedValueOnce(null);
     await aceptarInvitacion(UID_COLAB, EMPLEADO_ID);
-    // La transacción se abre directo sobre prisma, sin set_config del actor.
-    expect(prismaMock.$transaction.mock.calls[0]![0]).toBeInstanceOf(Function);
-    expect((txMock as unknown as Record<string, unknown>).$executeRaw).toBeUndefined();
+
+    expect(txMock.$executeRaw).toHaveBeenCalled();
+    // El usuarioId viaja como PARÁMETRO del template, no concatenado.
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_COLAB);
+    // Y el update del empleado ocurre en ese MISMO tx, o el set_config no lo
+    // alcanzaría: `SET LOCAL` vive solo dentro de su transacción.
+    expect(txMock.empleado.update).toHaveBeenCalled();
   });
 });
 
@@ -226,10 +237,16 @@ describe("rechazarInvitacion", () => {
     // nómina activa.
     prismaMock.empleado.findFirst.mockResolvedValue(empleadoFixture());
     await rechazarInvitacion(UID_COLAB, EMPLEADO_ID);
-    expect(prismaMock.empleado.update).toHaveBeenCalledWith({
+    // Por el `tx` y no por el cliente raíz: el write va dentro de
+    // `conAuditoria`, o el trigger lo registraría sin actor. Y acá importa más
+    // que en aceptar, porque el update pone `usuarioId = null`: después del
+    // cambio la fila ya no dice a quién estaba ligada, así que si el rastro no
+    // guarda al actor, esa información se pierde del todo.
+    expect(txMock.empleado.update).toHaveBeenCalledWith({
       where: { id: EMPLEADO_ID },
       data: { usuarioId: null },
     });
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_COLAB);
   });
 });
 

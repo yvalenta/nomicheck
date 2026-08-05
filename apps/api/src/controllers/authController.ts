@@ -89,7 +89,12 @@ export async function invitar(req: Request, res: Response) {
   try {
     // El empresaId del USUARIO AUTENTICADO, nunca del body ni de la URL: es lo
     // que impide invitar sobre un empleado de otra empresa.
-    const resultado = await invitarColaborador(empleadoId, parseo.data.email, req.usuario!.empresaId!);
+    const resultado = await invitarColaborador(
+      empleadoId,
+      parseo.data.email,
+      req.usuario!.empresaId!,
+      req.usuario!.id
+    );
     res.status(201).json(resultado);
   } catch (err) {
     if (err instanceof ErrorConflicto) {

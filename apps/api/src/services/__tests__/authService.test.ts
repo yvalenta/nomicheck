@@ -16,14 +16,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthError } from "@supabase/supabase-js";
 
-const { prismaMock, authAdminMock } = vi.hoisted(() => ({
-  prismaMock: {
-    usuario: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    empleado: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
-    empresa: { create: vi.fn(), findUnique: vi.fn(), delete: vi.fn() },
-  },
-  authAdminMock: { createUser: vi.fn(), deleteUser: vi.fn(), inviteUserByEmail: vi.fn() },
-}));
+const { prismaMock, txMock, authAdminMock } = vi.hoisted(() => {
+  // `invitarColaborador` escribe `Empleado` dentro de `conAuditoria`, que abre
+  // una transaccion y setea `app.usuario_actual` — es de ahi que el trigger de
+  // auditoria lee el actor. El wrapper corre DE VERDAD acá: mockearlo probaria
+  // el mock, no que el actor llegue.
+  const txMock = { empleado: { update: vi.fn() }, $executeRaw: vi.fn() };
+  return {
+    txMock,
+    prismaMock: {
+      usuario: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+      empleado: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+      empresa: { create: vi.fn(), findUnique: vi.fn(), delete: vi.fn() },
+      $transaction: vi.fn(async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)),
+    },
+    authAdminMock: { createUser: vi.fn(), deleteUser: vi.fn(), inviteUserByEmail: vi.fn() },
+  };
+});
 
 vi.mock("../../lib/prisma.js", () => ({ prisma: prismaMock }));
 vi.mock("../../lib/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { admin: authAdminMock } } }));
@@ -43,6 +52,9 @@ import { ErrorConflicto } from "../empleadosService.js";
 
 // --- fixtures -------------------------------------------------------------
 
+// El admin que invita. Viaja hasta el servicio solo para que el trigger de
+// auditoria pueda nombrarlo: sin el, el rastro del vinculo queda sin actor.
+const UID_ADMIN = "11111111-1111-4111-8111-111111111111";
 const EMPRESA_A = 1;
 const EMPRESA_B = 2;
 const UID_NUEVO = "11111111-1111-4111-8111-111111111111";
@@ -286,7 +298,7 @@ describe("invitarColaborador", () => {
   // empleado, segunda la membresía.
 
   it("empleado inexistente: falla sin mandarle correo a nadie", async () => {
-    await expect(invitarColaborador(999, "ana@empresa.com", EMPRESA_A)).rejects.toThrow("Empleado no encontrado");
+    await expect(invitarColaborador(999, "ana@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("Empleado no encontrado");
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
     expect(prismaMock.usuario.create).not.toHaveBeenCalled();
   });
@@ -303,7 +315,7 @@ describe("invitarColaborador", () => {
     // Un empleado de otra empresa no "existe y está prohibido": no existe, y la
     // respuesta no filtra que el id era real.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(null); // B no aparece con empresaId=A
-    await expect(invitarColaborador(500, "atacante@evil.com", EMPRESA_A)).rejects.toThrow("Empleado no encontrado");
+    await expect(invitarColaborador(500, "atacante@evil.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("Empleado no encontrado");
     expect(prismaMock.empleado.findFirst).toHaveBeenCalledWith({ where: { id: 500, empresaId: EMPRESA_A } });
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
     expect(prismaMock.usuario.create).not.toHaveBeenCalled();
@@ -316,7 +328,7 @@ describe("invitarColaborador", () => {
     // ventana entre las dos consultas y el olvido del if son el agujero de
     // nuevo. El where es la única forma sin ventana.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
-    await invitarColaborador(500, "nueva@empresa.com", EMPRESA_A);
+    await invitarColaborador(500, "nueva@empresa.com", EMPRESA_A, UID_ADMIN);
     const primera = prismaMock.empleado.findFirst.mock.calls[0]![0] as { where: Record<string, unknown> };
     expect(Object.keys(primera.where).sort()).toEqual(["empresaId", "id"]);
   });
@@ -325,7 +337,7 @@ describe("invitarColaborador", () => {
     // Sin esta guarda, reinvitar a otro correo reescribiría `usuarioId` y la
     // persona anterior perdería sus recibos mientras la nueva los hereda.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture({ usuarioId: UID_AJENO }));
-    await expect(invitarColaborador(500, "otra@empresa.com", EMPRESA_A)).rejects.toThrow("ya tiene una cuenta vinculada");
+    await expect(invitarColaborador(500, "otra@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("ya tiene una cuenta vinculada");
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
   });
@@ -338,7 +350,7 @@ describe("invitarColaborador", () => {
       .mockResolvedValueOnce(empleadoFixture())
       .mockResolvedValueOnce({ id: 900, empresaId: EMPRESA_B });
     prismaMock.usuario.findUnique.mockResolvedValue(usuarioFixture());
-    await expect(invitarColaborador(500, "ana@empresa.com", EMPRESA_A)).rejects.toBeInstanceOf(ErrorConflicto);
+    await expect(invitarColaborador(500, "ana@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toBeInstanceOf(ErrorConflicto);
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
   });
@@ -351,7 +363,7 @@ describe("invitarColaborador", () => {
     // detalle de implementación.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
     prismaMock.usuario.findUnique.mockResolvedValue(usuarioFixture());
-    await invitarColaborador(500, "ana@empresa.com", EMPRESA_A);
+    await invitarColaborador(500, "ana@empresa.com", EMPRESA_A, UID_ADMIN);
     expect(prismaMock.empleado.findFirst).toHaveBeenNthCalledWith(2, {
       where: { usuarioId: UID_AJENO, activo: true, invitacionAceptadaEn: { not: null } },
     });
@@ -363,12 +375,17 @@ describe("invitarColaborador", () => {
     // en su nómina sin que ella lo sepa.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
     prismaMock.usuario.findUnique.mockResolvedValue(usuarioFixture());
-    const resultado = await invitarColaborador(500, "ana@empresa.com", EMPRESA_A);
+    const resultado = await invitarColaborador(500, "ana@empresa.com", EMPRESA_A, UID_ADMIN);
     expect(resultado).toEqual({ estado: "pendiente_en_app" });
-    expect(prismaMock.empleado.update).toHaveBeenCalledWith({
+    // Por el `tx` de `conAuditoria`, no por el cliente raíz: `Empleado` está
+    // vigilado por el trigger, y sin el wrapper el vínculo quedaba registrado
+    // sin decir qué admin lo creó — justo lo que se le pregunta a la auditoría
+    // cuando aparece una cuenta que no debería estar.
+    expect(txMock.empleado.update).toHaveBeenCalledWith({
       where: { id: 500 },
       data: { usuarioId: UID_AJENO, invitacionAceptadaEn: null },
     });
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_ADMIN);
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
     expect(prismaMock.usuario.create).not.toHaveBeenCalled();
   });
@@ -378,7 +395,7 @@ describe("invitarColaborador", () => {
     // exploit: el empresaId del perfil salía del empleado, no de quien invita.
     // Con el scoping en el where las dos ya no pueden diferir.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture({ empresaId: EMPRESA_B }));
-    const resultado = await invitarColaborador(500, "nueva@empresa.com", EMPRESA_B);
+    const resultado = await invitarColaborador(500, "nueva@empresa.com", EMPRESA_B, UID_ADMIN);
     expect(resultado).toEqual({ estado: "correo_enviado" });
     expect(prismaMock.usuario.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ id: UID_NUEVO, rol: "colaborador", empresaId: EMPRESA_B }),
@@ -390,7 +407,7 @@ describe("invitarColaborador", () => {
     // puede quedar hecho: apuntaría a un id de Auth que nadie controla.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: errorAuth("user_already_exists") });
-    await expect(invitarColaborador(500, "huerfana@empresa.com", EMPRESA_A)).rejects.toBeInstanceOf(ErrorConflicto);
+    await expect(invitarColaborador(500, "huerfana@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toBeInstanceOf(ErrorConflicto);
     expect(prismaMock.usuario.create).not.toHaveBeenCalled();
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
   });
@@ -400,7 +417,7 @@ describe("invitarColaborador", () => {
     // undefined y el Empleado quedaría vinculado a un usuarioId inexistente.
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: null });
-    await expect(invitarColaborador(500, "nueva@empresa.com", EMPRESA_A)).rejects.toThrow("No se pudo enviar la invitación");
+    await expect(invitarColaborador(500, "nueva@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("No se pudo enviar la invitación");
     expect(prismaMock.usuario.create).not.toHaveBeenCalled();
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
   });
@@ -421,7 +438,7 @@ describe("invitarColaborador", () => {
     );
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: errorAuth("user_already_exists") });
 
-    await expect(invitarColaborador(500, "ANA@Empresa.com", EMPRESA_A)).rejects.toBeInstanceOf(ErrorConflicto);
+    await expect(invitarColaborador(500, "ANA@Empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toBeInstanceOf(ErrorConflicto);
     expect(prismaMock.usuario.findUnique).toHaveBeenCalledWith({ where: { email: "ANA@Empresa.com" } });
     // La membresía activa nunca se consultó: findFirst corrió UNA sola vez (el
     // empleado). La rama que la mira quedó afuera.

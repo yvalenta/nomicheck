@@ -1,3 +1,4 @@
+import { conAuditoria } from "../lib/auditoria.js";
 import { supabaseAdmin } from "../lib/supabaseAdmin.js";
 import { prisma } from "../lib/prisma.js";
 import { ErrorConflicto } from "./empleadosService.js";
@@ -110,10 +111,17 @@ export type ResultadoInvitacion =
 // las pruebas del servicio, no en un incidente — por eso el guard vive acá y
 // no en el controller: el scoping que depende de que cada llamador se acuerde
 // ya falló una vez.
+// `usuarioId` es el ADMIN que invita, y viaja hasta acá solo para que el
+// trigger de auditoría pueda nombrarlo: `Empleado` está vigilado (SDD §15,
+// pilar 1B) y sin `conAuditoria` el cambio queda registrado con
+// `usuarioId = NULL`. Quedaba constancia de que a alguien lo invitaron y
+// ninguna de quién lo invitó — que es justo lo que se le pregunta a una
+// auditoría cuando aparece una cuenta que no debería estar.
 export async function invitarColaborador(
   empleadoId: number,
   email: string,
-  empresaId: number
+  empresaId: number,
+  usuarioId: string
 ): Promise<ResultadoInvitacion> {
   const empleado = await prisma.empleado.findFirst({ where: { id: empleadoId, empresaId } });
   if (!empleado) throw new Error("Empleado no encontrado");
@@ -132,10 +140,12 @@ export async function invitarColaborador(
       );
     }
     // Cuenta libre: vínculo pendiente, sin correo — le llega como notificación.
-    await prisma.empleado.update({
-      where: { id: empleadoId },
-      data: { usuarioId: cuenta.id, invitacionAceptadaEn: null },
-    });
+    await conAuditoria(usuarioId, (tx) =>
+      tx.empleado.update({
+        where: { id: empleadoId },
+        data: { usuarioId: cuenta.id, invitacionAceptadaEn: null },
+      })
+    );
     return { estado: "pendiente_en_app" };
   }
 
@@ -153,10 +163,16 @@ export async function invitarColaborador(
   await prisma.usuario.create({
     data: { id: data.user.id, nombre: empleado.nombre, email, rol: "colaborador", empresaId: empleado.empresaId },
   });
-  await prisma.empleado.update({
-    where: { id: empleadoId },
-    data: { usuarioId: data.user.id, invitacionAceptadaEn: new Date() },
-  });
+  // La otra rama de la invitación —cuenta nueva creada en Auth— escribe el
+  // mismo `Empleado` vigilado, así que necesita el mismo wrapper. Arreglar solo
+  // la primera habría dejado el rastro sin actor justo en el camino más común:
+  // invitar a alguien que todavía no tiene cuenta.
+  await conAuditoria(usuarioId, (tx) =>
+    tx.empleado.update({
+      where: { id: empleadoId },
+      data: { usuarioId: data.user.id, invitacionAceptadaEn: new Date() },
+    })
+  );
 
   return { estado: "correo_enviado" };
 }

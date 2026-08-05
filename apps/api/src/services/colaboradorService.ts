@@ -1,3 +1,4 @@
+import { conAuditoria } from "../lib/auditoria.js";
 import { prisma } from "../lib/prisma.js";
 import { ErrorConflicto } from "./empleadosService.js";
 import type { crearReporteSchema } from "../validation/discrepancia.js";
@@ -58,7 +59,16 @@ export async function aceptarInvitacion(usuarioId: string, empleadoId: number) {
     throw new ErrorConflicto("Ya perteneces a una empresa activa. Debes retirarte de ella antes de unirte a otra.");
   }
 
-  return prisma.$transaction(async (tx) => {
+  // `conAuditoria` y no `prisma.$transaction` pelado: `Empleado` está vigilado
+  // por el trigger inmutable (SDD §15, pilar 1B), que lee el autor de
+  // `app.usuario_actual`. Sin el wrapper el cambio SÍ se registra, pero con
+  // `usuarioId = NULL` — o sea que quedaba constancia de que alguien aceptó la
+  // invitación y ninguna de quién. Una auditoría inmutable que no puede nombrar
+  // al actor es media auditoría, y la mitad que falta es justo la que se le
+  // pide cuando hace falta.
+  //
+  // El actor acá es la propia persona: acepta su invitación.
+  return conAuditoria(usuarioId, async (tx) => {
     const actualizado = await tx.empleado.update({
       where: { id: empleadoId },
       data: { invitacionAceptadaEn: new Date() },
@@ -75,7 +85,14 @@ export async function rechazarInvitacion(usuarioId: string, empleadoId: number) 
     where: { id: empleadoId, usuarioId, invitacionAceptadaEn: null, activo: true },
   });
   if (!empleado) throw new Error("Invitación no encontrada");
-  return prisma.empleado.update({ where: { id: empleadoId }, data: { usuarioId: null } });
+  // Mismo motivo que en `aceptarInvitacion`: sin el wrapper, el trigger deja
+  // constancia del rechazo sin decir quién rechazó. Y acá duele más, porque el
+  // update pone `usuarioId = null` — después del cambio, la fila ya no dice a
+  // quién estaba ligada: si el rastro no guarda al actor, la información se
+  // pierde del todo.
+  return conAuditoria(usuarioId, (tx) =>
+    tx.empleado.update({ where: { id: empleadoId }, data: { usuarioId: null } })
+  );
 }
 
 // Historial de empresas de la cuenta: todos los Empleado ligados a ella
