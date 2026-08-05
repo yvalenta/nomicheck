@@ -238,7 +238,10 @@ export interface PilaEmpleado {
     lineas: LineaCosto[];
     costoTotalPeriodo: number;
     advertencias: string[];
-  } | null; // null = aprendiz SENA etapa lectiva, sin IBC
+  } | null;
+  /** Presente cuando `pila` es null: el motivo que da el backend. Se muestra
+   *  tal cual — acá no se adivina por qué un recibo no liquidó. */
+  sinPila?: string;
 }
 
 export interface PilaPeriodo {

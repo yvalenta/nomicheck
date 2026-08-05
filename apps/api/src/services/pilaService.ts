@@ -17,7 +17,16 @@ export interface PilaEmpleadoResumen {
   nombre: string;
   tipoContrato: string;
   claseRiesgoArl: number;
-  pila: ResultadoLiquidacionPila | null; // null = aprendiz SENA etapa lectiva (sin IBC, SENA gestiona su afiliación)
+  pila: ResultadoLiquidacionPila | null;
+  /**
+   * Presente exactamente cuando `pila` es null: por qué ESE recibo no liquida.
+   *
+   * Antes el null viajaba sin motivo y la UI lo rotulaba "Aprendiz SENA" para
+   * todos — así que un recibo histórico incompleto se le mostraba a la empresa
+   * como un aprendiz que no tiene. El dato de "no hay PILA" es barato; el caro
+   * es "por qué", y era justo el que se tiraba.
+   */
+  sinPila?: string;
 }
 
 export interface PilaPeriodoResumen {
@@ -50,9 +59,28 @@ function buscarLinea(
   return lineas.find((l) => (l.codigo ? l.codigo === codigo : l.concepto === conceptoLegacy));
 }
 
-function ibcDeRecibo(lineas: LineaReciboJson[]): number | null {
-  return buscarLinea(lineas, "SALUD_EMPLEADO", "Salud (aporte empleado)")?.base ?? null;
+function ibcDeRecibo(lineas: LineaReciboJson[]): unknown {
+  return buscarLinea(lineas, "SALUD_EMPLEADO", "Salud (aporte empleado)")?.base;
 }
+
+// `LineaReciboJson` es una AFIRMACIÓN nuestra sobre bytes guardados en una
+// columna Json, no algo que TypeScript haya verificado: el recibo se lee con
+// un `as` y la base acepta cualquier cosa que quepa en JSON. Por eso acá se
+// comprueba el valor, no el tipo.
+//
+// El umbral es el mismo invariante que el motor exige (`ibcPeriodo > 0`), y
+// escrito así —negando `> 0` en vez de comparar contra 0— también atrapa
+// negativos, NaN y strings.
+function ibcUtilizable(valor: unknown): valor is number {
+  return typeof valor === "number" && Number.isFinite(valor) && valor > 0;
+}
+
+const SIN_LINEA_DE_SALUD =
+  "El recibo no registra IBC (sin línea de salud, o sin base en ella). " +
+  "Es lo esperable en un aprendiz SENA en etapa lectiva, cuya afiliación gestiona el SENA.";
+
+const IBC_NO_LIQUIDABLE =
+  "El recibo registra un IBC que no permite liquidar aportes — revisa el recibo de este colaborador.";
 
 function auxilioDeRecibo(lineas: LineaReciboJson[]): number {
   return (
@@ -80,35 +108,53 @@ export async function calcularLiquidacionPilaPeriodo(
   const [{ reglas }, recibos] = await Promise.all([
     obtenerReglasYFestivos(),
     prisma.reciboPago.findMany({
-      where: { periodoId, empleadoId: { not: null } },
+      where: { periodoId, periodo: { empresaId }, empleadoId: { not: null } },
       include: { empleado: true },
     }),
   ]);
 
+  // Un recibo que no se puede liquidar se SALTA, no tumba el periodo.
+  //
+  // El motor exige `ibcPeriodo > 0` y lanza si no. Como el IBC sale de un
+  // recibo ya persistido, un solo recibo con la base en 0 hacía explotar este
+  // map entero: la petición terminaba en 422 y la empresa se quedaba sin la
+  // PILA de TODOS sus colaboradores por el dato de uno.
+  //
+  // Lo que NO se atrapa a propósito es el fallo de alcance del periodo (que no
+  // haya regla vigente para `fechaFin`, por ejemplo): eso no es de un recibo,
+  // es de la corrida, y afecta a todos por igual. Tragárselo devolvería un 200
+  // con la lista completa en "sin PILA" y los totales en $0 — una planilla que
+  // parece liquidada y vale cero. Un 422 es la respuesta honesta ahí.
   const empleados: PilaEmpleadoResumen[] = recibos
     .filter((r) => r.empleado)
     .map((r) => {
       const empleado = r.empleado!;
       const lineas = r.lineas as unknown as LineaReciboJson[];
       const ibcPeriodo = ibcDeRecibo(lineas);
-      return {
+      const comun = {
         empleadoId: empleado.id,
         nombre: empleado.nombre,
         tipoContrato: empleado.tipoContrato,
         claseRiesgoArl: empleado.claseRiesgoArl,
-        pila:
-          ibcPeriodo === null
-            ? null
-            : calcularLiquidacionPilaEmpleado(
-                {
-                  ibcPeriodo,
-                  auxilioTransportePeriodo: auxilioDeRecibo(lineas),
-                  salarioMensualPactado: empleado.salarioBase,
-                  claseRiesgoArl: empleado.claseRiesgoArl as 1 | 2 | 3 | 4 | 5,
-                },
-                reglas,
-                { exoneradoParafiscales, fecha: periodo.fechaFin }
-              ),
+      };
+      if (ibcPeriodo === undefined || ibcPeriodo === null) {
+        return { ...comun, pila: null, sinPila: SIN_LINEA_DE_SALUD };
+      }
+      if (!ibcUtilizable(ibcPeriodo)) {
+        return { ...comun, pila: null, sinPila: IBC_NO_LIQUIDABLE };
+      }
+      return {
+        ...comun,
+        pila: calcularLiquidacionPilaEmpleado(
+          {
+            ibcPeriodo,
+            auxilioTransportePeriodo: auxilioDeRecibo(lineas),
+            salarioMensualPactado: empleado.salarioBase,
+            claseRiesgoArl: empleado.claseRiesgoArl as 1 | 2 | 3 | 4 | 5,
+          },
+          reglas,
+          { exoneradoParafiscales, fecha: periodo.fechaFin }
+        ),
       };
     });
 

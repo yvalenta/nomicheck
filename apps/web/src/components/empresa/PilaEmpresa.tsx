@@ -132,9 +132,20 @@ export default function PilaEmpresa() {
                         <p className="text-xs text-muted tabular-nums">IBC {formatCOP(e.pila.ibcPeriodo)}</p>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted shrink-0">Aprendiz SENA — sin IBC</p>
+                      <p className="text-xs text-muted shrink-0">Sin PILA</p>
                     )}
                   </button>
+
+                  {/* El motivo lo da el backend. Antes acá decía "Aprendiz SENA"
+                      para todo recibo sin IBC, así que un recibo incompleto se
+                      mostraba como un aprendiz que la empresa no tiene. */}
+                  {abiertoId === e.empleadoId && !e.pila && e.sinPila && (
+                    <div className="mx-3 mb-2 rounded-xl bg-slate-50 p-3">
+                      <p className="flex items-start gap-1.5 text-xs text-muted">
+                        <Info size={13} className="shrink-0 mt-0.5" /> {e.sinPila}
+                      </p>
+                    </div>
+                  )}
 
                   {abiertoId === e.empleadoId && e.pila && (
                     <div className="mx-3 mb-2 rounded-xl bg-slate-50 p-3 flex flex-col gap-1.5">

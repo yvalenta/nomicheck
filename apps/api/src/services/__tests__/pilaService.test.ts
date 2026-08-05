@@ -113,6 +113,7 @@ describe("calcularLiquidacionPilaPeriodo — guardas", () => {
     await calcularLiquidacionPilaPeriodo(1, 55, true);
     expect(prismaMock.reciboPago.findMany.mock.calls[0][0].where).toEqual({
       periodoId: 55,
+      periodo: { empresaId: 1 },
       empleadoId: { not: null },
     });
   });
@@ -188,13 +189,62 @@ describe("calcularLiquidacionPilaPeriodo — el IBC sale del recibo, no se recal
   });
 
   it("línea de salud sin `base` (recibo viejo incompleto): pila null, no inventa IBC 0", async () => {
-    // `?? null` es deliberado: con `?? 0` el motor lanzaría (IBC debe ser > 0)
-    // y una PILA entera del periodo se caería por un recibo histórico.
     prismaMock.reciboPago.findMany.mockResolvedValue([
       recibo([{ codigo: "SALUD_EMPLEADO", concepto: "Salud (aporte empleado)", valorCalculado: 0, tipo: "deduccion" }]),
     ]);
     const r = await calcularLiquidacionPilaPeriodo(1, 55, true);
     expect(r.empleados[0]!.pila).toBeNull();
+    expect(r.empleados[0]!.sinPila).toMatch(/no registra IBC/);
+  });
+
+  it("un recibo con IBC 0 se salta: NO se lleva por delante la PILA de los demás", async () => {
+    // El motor exige IBC > 0 y lanza si no. Como el IBC sale de un recibo ya
+    // persistido, un solo recibo malo hacía explotar el map entero: la empresa
+    // se quedaba sin la PILA de TODOS sus colaboradores por el dato de uno, y
+    // el controlador lo servía como 422 de todo el periodo.
+    //
+    // `base: 0` no lo atrapaba el `?? null` de antes: `0 ?? null` es 0.
+    prismaMock.reciboPago.findMany.mockResolvedValue([
+      recibo([lineaSalud(0)], empleadoFixture({ id: 10, nombre: "Cero Base" })),
+      recibo([lineaSalud(1_000_000), lineaAuxilio(124_548)], empleadoFixture({ id: 11, nombre: "Ana Base" })),
+    ]);
+    const r = await calcularLiquidacionPilaPeriodo(1, 55, true);
+
+    expect(r.empleados[0]!.pila).toBeNull();
+    expect(r.empleados[0]!.sinPila).toMatch(/no permite liquidar/);
+    // El otro liquida completo, y los totales son los suyos: el recibo malo
+    // no aporta 0 a un promedio, queda afuera.
+    expect(r.empleados[1]!.pila!.ibcPeriodo).toBe(1_000_000);
+    expect(r.totales).toEqual({ ibcTotal: 1_000_000, costoTotalPeriodo: 1_530_104 });
+  });
+
+  it("un IBC negativo o no numérico tampoco liquida — y tampoco tumba el periodo", async () => {
+    // El tipo `LineaReciboJson` es una afirmación sobre una columna Json, no
+    // una verificación: la base acepta cualquier cosa que quepa en JSON. Un
+    // negativo invertiría el signo de cada aporte; un string se multiplicaría
+    // por los porcentajes hasta salir NaN y viajar como aportes "calculados".
+    prismaMock.reciboPago.findMany.mockResolvedValue([
+      recibo([lineaSalud(-1_000_000)], empleadoFixture({ id: 10, nombre: "Negativo" })),
+      recibo(
+        [{ codigo: "SALUD_EMPLEADO", concepto: "Salud (aporte empleado)", base: "1000000" as unknown as number, valorCalculado: 40_000, tipo: "deduccion" }],
+        empleadoFixture({ id: 11, nombre: "Texto" })
+      ),
+      recibo([lineaSalud(1_000_000), lineaAuxilio(124_548)], empleadoFixture({ id: 12, nombre: "Sana" })),
+    ]);
+    const r = await calcularLiquidacionPilaPeriodo(1, 55, true);
+    expect(r.empleados.map((e) => e.pila === null)).toEqual([true, true, false]);
+    expect(r.totales).toEqual({ ibcTotal: 1_000_000, costoTotalPeriodo: 1_530_104 });
+  });
+
+  it("un fallo de la CORRIDA (sin regla vigente) sí tumba el periodo — no se disfraza de PILA en ceros", async () => {
+    // La contracara de lo anterior, y es deliberada: si falta la regla para
+    // `fechaFin`, el fallo no es de un recibo, es de todos. Atraparlo por
+    // empleado devolvería un 200 con la lista entera en "sin PILA" y los
+    // totales en $0 — una planilla que parece liquidada y vale cero. Es peor
+    // que el error: se puede citar.
+    prismaMock.reglaLegal.findMany.mockResolvedValue([]);
+    prismaMock.reciboPago.findMany.mockResolvedValue([recibo([lineaSalud(1_000_000)])]);
+    await expect(calcularLiquidacionPilaPeriodo(1, 55, true)).rejects.toThrow();
   });
 
   it("sin línea de auxilio, el auxilio del periodo es 0 — no null ni NaN", async () => {
