@@ -31,13 +31,35 @@ export async function requiereAuth(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data.user) {
+  // `getClaims` verifica la firma del JWT LOCALMENTE contra el JWKS del
+  // proyecto (ES256, cacheado por el cliente) — antes cada request protegido
+  // pagaba una ida HTTP a Supabase Auth (`getUser`) solo para validar el
+  // token. Si el token viniera firmado con la llave simétrica legacy, el SDK
+  // cae solo al camino remoto, así que no hay tokens que antes pasaran y
+  // ahora no. El trade-off real: una sesión revocada sigue siendo válida
+  // hasta que expire el access token (~1h) — aceptable porque suspender
+  // empresas (el único kill-switch del producto) se chequea abajo contra la
+  // BD en cada request, igual que siempre.
+  const { data, error } = await supabaseAdmin.auth.getClaims(token);
+  const usuarioId = data?.claims.sub;
+  if (error || !usuarioId) {
     res.status(401).json({ error: "Sesión inválida o expirada" });
     return;
   }
 
-  const perfil = await prisma.usuario.findUnique({ where: { id: data.user.id } });
+  // Las dos consultas solo dependen del id del token — en paralelo, un solo
+  // round-trip a la base en vez de dos encadenados.
+  //
+  // usuarioId ya no es único (una cuenta puede tener varios Empleado:
+  // historial + invitaciones pendientes). El empleado "actual" es el activo
+  // y aceptado.
+  const [perfil, empleadoActivo] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: usuarioId } }),
+    prisma.empleado.findFirst({
+      where: { usuarioId, activo: true, invitacionAceptadaEn: { not: null } },
+      select: { id: true },
+    }),
+  ]);
   if (!perfil) {
     res.status(403).json({ error: "El usuario no tiene un perfil en NomiCheck" });
     return;
@@ -56,13 +78,6 @@ export async function requiereAuth(req: Request, res: Response, next: NextFuncti
       return;
     }
   }
-
-  // usuarioId ya no es único (una cuenta puede tener varios Empleado: historial
-  // + invitaciones pendientes). El empleado "actual" es el activo y aceptado.
-  const empleadoActivo = await prisma.empleado.findFirst({
-    where: { usuarioId: perfil.id, activo: true, invitacionAceptadaEn: { not: null } },
-    select: { id: true },
-  });
 
   req.usuario = {
     id: perfil.id,

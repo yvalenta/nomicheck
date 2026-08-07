@@ -24,6 +24,12 @@ export function esEstadoPeriodo(v: unknown): v is EstadoPeriodo {
 
 // Estados terminales del pipeline de liquidación asíncrona — el polling del
 // frontend debe parar al alcanzar cualquiera de estos.
+//
+// OJO: nada en apps/api la referencia, pero NO es código muerto — el espejo
+// del frontend (apps/web estadosPeriodo.test.ts) LEE ESTE ARCHIVO COMO TEXTO
+// para verificar que su copia local coincide. Borrarla rompe esa suite, no
+// esta. Ya pasó una vez (2026-08-07): un barrido de exports sin referencias
+// la dio por muerta porque ningún grep de símbolos ve una lectura textual.
 export const ESTADOS_TERMINALES_LIQUIDACION: EstadoPeriodo[] = [
   "liquidado",
   "liquidado_con_rechazos",

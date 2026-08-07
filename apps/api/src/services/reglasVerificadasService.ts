@@ -70,10 +70,21 @@ function canonicalizar(
   return { reglas: reglasOrd, festivos: festivosOrd };
 }
 
+// Memo por identidad: el catálogo cacheado en nominaService sirve los MISMOS
+// arreglos durante 5 minutos, y cada request del wrapper batch recalculaba el
+// canónico + sha256 completos sobre datos idénticos. Con identidad nueva
+// (refresco del cache, tests con fixtures propios) se recalcula solo.
+let memoHash: { reglas: ReglaLegal[]; festivos: Festivo[]; hash: string } | null = null;
+
 export function hashCatalogo(reglas: ReglaLegal[], festivos: Festivo[]): string {
+  if (memoHash && memoHash.reglas === reglas && memoHash.festivos === festivos) {
+    return memoHash.hash;
+  }
   const canonico = canonicalizar(reglas, festivos);
   const json = JSON.stringify(canonico);
-  return createHash("sha256").update(json).digest("hex");
+  const hash = createHash("sha256").update(json).digest("hex");
+  memoHash = { reglas, festivos, hash };
+  return hash;
 }
 
 export interface LedgerReglas {

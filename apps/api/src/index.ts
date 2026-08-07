@@ -25,6 +25,12 @@ const PORT = process.env.PORT ?? 3001;
 // llave pública era ilegible desde otro origen y ningún verificador de
 // terceros en el navegador podía comprobarnos. Ver lib/corsPublico.ts.
 app.use(cors(delegadoCors));
+// El contrato batch admite lotes de hasta 500 empleados con sus turnos del
+// periodo, y eso no cabe en el default de 100kb de express.json: un lote de
+// 100 empleados con turnos pesa ~160kb y moría en 500 antes de llegar al
+// handler. 5mb cubre el lote máximo del contrato con margen; el resto del
+// API se queda con el default (nada fuera de /api/batch recibe lotes).
+app.use("/api/batch", express.json({ limit: "5mb" }));
 app.use(express.json());
 
 // Antes del router: el 402 tiene que salir sin ejecutar el cálculo. Apagado

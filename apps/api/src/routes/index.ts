@@ -108,10 +108,13 @@ const limitadorCalculo = rateLimit({
 // buyer pagó un order y espera ejecución inmediata — 30/min sería un cuello
 // artificial para un agente que quiere reintentar CSV+JSON o pedir el
 // schema/ejemplo antes del POST. 60/min por IP sigue cortando abuso pero
-// no fricciona al buyer legítimo.
+// no fricciona al buyer legítimo. Sobreescribible por env porque el bucket
+// es POR IP: detrás del proxy, un integrador con muchos agentes en un mismo
+// egress agota el bucket de todos — subirlo es decisión de operación, no un
+// redeploy.
 const limitadorBatch = rateLimit({
   windowMs: 60 * 1000,
-  limit: 60,
+  limit: Number(process.env.BATCH_RATE_LIMIT_POR_MINUTO ?? 60),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Demasiadas solicitudes al wrapper batch — reintenta en un minuto." },

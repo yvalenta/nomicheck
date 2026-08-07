@@ -93,9 +93,14 @@ export const batchLiquidarSchema = z.object({
     fechaInicio: fecha,
     fechaFin: fecha,
   }),
-  empleados: z.array(empleadoBatch).default([]),
-  contratistas: z.array(contratistaBatch).default([]),
-  turnos: z.array(turnoBatch).default([]),
+  // Mismos topes que el resto de la familia de contratos (retención, pago
+  // on-chain, verificación ya llevan .max(500)): un lote sin tope es CPU sin
+  // tope en un proceso single-thread — 500 empleados ≈ decenas de ms, y de
+  // ahí para arriba un solo POST bloquea el event loop para todos los demás.
+  // 20000 turnos = 500 empleados × ~40 turnos de un periodo mensual.
+  empleados: z.array(empleadoBatch).max(500).default([]),
+  contratistas: z.array(contratistaBatch).max(500).default([]),
+  turnos: z.array(turnoBatch).max(20000).default([]),
 });
 
 export type BatchLiquidarInput = z.infer<typeof batchLiquidarSchema>;

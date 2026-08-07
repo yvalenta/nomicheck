@@ -81,7 +81,9 @@ model Liquidacion {
   periodoHasta String? // YYYY-MM-DD, desde el snapshot
   creadoEn     DateTime @default(now())
 
-  @@index([usuarioId])
+  // El listado del historial es siempre "las mías, más recientes primero" —
+  // el índice compuesto sirve el ORDER BY sin sort aparte.
+  @@index([usuarioId, creadoEn(sort: Desc)])
 }
 
 model Empresa {
@@ -192,6 +194,12 @@ model Empleado {
 
   @@unique([empresaId, documento])
   @@index([empresaId])
+  // Flujos del colaborador (invitaciones pendientes, historial de empresas)
+  // buscan por usuarioId sin las condiciones del índice parcial
+  // Empleado_usuario_activo_unico (que solo cubre activo + aceptado).
+  @@index([usuarioId])
+  // Scoping del analista_rrhh: listar/validar empleados por sede.
+  @@index([sedeId])
 }
 
 // Contratista de prestación de servicios (Ley 1819 de 2016, art. 244) — NO
@@ -261,7 +269,9 @@ model PeriodoNomina {
   empleadosIncluidos PeriodoNominaEmpleado[]
   batchesPago BatchPago[]
 
-  @@index([empresaId])
+  // El listado pagina por empresa ordenando fechaInicio desc — el compuesto
+  // sirve filtro + ORDER BY de una vez (reemplaza al índice de empresaId sola).
+  @@index([empresaId, fechaInicio(sort: Desc)])
 }
 
 // Qué empleados quedan incluidos en un periodo — se autopuebla con los
@@ -292,6 +302,9 @@ model Turno {
   horaFin     String // HH:mm
 
   @@index([empleadoId, periodoId])
+  // Leer/guardar los turnos de un periodo completo consulta por periodoId
+  // solo — el compuesto de arriba no sirve con empleadoId ausente.
+  @@index([periodoId])
 }
 
 // Documento emitido (snapshot histórico) — no se recalcula al cambiar reglas.
@@ -323,6 +336,9 @@ model ReciboPago {
 
   @@unique([empleadoId, periodoId])
   @@unique([contratistaId, periodoId])
+  // Recibos de un periodo (listado, PILA, batch de pago, worker) consultan
+  // por periodoId solo; los únicos de arriba solo sirven con el primer campo.
+  @@index([periodoId])
 }
 
 // Bitácora inmutable de cambios sensibles (SDD §15, pilar 1). Poblada por

@@ -1,13 +1,9 @@
 // Endpoint público stateless para Execution Market (listings 5/6/8a/8b).
-// NO se cablea a `routes/index.ts` en este commit — solo fija la superficie
-// del contrato (schema + handler skeleton). La implementación del pipeline
-// entra en un commit siguiente, reusando `calcularReciboLote` +
-// `calcularRecibosContratistas` de `services/liquidacionCalculo.ts` sin
-// tocar Prisma.
-//
-// Cuando se cablee: rate limit igual al de `/api/nomina/calcular`, sin auth
-// (el pago del marketplace ya autoriza), y `noExternalLlm` respetado a
-// nivel de runtime (no solo copy).
+// Cableado en `routes/index.ts` bajo `/api/batch` con rate limit propio y
+// sin auth (el pago del marketplace ya autoriza); el pipeline reusa
+// `calcularReciboLote` + `calcularRecibosContratistas` de
+// `services/liquidacionCalculo.ts` sin tocar Prisma, y `noExternalLlm` se
+// respeta a nivel de runtime (guard en batchPublicoService).
 import { Router, Request, Response } from "express";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { batchLiquidarSchema } from "../validation/batchPublico.js";

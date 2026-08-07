@@ -34,6 +34,17 @@ export function manejadorDeErrores(err: unknown, _req: Request, res: Response, n
     return;
   }
 
+  // Body más grande que el límite del parser: también es del cliente, y antes
+  // salía como "Error interno" con id — un buyer con un lote legítimo grande
+  // no podía distinguir "recorta el lote" de "el servidor está roto".
+  if (status === 413) {
+    res.status(413).json({
+      error: "payload_demasiado_grande",
+      mensaje: "El cuerpo excede el límite del endpoint — divide el lote en partes más chicas.",
+    });
+    return;
+  }
+
   const id = nuevoIdDeError();
   // método y ruta sí; body, query y headers jamás — ver lib/registro.ts.
   registro.error("http", "error no manejado", err, {
