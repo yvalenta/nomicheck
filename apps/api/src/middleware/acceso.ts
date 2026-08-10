@@ -52,9 +52,27 @@ function registrable(req: Request): boolean {
   // Solo la API. El contenedor también sirve el front compilado, y una línea
   // por cada .js y .css convertiría el log en un lugar donde nadie busca.
   if (!ruta.startsWith("/api")) return false;
-  // El healthcheck del contenedor pega cada 15 s, para siempre. Registrarlo
-  // ahoga cualquier otra cosa: 5.760 líneas por día que nadie va a leer.
-  return ruta !== "/api/health";
+  return !esSondaInterna(req, ruta);
+}
+
+/**
+ * Las sondas de salud propias, que pegan cada 15 s para siempre — 5.760 líneas
+ * por día que nadie va a leer y que ahogan todo lo demás.
+ *
+ * **No alcanza con filtrar las rutas de salud**, y se vio en producción: un
+ * comprador SÍ consulta `/api/batch/health` antes de pagar —es lo que le da el
+ * `reglasHash` y el `publicKeyId` sin gastar un centavo, y la spec del sobre se
+ * lo recomienda—, así que descartarla a secas borra justo la señal de alguien
+ * evaluándonos.
+ *
+ * Se distinguen por DÓNDE ENTRAN. Todo lo externo llega por el túnel de
+ * Cloudflare, que escribe `CF-Connecting-IP`; el healthcheck del contenedor
+ * pega a `localhost` y no la trae. Es la misma cabecera en la que ya confía el
+ * rate limit, y por el mismo motivo: el origen no es alcanzable de otra forma.
+ */
+function esSondaInterna(req: Request, ruta: string): boolean {
+  if (!ruta.endsWith("/health")) return false;
+  return !req.headers["cf-connecting-ip"];
 }
 
 /**

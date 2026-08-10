@@ -122,11 +122,29 @@ describe("registrarAcceso", () => {
     expect(lineas).toHaveLength(1);
   });
 
-  it("no registra el healthcheck del contenedor", () => {
+  it("no registra las sondas de salud propias", () => {
     // Cada 15 s, para siempre: 5.760 líneas por día que ahogan todo lo demás.
-    const p = peticion({ path: "/api/health", originalUrl: "/api/health", method: "GET" });
+    // Se reconocen porque NO traen CF-Connecting-IP: pegan a localhost.
+    for (const ruta of ["/api/health", "/api/batch/health"]) {
+      lineas = [];
+      peticion({ originalUrl: ruta, method: "GET", headers: {} }).terminar();
+      expect(lineas, ruta).toHaveLength(0);
+    }
+  });
+
+  it("SI registra a un tercero que consulta la salud desde afuera", () => {
+    // No es simetria: un comprador consulta /api/batch/health antes de pagar
+    // —es lo que le da reglasHash y publicKeyId sin gastar un centavo— y
+    // descartarlo por la ruta borraria justo la señal de alguien evaluandonos.
+    // Se vio en produccion: el filtro por ruta se comia las dos cosas.
+    const p = peticion({
+      originalUrl: "/api/batch/health",
+      method: "GET",
+      headers: { "cf-connecting-ip": "198.51.100.9" },
+    });
     p.terminar();
-    expect(lineas).toHaveLength(0);
+    expect(lineas).toHaveLength(1);
+    expect(lineas[0].ruta).toBe("/api/batch/health");
   });
 
   it("no registra los archivos estáticos del front", () => {
@@ -147,7 +165,7 @@ describe("registrarAcceso", () => {
   it("siempre llama a next, registre o no", () => {
     // Es un observador: si alguna rama olvidara `next`, cuelga la API entera.
     expect(peticion().siguio()).toBe(true);
-    expect(peticion({ originalUrl: "/api/health" }).siguio()).toBe(true);
+    expect(peticion({ originalUrl: "/api/health", headers: {} }).siguio()).toBe(true);
     expect(peticion({ originalUrl: "/assets/x.css" }).siguio()).toBe(true);
   });
 });
