@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type { ReglaLegal } from "./types.js";
 import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { diasEntreFechas, esFechaValida } from "./utils.js";
@@ -91,7 +92,7 @@ function esTerminoDefinido(datos: DatosIndemnizacion): datos is DatosIndemnizaci
 function validarFechas(fechas: Record<string, string>) {
   for (const [nombre, fecha] of Object.entries(fechas)) {
     if (!esFechaValida(fecha)) {
-      throw new Error(`Fecha inválida o inexistente en "${nombre}": "${fecha}"`);
+      throw new ErrorDeDatos(`Fecha inválida o inexistente en "${nombre}": "${fecha}"`);
     }
   }
 }
@@ -107,7 +108,7 @@ export function calcularIndemnizacion(
   reglas: ReglaLegal[] | ResolutorReglas
 ): ResultadoIndemnizacion {
   if (!(datos.salarioMensual > 0)) {
-    throw new Error(`El salario mensual debe ser mayor que cero (recibido: ${datos.salarioMensual})`);
+    throw new ErrorDeDatos(`El salario mensual debe ser mayor que cero (recibido: ${datos.salarioMensual})`);
   }
 
   if (datos.enPeriodoPrueba) {
@@ -138,7 +139,7 @@ export function calcularIndemnizacion(
     });
     const diasFaltantes = diasEntreFechas(datos.fechaTerminacion, datos.fechaVencimientoPactada);
     if (diasFaltantes <= 0) {
-      throw new Error(
+      throw new ErrorDeDatos(
         `La fecha de vencimiento pactada (${datos.fechaVencimientoPactada}) no es posterior a la fecha de terminación (${datos.fechaTerminacion}) — el contrato ya se habría cumplido`
       );
     }
@@ -163,7 +164,7 @@ export function calcularIndemnizacion(
   validarFechas({ "fecha de ingreso": datos.fechaIngreso, "fecha de terminación": datos.fechaTerminacion });
   const diasServidos = diasEntreFechas(datos.fechaIngreso, datos.fechaTerminacion);
   if (diasServidos <= 0) {
-    throw new Error(
+    throw new ErrorDeDatos(
       `La fecha de terminación (${datos.fechaTerminacion}) no es posterior a la fecha de ingreso (${datos.fechaIngreso})`
     );
   }

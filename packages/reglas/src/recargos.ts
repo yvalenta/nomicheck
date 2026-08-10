@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type { LineaResultado, ReglaLegal } from "./types.js";
 import { comoResolutor, esFechaValida, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
@@ -185,14 +186,14 @@ export function calcularRecargos(
   reglas: ReglaLegal[] | ResolutorReglas
 ): ResultadoRecargos {
   if (!(datos.salarioMensual > 0)) {
-    throw new Error(`El salario mensual debe ser mayor que cero (recibido: ${datos.salarioMensual})`);
+    throw new ErrorDeDatos(`El salario mensual debe ser mayor que cero (recibido: ${datos.salarioMensual})`);
   }
   if (!esFechaValida(datos.fechaReferencia)) {
-    throw new Error(`Fecha de referencia inválida o inexistente: "${datos.fechaReferencia}"`);
+    throw new ErrorDeDatos(`Fecha de referencia inválida o inexistente: "${datos.fechaReferencia}"`);
   }
   for (const [campo, valor] of Object.entries(datos.horas)) {
     if (valor !== undefined && (!Number.isFinite(valor) || valor < 0)) {
-      throw new Error(`Las horas no pueden ser negativas (${campo}: ${valor})`);
+      throw new ErrorDeDatos(`Las horas no pueden ser negativas (${campo}: ${valor})`);
     }
   }
 

@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type { ReglaLegal } from "./types.js";
 
 export interface ResolutorReglas {
@@ -166,11 +167,11 @@ export function esFechaValida(fecha: string): boolean {
 export function validarPeriodo(desde: string, hasta: string): void {
   for (const f of [desde, hasta]) {
     if (!esFechaValida(f)) {
-      throw new Error(`Fecha inválida o inexistente en el calendario: "${f}"`);
+      throw new ErrorDeDatos(`Fecha inválida o inexistente en el calendario: "${f}"`);
     }
   }
   if (desde > hasta) {
-    throw new Error(`El periodo está invertido: desde ${desde} es posterior a hasta ${hasta}`);
+    throw new ErrorDeDatos(`El periodo está invertido: desde ${desde} es posterior a hasta ${hasta}`);
   }
 }
 

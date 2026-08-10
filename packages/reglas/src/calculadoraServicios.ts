@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type { CalculadoraNomina, ConceptoNomina, DatosNominaServicios, LineaResultado } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { ensamblarResultado } from "./ensamblarResultado.js";
@@ -27,7 +28,7 @@ export const CalculadoraServicios: CalculadoraNomina = {
     const d = datos as DatosNominaServicios;
     validarPeriodo(d.periodoDesde, d.periodoHasta);
     if (!(d.honorariosMensuales > 0)) {
-      throw new Error(`Los honorarios mensuales deben ser mayores que cero (recibido: ${d.honorariosMensuales})`);
+      throw new ErrorDeDatos(`Los honorarios mensuales deben ser mayores que cero (recibido: ${d.honorariosMensuales})`);
     }
 
     const advertencias: string[] = [];

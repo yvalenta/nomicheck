@@ -5,6 +5,7 @@
 // `services/liquidacionCalculo.ts` sin tocar Prisma, y `noExternalLlm` se
 // respeta a nivel de runtime (guard en batchPublicoService).
 import { Router, Request, Response } from "express";
+import { ErrorDeDatos } from "@pv/reglas";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { batchLiquidarSchema } from "../validation/batchPublico.js";
 import { batchRetencionSchema } from "../validation/batchRetencion.js";
@@ -44,6 +45,32 @@ import { ErrorRedNoSoportada, resolverRedPago } from "../lib/pagosConfig.js";
 import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../lib/ejemplosBatch.js";
 
 export const batchPublicoRouter = Router();
+
+/**
+ * Traduce lo que tiró el motor al status que le corresponde.
+ *
+ * Antes cada `catch` respondía 500 `internal_error`, y con eso "te faltó una
+ * coma" y "estamos rotos" salían idénticos. Con el muro x402 adelante —que
+ * cobra ANTES de ejecutar el handler— eso es un cobro sin entrega por un error
+ * del comprador que nadie le nombró: paga, recibe "error interno", y lo único
+ * que puede concluir es que el servicio no sirve. Ver la ley
+ * `cobrar-antes-de-servir` en nomicheck_ops.
+ *
+ * Vive en UN solo lugar a propósito. Eran 14 `catch` con el mismo cuerpo
+ * copiado: catorce lugares donde desincronizar la decisión, y basta que uno se
+ * olvide para que el modo de falla vuelva entero por esa puerta.
+ *
+ * `ErrorDeDatos` lo tira el motor solo cuando el problema es del insumo. Las
+ * guardas de modo y el hueco de catálogo siguen siendo 500, que es lo correcto:
+ * no son culpa de quien paga.
+ */
+function responderFallo(res: Response, e: unknown) {
+  const mensaje = e instanceof Error ? e.message : "Error inesperado";
+  if (e instanceof ErrorDeDatos) {
+    return res.status(400).json({ error: "invalid_input", mensaje });
+  }
+  return res.status(500).json({ error: "internal_error", mensaje });
+}
 
 // El muro de pago x402 NO se monta acá: va a nivel de app en `lib/x402Muro.ts`,
 // antes de `app.use("/api", router)`. Montarlo en este router hacía que el 402
@@ -188,10 +215,7 @@ batchPublicoRouter.get("/ejemplo", async (_req: Request, res: Response) => {
       output: salida,
     });
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -204,10 +228,7 @@ batchPublicoRouter.post("/liquidar", async (req: Request, res: Response) => {
     const salida = await ejecutarBatchPublico(parsed.data);
     return res.status(200).json(salida);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -229,10 +250,7 @@ batchPublicoRouter.post("/liquidar/csv", async (req: Request, res: Response) => 
     );
     return res.status(200).send(csv);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -263,10 +281,7 @@ batchPublicoRouter.get("/retencion/ejemplo", async (_req: Request, res: Response
       output: salida,
     });
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -279,10 +294,7 @@ batchPublicoRouter.post("/retencion", async (req: Request, res: Response) => {
     const salida = await ejecutarBatchRetencion(parsed.data);
     return res.status(200).json(salida);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -298,10 +310,7 @@ batchPublicoRouter.post("/retencion/csv", async (req: Request, res: Response) =>
     res.setHeader("Content-Disposition", `attachment; filename="nomicheck-retencion.csv"`);
     return res.status(200).send(csv);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -333,10 +342,7 @@ batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response
       output: salida,
     });
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -349,10 +355,7 @@ batchPublicoRouter.post("/verificar", async (req: Request, res: Response) => {
     const salida = await ejecutarBatchVerificacion(parsed.data);
     return res.status(200).json(salida);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -368,10 +371,7 @@ batchPublicoRouter.post("/verificar/csv", async (req: Request, res: Response) =>
     res.setHeader("Content-Disposition", `attachment; filename="nomicheck-verificacion.csv"`);
     return res.status(200).send(csv);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -446,10 +446,7 @@ batchPublicoRouter.get("/liquidacion-final/ejemplo", async (_req: Request, res: 
       output: salida,
     });
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -462,10 +459,7 @@ batchPublicoRouter.post("/liquidacion-final", async (req: Request, res: Response
     const salida = await ejecutarBatchLiquidacionFinal(parsed.data);
     return res.status(200).json(salida);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -481,10 +475,7 @@ batchPublicoRouter.post("/liquidacion-final/csv", async (req: Request, res: Resp
     res.setHeader("Content-Disposition", `attachment; filename="nomicheck-liquidacion-final.csv"`);
     return res.status(200).send(csv);
   } catch (e) {
-    return res.status(500).json({
-      error: "internal_error",
-      mensaje: e instanceof Error ? e.message : "Error inesperado",
-    });
+    return responderFallo(res, e);
   }
 });
 
@@ -508,10 +499,7 @@ function responderErrorPagoOnchain(res: Response, e: unknown) {
   if (e instanceof ErrorRedNoSoportada || e instanceof ErrorLoteSinWallets) {
     return res.status(422).json({ error: "unprocessable", mensaje: e.message });
   }
-  return res.status(500).json({
-    error: "internal_error",
-    mensaje: e instanceof Error ? e.message : "Error inesperado",
-  });
+  return responderFallo(res, e);
 }
 
 batchPublicoRouter.post("/pago-onchain", async (req: Request, res: Response) => {
@@ -562,10 +550,7 @@ function responderErrorComprobante(res: Response, e: unknown) {
   if (e instanceof ErrorPagoNoConfirmado || e instanceof ErrorPagoNoCoincide) {
     return res.status(409).json({ error: "pago_no_acreditado", mensaje: e.message });
   }
-  return res.status(500).json({
-    error: "internal_error",
-    mensaje: e instanceof Error ? e.message : "Error inesperado",
-  });
+  return responderFallo(res, e);
 }
 
 batchPublicoRouter.post("/comprobante", async (req: Request, res: Response) => {

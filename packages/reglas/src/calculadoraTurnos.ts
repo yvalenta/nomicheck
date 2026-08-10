@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type {
   CalculadoraNomina,
   DatosNominaTurnos,
@@ -80,7 +81,7 @@ function dividirTurno(horaInicio: string, horaFin: string, jornadaOrdinariaHoras
     // Ambiguo: ¿0 horas o 24 horas? Antes se interpretaba en silencio como
     // 24h (turno "10:00→10:00" = jornada completa de un día). Se exige que
     // el llamador sea explícito.
-    throw new Error(
+    throw new ErrorDeDatos(
       `Turno ambiguo: hora de inicio y fin iguales (${horaInicio}) — no se puede distinguir entre 0 y 24 horas`
     );
   }
@@ -120,7 +121,7 @@ function horarioDelDia(
   if (novedad) {
     if (!novedad.trabajo) return null;
     if (!novedad.horaInicio || !novedad.horaFin) {
-      throw new Error(`La novedad del ${fecha} indica trabajo pero no tiene horas`);
+      throw new ErrorDeDatos(`La novedad del ${fecha} indica trabajo pero no tiene horas`);
     }
     return { horaInicio: novedad.horaInicio, horaFin: novedad.horaFin };
   }
@@ -138,19 +139,19 @@ export const CalculadoraPorTurnos: CalculadoraNomina = {
     }
     const d = datos as DatosNominaTurnos;
     if (d.horarioBase.length !== 7) {
-      throw new Error("horarioBase debe tener 7 posiciones (domingo a sábado)");
+      throw new ErrorDeDatos("horarioBase debe tener 7 posiciones (domingo a sábado)");
     }
     validarPeriodo(d.periodoDesde, d.periodoHasta);
     if (!(d.salarioBasicoMensual > 0)) {
-      throw new Error(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
+      throw new ErrorDeDatos(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
     }
     const fechasNovedades = new Set<string>();
     for (const n of d.novedades) {
       if (!esFechaValida(n.fecha)) {
-        throw new Error(`Fecha inválida o inexistente en una novedad: "${n.fecha}"`);
+        throw new ErrorDeDatos(`Fecha inválida o inexistente en una novedad: "${n.fecha}"`);
       }
       if (fechasNovedades.has(n.fecha)) {
-        throw new Error(`Hay dos novedades para la misma fecha (${n.fecha}) — elimina la duplicada`);
+        throw new ErrorDeDatos(`Hay dos novedades para la misma fecha (${n.fecha}) — elimina la duplicada`);
       }
       fechasNovedades.add(n.fecha);
     }

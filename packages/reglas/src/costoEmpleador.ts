@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type { ReglaLegal } from "./types.js";
 import { comoResolutor, type ResolutorReglas } from "./utils.js";
 import { redondearPeso } from "./numero.js";
@@ -60,7 +61,7 @@ export function calcularCostoEmpleador(
   opciones: OpcionesCostoEmpleador
 ): ResultadoCostoEmpleador {
   if (!(salarioMensual > 0)) {
-    throw new Error(`El salario mensual debe ser mayor que cero (recibido: ${salarioMensual})`);
+    throw new ErrorDeDatos(`El salario mensual debe ser mayor que cero (recibido: ${salarioMensual})`);
   }
   const r = comoResolutor(reglas);
   const {
@@ -224,7 +225,7 @@ export function calcularLiquidacionPilaEmpleado(
   opciones: { exoneradoParafiscales?: boolean; fecha: string }
 ): ResultadoLiquidacionPila {
   if (!(datos.ibcPeriodo > 0)) {
-    throw new Error(`El IBC del periodo debe ser mayor que cero (recibido: ${datos.ibcPeriodo})`);
+    throw new ErrorDeDatos(`El IBC del periodo debe ser mayor que cero (recibido: ${datos.ibcPeriodo})`);
   }
   const r = comoResolutor(reglas);
   const { exoneradoParafiscales = true, fecha } = opciones;

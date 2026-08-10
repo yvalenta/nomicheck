@@ -1,3 +1,4 @@
+import { ErrorDeDatos } from "./errores.js";
 import type { CalculadoraNomina, ConceptoNomina, DatosNominaFija, LineaResultado } from "./types.js";
 import { redondearPeso } from "./numero.js";
 import { aplicarDeducciones } from "./deducciones.js";
@@ -20,7 +21,7 @@ export const CalculadoraSalarioFijo: CalculadoraNomina = {
     const d = datos as DatosNominaFija;
     validarPeriodo(d.periodoDesde, d.periodoHasta);
     if (!(d.salarioBasicoMensual > 0)) {
-      throw new Error(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
+      throw new ErrorDeDatos(`El salario básico mensual debe ser mayor que cero (recibido: ${d.salarioBasicoMensual})`);
     }
     const advertencias: string[] = [];
     // Issues tipados en paralelo (SDD §15, pilar 2).
