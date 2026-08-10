@@ -14,6 +14,12 @@ name: ci
 on:
   push:
   pull_request:
+  # Semanal, y SOLO para el audit de dependencias. Una vulnerabilidad nueva no
+  # la publica un commit nuestro: aparece sola, un martes, en una librería que
+  # no tocamos hace meses. Atarla a `push` haría que un rojo culpe al commit
+  # equivocado — y peor, que un repo sin actividad deje de mirarse.
+  schedule:
+    - cron: "23 7 * * 1"
 
 jobs:
   verificar:
@@ -82,6 +88,23 @@ jobs:
 
       - name: lint del front
         run: pnpm --filter '@pv/web' lint
+
+      # ── Vulnerabilidades: SOLO las que llegan al servidor ────────────────
+      #
+      # `--prod` no es para bajar el listón: es lo único que mide la superficie
+      # real. El Dockerfile hace `pnpm deploy --prod`, así que vitest, vite y
+      # esbuild no viajan a producción — sus avisos son de esta máquina y de
+      # este runner, no del box que cobra.
+      #
+      # Medido el 2026-08-10, la primera vez que se corrió: 11 avisos en total,
+      # 1 crítico. En producción, dos — y uno era `ip-address` por debajo de
+      # `express-rate-limit`, o sea justo abajo del tope por IP que se había
+      # arreglado ese mismo día. Un bump lo cerró.
+      #
+      # Falla el job a propósito: en producción el número correcto es cero, y
+      # cualquier otro es una decisión que alguien tiene que tomar mirándola.
+      - name: sin vulnerabilidades conocidas en producción
+        run: pnpm audit --prod --audit-level=low
 
   # ── La imagen se construye ACÁ, no en el VPS ────────────────────────────────
   #
