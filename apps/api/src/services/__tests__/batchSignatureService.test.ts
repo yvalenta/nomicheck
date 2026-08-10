@@ -21,8 +21,15 @@
 // llave para todos los demás.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash, generateKeyPairSync } from "node:crypto";
+import type { LineaDeRegistro } from "../../lib/registro.js";
 
 type Servicio = typeof import("../batchSignatureService.js");
+
+// El aviso de llave efímera dejó de salir por `console.warn` y ahora va por
+// `registro` (con el sha, greppable). Se captura desde el MISMO grafo que carga
+// el servicio: `cargarServicio` hace `vi.resetModules()`, así que un `registro`
+// importado antes sería otra instancia y no vería el aviso.
+let lineasCapturadas: LineaDeRegistro[] = [];
 
 const ENV_LLAVE = "NOMICHECK_BATCH_SIGNING_KEY_PEM";
 const envOriginal = process.env[ENV_LLAVE];
@@ -42,7 +49,13 @@ async function cargarServicio(pem?: string): Promise<Servicio> {
   vi.resetModules();
   if (pem === undefined) delete process.env[ENV_LLAVE];
   else process.env[ENV_LLAVE] = pem;
-  return await import("../batchSignatureService.js");
+  const svc = await import("../batchSignatureService.js");
+  // Mismo grafo, después del reset: captura las líneas y de paso silencia el
+  // sink de consola en todas las pruebas de este archivo.
+  const { usarEmisor } = await import("../../lib/registro.js");
+  lineasCapturadas = [];
+  usarEmisor((l) => lineasCapturadas.push(l));
+  return svc;
 }
 
 afterEach(() => {
@@ -111,17 +124,19 @@ describe("canonicalJson", () => {
 });
 
 describe("keypair efímero (sin NOMICHECK_BATCH_SIGNING_KEY_PEM)", () => {
-  it("AVISA por console.warn con el publicKeyId, y la firma verifica consigo misma", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("AVISA por el registro con el publicKeyId, y la firma verifica consigo misma", async () => {
     const svc = await cargarServicio(undefined);
     const kp = svc.obtenerKeypair();
     expect(kp.esEfimero).toBe(true);
-    // El warning es el contrato de dev: sin él, PROD podría correr meses con
-    // una llave que muere en cada deploy sin que nadie lo note.
-    expect(warn).toHaveBeenCalledTimes(1);
-    const aviso = String(warn.mock.calls[0]![0]);
-    expect(aviso).toContain("efímero");
-    expect(aviso).toContain(kp.publicKeyId);
+    // El aviso es el contrato de dev: sin él, PROD podría correr meses con una
+    // llave que muere en cada deploy sin que nadie lo note.
+    const avisos = lineasCapturadas.filter((l) => l.origen === "batchSignature");
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0].nivel).toBe("warn");
+    expect(avisos[0].mensaje).toContain("efímero");
+    // El publicKeyId efímero viaja como campo, no en el mensaje: así se puede
+    // correlacionar sin parsear texto.
+    expect(avisos[0].publicKeyIdEfimero).toBe(kp.publicKeyId);
     // Aun efímera, la firma es una firma de verdad: cierra el ciclo completo.
     const payload = { neto: 1_234_567, empleado: "EMP-1" };
     const firma = svc.firmarPayload(payload);
@@ -130,8 +145,7 @@ describe("keypair efímero (sin NOMICHECK_BATCH_SIGNING_KEY_PEM)", () => {
     expect(svc.verificarFirma(payload, firma, svc.obtenerPublicKeyPem())).toBe(true);
   });
 
-  it("es singleton: una sola generación y un solo warning por proceso", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("es singleton: una sola generación y un solo aviso por proceso", async () => {
     const svc = await cargarServicio(undefined);
     const a = svc.obtenerKeypair();
     const b = svc.obtenerKeypair();
@@ -139,7 +153,7 @@ describe("keypair efímero (sin NOMICHECK_BATCH_SIGNING_KEY_PEM)", () => {
     // Si cada llamada regenerara el par, una firma emitida hace un segundo ya
     // no verificaría con obtenerPublicKeyPem() — el singleton es el invariante.
     expect(a).toBe(b);
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(lineasCapturadas.filter((l) => l.origen === "batchSignature")).toHaveLength(1);
   });
 });
 

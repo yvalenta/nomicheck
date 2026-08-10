@@ -30,6 +30,7 @@ import {
   type RedX402,
 } from "./x402Config.js";
 import { credencialesCdp, jwtCdp } from "./cdpAuth.js";
+import { registro } from "./registro.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
 const PREFIJO = "/api/batch";
@@ -181,11 +182,14 @@ function fetchDelFacilitador(
       // extensión rechazada se ve exactamente igual que una aceptada — el pago
       // liquida en los dos casos y nadie se entera de que no entramos.
       if (extensiones) {
-        // eslint-disable-next-line no-console
-        console.log(
-          `[x402] ${ruta} → ${res.status} · EXTENSION-RESPONSES: ` +
-            (res.headers.get("extension-responses") ?? "(el facilitador no mandó ninguno)"),
-        );
+        // Dispara por liquidación, no al arrancar, así que va por `registro`
+        // con el sha: es la única señal de si el Bazaar aceptó la extensión, y
+        // el comentario de arriba dice por qué importa que sea greppable.
+        registro.info("x402", "liquidación con extensión declarada", {
+          ruta,
+          estado: res.status,
+          extensionResponses: res.headers.get("extension-responses") ?? null,
+        });
       }
       return res;
     }
@@ -297,8 +301,13 @@ export function montarMuroX402(app: Express): void {
       // 4xx pasan intactos. `424 Failed Dependency` además dice lo que pasó:
       // la petición dependía de una liquidación ajena, y esa falló.
       if (res.headersSent) return next(err);
-      // eslint-disable-next-line no-console
-      console.error("[x402] fallo liquidando:", err);
+      // Un fallo de liquidación es lo más caro que puede pasar en este muro: el
+      // comprador está pagando. Va por `registro` y no `console` para que lleve
+      // el sha desplegado y se pueda encontrar con el mismo grep que el resto —
+      // ver lib/registro.ts y la ley cobrar-antes-de-servir.
+      registro.error("x402", "fallo liquidando: el facilitador no confirmó el pago", err, {
+        facilitador: cfg.facilitatorURL,
+      });
       res.status(424).json({
         error: "facilitator_error",
         mensaje:

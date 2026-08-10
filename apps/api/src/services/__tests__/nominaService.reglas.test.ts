@@ -20,6 +20,12 @@ vi.mock("../../lib/prisma.js", () => ({
 }));
 
 const { obtenerReglasYFestivos, invalidarCacheReglas } = await import("../nominaService.js");
+// El aviso de catálogo vencido pasó de `console.warn` a `registro.warn` (con el
+// sha). Import estático, misma instancia que el servicio: se captura instalando
+// un emisor y se restaura en cada test.
+const { usarEmisor } = await import("../../lib/registro.js");
+import type { LineaDeRegistro } from "../../lib/registro.js";
+let lineasReglas: LineaDeRegistro[] = [];
 
 const REGLAS = [
   { clave: "smlmv", valor: 1_750_905, vigenteDesde: "2026-01-01", vigenteHasta: null, fuente: "D. 1234" },
@@ -34,6 +40,8 @@ beforeEach(() => {
   invalidarCacheReglas();
   findManyReglas.mockReset().mockResolvedValue(REGLAS);
   findManyFestivos.mockReset().mockResolvedValue([]);
+  lineasReglas = [];
+  usarEmisor((l) => lineasReglas.push(l));
 });
 
 describe("obtenerReglasYFestivos — caché", () => {
@@ -57,13 +65,16 @@ describe("obtenerReglasYFestivos — la base falla al refrescar", () => {
     // Vence el TTL de 5 minutos y la base deja de responder.
     vi.advanceTimersByTime(6 * 60 * 1000);
     findManyReglas.mockRejectedValue(new Error("Can't reach database server"));
-    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const segundo = await obtenerReglasYFestivos();
     expect(segundo.reglas).toEqual(primero.reglas);
     // Servir vencido en silencio sería indistinguible de servir fresco.
-    expect(aviso).toHaveBeenCalledOnce();
-    expect(aviso.mock.calls[0][0]).toContain("la base no respondió");
+    const avisos = lineasReglas.filter((l) => l.origen === "reglas");
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0].nivel).toBe("warn");
+    expect(avisos[0].mensaje).toContain("catálogo vencido");
+    // La antigüedad viaja como número, no dentro del texto.
+    expect(avisos[0].antiguedadSegundos).toBeGreaterThan(0);
   });
 
   it("avisa en CADA refresco fallido, no solo en el primero", async () => {
@@ -71,11 +82,10 @@ describe("obtenerReglasYFestivos — la base falla al refrescar", () => {
     await obtenerReglasYFestivos();
     vi.advanceTimersByTime(6 * 60 * 1000);
     findManyReglas.mockRejectedValue(new Error("timeout"));
-    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await obtenerReglasYFestivos();
     await obtenerReglasYFestivos();
-    expect(aviso).toHaveBeenCalledTimes(2);
+    expect(lineasReglas.filter((l) => l.origen === "reglas")).toHaveLength(2);
   });
 
   it("pasada la gracia, la caída vuelve a doler", async () => {

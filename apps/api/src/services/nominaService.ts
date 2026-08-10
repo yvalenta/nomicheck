@@ -10,6 +10,7 @@ import {
   type ResultadoNomina,
 } from "@pv/reglas";
 import { prisma } from "../lib/prisma.js";
+import { registro } from "../lib/registro.js";
 
 // Cache en memoria de reglas/festivos: son datos casi estáticos (cambian
 // ~1 vez al año por decreto) pero cada request de /nomina/calcular —
@@ -69,10 +70,13 @@ export async function obtenerReglasYFestivos(): Promise<{ reglas: ReglaLegal[]; 
     // Se avisa en cada refresco fallido, no una sola vez: un catálogo que se
     // sirve vencido en silencio es indistinguible de uno fresco, y ese es
     // justamente el modo de falla que no se quiere.
-    console.warn(
-      `[reglas] la base no respondió; sirviendo el catálogo de hace ${Math.round(
-        (vencido + CACHE_TTL_MS) / 1000
-      )} s. Motivo: ${e instanceof Error ? e.message : e}`
+    registro.warn(
+      "reglas",
+      "la base no respondió; sirviendo el catálogo vencido en gracia",
+      {
+        antiguedadSegundos: Math.round((vencido + CACHE_TTL_MS) / 1000),
+        motivo: e instanceof Error ? e.message : String(e),
+      }
     );
     return cacheReglas.datos;
   }

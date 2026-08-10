@@ -15,6 +15,7 @@
 // firma. Ver `verificarFirma` para el mismo canonical al lado del buyer.
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import type { KeyObject } from "node:crypto";
+import { registro } from "../lib/registro.js";
 
 interface Keypair {
   privateKey: KeyObject;
@@ -68,13 +69,15 @@ function keypairDesdeEnv(): Keypair | null {
 function keypairEfimero(): Keypair {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   const publicKeyPem = publicKey.export({ format: "pem", type: "spki" }).toString();
-  // eslint-disable-next-line no-console
-  console.warn(
-    "[batchSignature] NOMICHECK_BATCH_SIGNING_KEY_PEM no configurado: usando keypair Ed25519 efímero de esta sesión.\n" +
-      "  publicKeyId=" +
-      calcularPublicKeyId(publicKeyPem) +
-      "\n" +
-      "  PROD debe congelar la llave para verificabilidad histórica del output pinneado.\n"
+  // Si esto se ve en producción es un incidente, no un aviso: los outputs se
+  // firman con una llave que muere en el redeploy y dejan de verificar contra
+  // la publicada. Va por `registro` con el sha para que sea greppable y quede
+  // el publicKeyId efímero como dato — antes se perdía en un console.warn.
+  registro.warn(
+    "batchSignature",
+    "NOMICHECK_BATCH_SIGNING_KEY_PEM no configurado: firmando con keypair efímero. " +
+      "PROD debe congelar la llave o el output deja de verificar tras el redeploy.",
+    { publicKeyIdEfimero: calcularPublicKeyId(publicKeyPem) }
   );
   return {
     privateKey,
