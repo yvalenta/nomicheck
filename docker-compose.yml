@@ -22,6 +22,11 @@ x-env: &app-env
   NOMICHECK_BATCH_SIGNING_KEY_PEM: ${NOMICHECK_BATCH_SIGNING_KEY_PEM:-}
   CORS_ORIGIN: http://localhost:5173
   PORT: 3001
+  # Existe en producción desde el commit de performance, pero el compose no la
+  # pasaba: medir capacidad en local era imposible sin tocar código, porque el
+  # tope de 60/min corta la carga en el primer segundo. Default igual al de
+  # producción para que dev no mienta sobre lo que hace prod.
+  BATCH_RATE_LIMIT_POR_MINUTO: ${BATCH_RATE_LIMIT_POR_MINUTO:-60}
   PNPM_STORE_DIR: /pnpm-store
   # Sin TTY, "pnpm install" en el entrypoint queda colgado pidiendo
   # confirmación interactiva si detecta que un volumen de node_modules no
