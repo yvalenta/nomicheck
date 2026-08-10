@@ -9,6 +9,7 @@ import { detenerBoss, getBoss } from "./lib/boss.js";
 import { delegadoCors } from "./lib/corsPublico.js";
 import { registro } from "./lib/registro.js";
 import { montarMuroX402 } from "./lib/x402Muro.js";
+import { registrarAcceso } from "./middleware/acceso.js";
 import { capturarErroresDeProceso, manejadorDeErrores } from "./middleware/errores.js";
 import { registrarWorkerLiquidacion } from "./workers/liquidacionWorker.js";
 
@@ -25,6 +26,11 @@ const PORT = process.env.PORT ?? 3001;
 // llave pública era ilegible desde otro origen y ningún verificador de
 // terceros en el navegador podía comprobarnos. Ver lib/corsPublico.ts.
 app.use(cors(delegadoCors));
+// Lo más arriba posible, y a propósito ANTES del muro x402: un 402 es un
+// evento que interesa —alguien pidió un endpoint que cobra sin pagarlo— y
+// montarlo después lo dejaría fuera del registro. Solo observa; no toca la
+// petición ni la respuesta.
+app.use(registrarAcceso);
 // El contrato batch admite lotes de hasta 500 empleados con sus turnos del
 // periodo, y eso no cabe en el default de 100kb de express.json: un lote de
 // 100 empleados con turnos pesa ~160kb y moría en 500 antes de llegar al
