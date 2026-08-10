@@ -1,6 +1,7 @@
-import { Router, type Request } from "express";
+import { Router } from "express";
 import multer from "multer";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit";
+import { llavePorIpReal } from "../lib/llaveRateLimit.js";
 import { calcular } from "../controllers/nominaController.js";
 import { batchPublicoRouter } from "./batchPublico.js";
 import { calcular as calcularIndemnizacion } from "../controllers/indemnizacionController.js";
@@ -84,27 +85,8 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// La llave del rate limit sale de CF-Connecting-IP, no de req.ip.
-//
-// El muro x402 hace `app.set("trust proxy", true)` (lo necesita para que
-// `req.protocol` sea https y anuncie bien el recurso que se paga). Con eso,
-// `req.ip` es el X-Forwarded-For MÁS A LA IZQUIERDA — y ese lo escribe el
-// cliente. Rotándolo, cada request cae en un bucket distinto y el tope no
-// aplica: medido, 40/40 pasan con tope de 10 (repro descartable, 2026-08-09).
-//
-// CF-Connecting-IP la escribe Cloudflare con la IP real del cliente y
-// SOBRESCRIBE lo que el cliente haya mandado. No es falsificable desde afuera
-// mientras el origen solo sea alcanzable por el túnel: el puerto 80 del host
-// da timeout (produccion.md), así que nadie llega al origen salteando el borde.
-//
-// `ipKeyGenerator` normaliza IPv6 a /64 (si no, cada IP de un mismo prefijo
-// sería un bucket y el tope IPv6 sería igual de evadible). Fallback a req.ip
-// solo por si una request no viniera por Cloudflare — no debería pasar en prod.
-export function llavePorIpReal(req: Request): string {
-  const cf = req.headers["cf-connecting-ip"];
-  const ip = (typeof cf === "string" && cf.length > 0 ? cf : req.ip) ?? "";
-  return ipKeyGenerator(ip);
-}
+// Los tres limitadores llavean por `llavePorIpReal` y no por `req.ip`: el
+// porqué está en `lib/llaveRateLimit.ts`, junto a la función.
 
 // Endpoints con costo de IA: límite generoso pero real por IP para evitar
 // abuso del flujo anónimo (SDD §08).

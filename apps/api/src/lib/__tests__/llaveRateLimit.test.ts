@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Request } from "express";
-import { llavePorIpReal } from "../index.js";
+import { llavePorIpReal } from "../llaveRateLimit.js";
 
 // Por qué existe esta suite, en una línea: el tope por IP se saltea si la llave
 // sale de algo que escribe el cliente.
