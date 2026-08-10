@@ -4,7 +4,16 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    // `node` ademas de `vite/client`: hay pruebas dentro de `src` que leen
+    // archivos del repo con `node:fs` para comprobar que el front y el back no
+    // se desincronicen (estadosPeriodo.test.ts compara contra api/src/lib).
+    //
+    // Hasta el 2026-08-10 esto compilaba sin declararlo, porque `@types/node`
+    // llegaba TRANSITIVAMENTE por el arbol de vitest. Un bump de vitest cambio
+    // ese arbol y el typecheck se cayo — con el codigo intacto. Depender de un
+    // paquete de tipos que nadie declaro es una bomba de relojeria silenciosa:
+    // ahora `@types/node` es dependencia explicita de este workspace.
+    "types": ["vite/client", "node"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
