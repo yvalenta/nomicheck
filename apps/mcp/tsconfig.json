@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": false,
+    "declarationMap": false,
+    // `allowJs` existe por un solo archivo: `src/vendor/sobre.mjs`, la copia
+    // vendorizada del verificador. Es JavaScript plano a propósito (el original
+    // se comprueba con `tsc --checkJs` sin instalar nada), y compilarlo acá lo
+    // deja en `dist/` para que `node dist/index.js` funcione sin pasos extra.
+    "allowJs": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/__tests__/**"]
+}

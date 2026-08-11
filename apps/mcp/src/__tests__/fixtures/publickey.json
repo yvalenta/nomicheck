@@ -1,0 +1,15 @@
+{
+  "//": [
+    "Respuesta REAL de GET https://nomicheck.ynt.codes/api/batch/publickey,",
+    "capturada UNA vez el 2026-08-11 con: curl -s .../api/batch/publickey",
+    "Es la llave que firma sobre-retencion.json: si el servidor rota la llave,",
+    "este par de fixtures sigue siendo consistente entre si — el test no",
+    "depende de que la llave de hoy siga siendo esta."
+  ],
+  "respuesta": {
+    "algo": "ed25519",
+    "publicKeyId": "9958654482741c98f4b6caaffcdf8acc",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAaB5DJXNAqRHkZavTQ5EMe2Ng55GOgCJ7fIgBjKiWv2E=\n-----END PUBLIC KEY-----\n",
+    "verificacionEjemplo": "node: const {verify,createPublicKey}=require(\"crypto\"); const pk=createPublicKey({key:pubPem,format:\"pem\"}); verify(null, Buffer.from(canonicalJson(out),\"utf8\"), pk, Buffer.from(out.signature.valor,\"base64\"))"
+  }
+}

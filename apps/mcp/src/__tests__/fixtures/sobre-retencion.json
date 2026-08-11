@@ -1,0 +1,68 @@
+{
+  "//": [
+    "Sobre REAL firmado por produccion, capturado UNA vez el 2026-08-11 con:",
+    "  curl -s https://nomicheck.ynt.codes/api/batch/retencion/ejemplo | jq .output",
+    "El campo `sobre` va tal cual salio del servidor; el wrapper de metadatos",
+    "queda AFUERA a proposito: agregar una clave dentro del sobre romperia la",
+    "firma, que cubre todos los campos menos `signature`.",
+    "El test lo verifica OFFLINE contra publickey.json — sin red."
+  ],
+  "sobre": {
+    "version": "1",
+    "generadoEn": "2026-08-11T19:59:25.575Z",
+    "reglasVerificadasAl": "2026-07-30",
+    "reglasHash": "e74c1ce46dc900002bfa894acce679c29d86c7450f3ca95c0fdf7cc691871e9f",
+    "disclaimer": "Cálculo informativo de retención en la fuente (E.T. art. 383/388), determinístico, basado en la normativa tributaria colombiana vigente al 2026-07-30. Estima la retención mensual a partir de los parámetros declarados; NO valida el umbral de declarante ni sustituye la depuración oficial que hace el empleador. No constituye asesoría tributaria ni dictamen contable (Ley 43/1990). NomiCheck no persiste los datos de este batch (Ley 1581/2012 habeas data).",
+    "habeasData": {
+      "norma": "Ley 1581 de 2012 (habeas data Colombia). Encargado de tratamiento — Ley 1581 art. 25.",
+      "procesado": true,
+      "descartado": true,
+      "persistidoEnBd": false,
+      "procesadoPorLlmExterno": false
+    },
+    "resultados": [
+      {
+        "externalId": "P-1",
+        "ingresoLaboralMensual": 8000000,
+        "ingresoNoConstitutivo": 640000,
+        "deduccionDependientes": 0,
+        "deduccionMedicinaPrepagada": 0,
+        "rentaExentaAfcYPension": 0,
+        "rentaExentaLaboral": 1840000,
+        "totalExentoYDeducible": 1840000,
+        "baseGravable": 5520000,
+        "baseGravableUvt": 105.4,
+        "retencionMensual": 103449,
+        "advertencias": [
+          "\"¿Declaras renta?\" es lo que tú marcas — el sistema no valida el umbral de ingresos/patrimonio vigente (cambia cada año), así que confirma con tu contador si no estás seguro."
+        ],
+        "referenciaLegal": "E.T. art. 383 y 388 (Ley 2277 de 2022, art. 7)"
+      },
+      {
+        "externalId": "P-2",
+        "ingresoLaboralMensual": 12000000,
+        "ingresoNoConstitutivo": 960000,
+        "deduccionDependientes": 1104000,
+        "deduccionMedicinaPrepagada": 0,
+        "rentaExentaAfcYPension": 1000000,
+        "rentaExentaLaboral": 2234000,
+        "totalExentoYDeducible": 4338000,
+        "baseGravable": 6702000,
+        "baseGravableUvt": 127.96,
+        "retencionMensual": 328029,
+        "advertencias": [
+          "El aporte voluntario a AFC/pensión voluntaria se topó con el equivalente MENSUAL del límite anual (3.800 UVT/año ÷ 12, E.T. art. 126-1 y 126-4) — el sistema calcula por periodo y no lleva el acumulado real del año; si ya usaste parte del cupo en otros meses, tu tope disponible puede ser menor al mostrado aquí.",
+          "\"¿Declaras renta?\" es lo que tú marcas — el sistema no valida el umbral de ingresos/patrimonio vigente (cambia cada año), así que confirma con tu contador si no estás seguro."
+        ],
+        "referenciaLegal": "E.T. art. 383 y 388 (Ley 2277 de 2022, art. 7)"
+      }
+    ],
+    "signature": {
+      "algo": "ed25519",
+      "valor": "mrXolf3DnTsl88ebOY/Ju33vLhmmSr9S3jYD5oM702U3+tf24irM3XjhrslNa9KMI4glnfidnft6sFZevgtpAg==",
+      "publicKeyId": "9958654482741c98f4b6caaffcdf8acc",
+      "cubreCampos": "todos_menos_signature",
+      "canonical": "sorted_keys_utf8_json"
+    }
+  }
+}
