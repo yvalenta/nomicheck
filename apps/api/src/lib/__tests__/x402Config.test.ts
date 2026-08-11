@@ -15,6 +15,8 @@ import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import {
   BASE_MAINNET,
   BASE_SEPOLIA,
+  AVALANCHE_MAINNET,
+  REDES_X402,
   DESCRIPCIONES,
   PRECIOS_USD,
   RUTAS_CON_MURO,
@@ -31,11 +33,15 @@ const LIMPIA = "0x1111111111111111111111111111111111111111";
 const base = (over: Partial<ReturnType<typeof leerConfigX402>> = {}) => ({
   activo: true,
   facilitatorURL: "https://facilitator.ultravioletadao.xyz",
-  red: BASE_MAINNET,
+  redes: [BASE_MAINNET],
+  redesInvalidas: [],
   payTo: LIMPIA,
   origenPublico: "https://nomicheck.ynt.codes",
   ...over,
 });
+
+/** El primer (y normalmente único) requisito, para las aserciones de una red. */
+const uno = (cfg: ReturnType<typeof base>, ruta: string) => requisitosDePago(cfg, ruta)[0];
 
 describe("problemasDeConfig", () => {
   it("no exige nada mientras el muro esté apagado", () => {
@@ -101,17 +107,48 @@ describe("leerConfigX402", () => {
     expect(leerConfigX402().activo).toBe(true);
   });
 
-  it("usa mainnet salvo que se pida sepolia explícitamente", () => {
-    expect(leerConfigX402().red).toEqual(BASE_MAINNET);
+  it("usa mainnet salvo que se pida otra cosa explícitamente", () => {
+    expect(leerConfigX402().redes).toEqual([BASE_MAINNET]);
     process.env.X402_RED = "base-sepolia";
-    expect(leerConfigX402().red).toEqual(BASE_SEPOLIA);
+    expect(leerConfigX402().redes).toEqual([BASE_SEPOLIA]);
+  });
+
+  it("X402_RED acepta una lista y conserva el orden", () => {
+    process.env.X402_RED = "base,avalanche";
+    expect(leerConfigX402().redes).toEqual([BASE_MAINNET, AVALANCHE_MAINNET]);
+    process.env.X402_RED = "avalanche, base";
+    expect(leerConfigX402().redes.map((r) => r.nombre)).toEqual(["avalanche", "base"]);
+  });
+
+  it("no duplica una red repetida", () => {
+    // Dos entradas iguales en `accepts` dejan al comprador sin saber cuál vale.
+    process.env.X402_RED = "base,base";
+    expect(leerConfigX402().redes).toEqual([BASE_MAINNET]);
+  });
+
+  it("un nombre desconocido NO se descarta en silencio", () => {
+    // Es el modo de falla del multired: el 402 se sigue viendo perfecto, solo
+    // que sin la red por la que alguien iba a pagar.
+    process.env.X402_RED = "base,avalancha";
+    const cfg = leerConfigX402();
+    expect(cfg.redesInvalidas).toEqual(["avalancha"]);
+    expect(problemasDeConfig({ ...cfg, activo: true, payTo: LIMPIA })).toEqual([
+      expect.stringMatching(/avalancha/),
+    ]);
+  });
+
+  it("sin ninguna red válida cae a mainnet, pero lo reporta", () => {
+    process.env.X402_RED = "marte";
+    const cfg = leerConfigX402();
+    expect(cfg.redes).toEqual([BASE_MAINNET]);
+    expect(cfg.redesInvalidas).toEqual(["marte"]);
   });
 
   it("le quita la barra final al origen público", () => {
     // Sin esto el `resource` sale con `//api/batch/...` y no coincide con la
     // URL que el comprador pidió ni con la que se registra en el Bazaar.
     process.env.NOMICHECK_PUBLIC_ORIGIN = "https://nomicheck.ynt.codes/";
-    expect(requisitosDePago(leerConfigX402(), "/verificar").resource).toBe(
+    expect(uno(leerConfigX402(), "/verificar").resource).toBe(
       "https://nomicheck.ynt.codes/api/batch/verificar",
     );
   });
@@ -119,8 +156,8 @@ describe("leerConfigX402", () => {
 
 describe("requisitosDePago", () => {
   it("convierte dólares a micro-USDC", () => {
-    expect(requisitosDePago(base(), "/verificar").maxAmountRequired).toBe("20000");
-    expect(requisitosDePago(base(), "/comprobante").maxAmountRequired).toBe("50000");
+    expect(uno(base(), "/verificar").maxAmountRequired).toBe("20000");
+    expect(uno(base(), "/comprobante").maxAmountRequired).toBe("50000");
   });
 
   it("revienta ante una ruta sin precio en vez de cobrar cero", () => {
@@ -128,10 +165,8 @@ describe("requisitosDePago", () => {
   });
 
   it("publica la red en CAIP-2, que es lo que espera el facilitador", () => {
-    expect(requisitosDePago(base(), "/verificar").network).toBe("eip155:8453");
-    expect(requisitosDePago(base({ red: BASE_SEPOLIA }), "/verificar").network).toBe(
-      "eip155:84532",
-    );
+    expect(uno(base(), "/verificar").network).toBe("eip155:8453");
+    expect(uno(base({ redes: [BASE_SEPOLIA] }), "/verificar").network).toBe("eip155:84532");
   });
 
   // Sin el dominio EIP-712 el comprador firma con el dominio equivocado y el
@@ -139,7 +174,7 @@ describe("requisitosDePago", () => {
   // 402 se ve perfecto y simplemente nadie paga nunca. El facilitador de
   // Ultravioleta no lo agrega, así que tiene que salir de acá.
   it("publica el dominio EIP-712 del token, que es lo que el comprador firma", () => {
-    expect(requisitosDePago(base(), "/verificar").extra).toEqual({
+    expect(uno(base(), "/verificar").extra).toEqual({
       name: "USD Coin",
       version: "2",
       assetTransferMethod: "eip3009",
@@ -149,12 +184,12 @@ describe("requisitosDePago", () => {
   it("cada red publica el suyo — en Sepolia el USDC NO se llama igual", () => {
     // `name()` medido en cadena: 8453 dice "USD Coin", 84532 dice "USDC".
     // Copiar uno del otro es una firma inválida en silencio.
-    expect(requisitosDePago(base({ red: BASE_SEPOLIA }), "/verificar").extra.name).toBe("USDC");
+    expect(uno(base({ redes: [BASE_SEPOLIA] }), "/verificar").extra.name).toBe("USDC");
     expect(BASE_MAINNET.eip712.name).not.toBe(BASE_SEPOLIA.eip712.name);
   });
 
   it("ninguna red se queda sin dominio", () => {
-    for (const red of [BASE_MAINNET, BASE_SEPOLIA]) {
+    for (const red of Object.values(REDES_X402)) {
       expect(red.eip712.name).toBeTruthy();
       expect(red.eip712.version).toBeTruthy();
     }
@@ -215,7 +250,7 @@ describe("descripciones publicadas", () => {
   it("hay una por cada ruta con precio", () => {
     expect(Object.keys(DESCRIPCIONES).sort()).toEqual(Object.keys(PRECIOS_USD).sort());
     for (const ruta of RUTAS_CON_MURO) {
-      expect(requisitosDePago(base(), ruta).description.length).toBeGreaterThan(20);
+      expect(uno(base(), ruta).description.length).toBeGreaterThan(20);
     }
   });
 

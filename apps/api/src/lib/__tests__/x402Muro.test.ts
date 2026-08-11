@@ -11,13 +11,14 @@
 // publicada— manda v2 siempre.
 import { describe, expect, it } from "vitest";
 import {
+  AVALANCHE_MAINNET,
   BASE_MAINNET,
   BASE_SEPOLIA,
   extensionBazaar,
   perfilFacilitador,
 } from "../x402Config.js";
 import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../ejemplosBatch.js";
-import { aFormatoV1 } from "../x402Muro.js";
+import { aFormatoV1, redDelPago } from "../x402Muro.js";
 
 /** Lo que faremeter 0.22.0 manda de verdad, copiado de la corrida real. */
 const CUERPO_V2 = {
@@ -111,6 +112,57 @@ describe("aFormatoV1", () => {
     };
     const t = aFormatoV1(sinDesc, BASE_MAINNET) as Traducido;
     expect(t.paymentRequirements.description).toBe("");
+  });
+});
+
+describe("redDelPago", () => {
+  // El punto donde el multired se rompe en silencio: traducir a v1 con la red
+  // equivocada le dice al facilitador que busque la transacción en una cadena
+  // donde nunca estuvo, y desde acá se ve como "nadie quiso comprar".
+  const DOS = [BASE_MAINNET, AVALANCHE_MAINNET];
+
+  it("con una sola red configurada la devuelve sin mirar el cuerpo", () => {
+    // Es el comportamiento anterior al multired: un cuerpo sin `network` no
+    // puede romper un despliegue que hoy funciona.
+    expect(redDelPago([BASE_MAINNET], {})).toBe(BASE_MAINNET);
+  });
+
+  it("resuelve por el CAIP-2 que declaró el comprador", () => {
+    const cuerpo = { paymentRequirements: { network: "eip155:43114" } };
+    expect(redDelPago(DOS, cuerpo)).toBe(AVALANCHE_MAINNET);
+  });
+
+  it("acepta también el nombre v1, que es lo que un cliente viejo declara", () => {
+    const cuerpo = { paymentRequirements: { network: "avalanche" } };
+    expect(redDelPago(DOS, cuerpo)).toBe(AVALANCHE_MAINNET);
+  });
+
+  it("mira el paymentPayload cuando los requirements no traen red", () => {
+    const cuerpo = { paymentPayload: { network: "eip155:43114" } };
+    expect(redDelPago(DOS, cuerpo)).toBe(AVALANCHE_MAINNET);
+  });
+
+  it("REVIENTA ante una red no anunciada, en vez de caer a la primera", () => {
+    // Liquidar contra la red equivocada es peor que no liquidar: el comprador
+    // ya firmó, y el error aparecería como "transacción no encontrada".
+    const cuerpo = { paymentRequirements: { network: "eip155:1" } };
+    expect(() => redDelPago(DOS, cuerpo)).toThrow(/no está entre las anunciadas/);
+  });
+
+  it("REVIENTA con dos redes y un cuerpo sin red declarada", () => {
+    expect(() => redDelPago(DOS, {})).toThrow(/no está entre las anunciadas/);
+  });
+
+  it("el pago en Avalanche se traduce con el nombre de Avalanche", () => {
+    // La integración completa: el mismo cuerpo v2 que manda faremeter, con la
+    // red cambiada, tiene que salir hacia el facilitador como "avalanche".
+    const cuerpo = {
+      ...CUERPO_V2,
+      paymentRequirements: { ...CUERPO_V2.paymentRequirements, network: "eip155:43114" },
+    };
+    const t = aFormatoV1(cuerpo, redDelPago(DOS, cuerpo)) as Traducido;
+    expect(t.paymentRequirements.network).toBe("avalanche");
+    expect(t.paymentPayload.network).toBe("avalanche");
   });
 });
 

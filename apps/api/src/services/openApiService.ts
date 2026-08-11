@@ -141,8 +141,9 @@ export function construirOpenApi(): Record<string, unknown> {
       "402": {
         description: cobra(op.ruta)
           ? `Pago requerido (x402): USD ${precioDe(op.ruta)?.toFixed(2)} por llamada en ` +
-            `\`${muro.red.caip2}\`. El 402 trae \`accepts\` con la red, el token, el monto y el ` +
-            "dominio EIP-712 con el que se firma — ver `securitySchemes.x402`."
+            `${muro.redes.map((r) => `\`${r.caip2}\``).join(" o ")}. El 402 trae \`accepts\` con ` +
+            "una entrada por red —el token, el monto y el dominio EIP-712 con el que se " +
+            "firma—; el comprador elige una. Ver `securitySchemes.x402`."
           : "Pago requerido (x402). Solo cuando el muro está encendido; ahora está apagado y " +
             "estas operaciones responden sin pagar. El cuerpo del 402 trae `accepts` con la " +
             "red, el token y el monto — ver `securitySchemes.x402`.",
@@ -164,8 +165,15 @@ export function construirOpenApi(): Record<string, unknown> {
       "x-x402": {
         cobra: cobra(op.ruta),
         precioUsd: precioDe(op.ruta) ?? null,
-        red: muro.activo ? muro.red.caip2 : null,
-        asset: muro.activo ? muro.red.asset : null,
+        // `redes` en plural y en array: el muro puede anunciar varias y el
+        // comprador elige. Se conserva `red`/`asset` en singular con la PRIMERA
+        // porque son campos publicados que un cliente ya puede estar leyendo —
+        // quitarlos sería romperle el contrato a alguien para ahorrar dos líneas.
+        red: muro.activo ? muro.redes[0].caip2 : null,
+        asset: muro.activo ? muro.redes[0].asset : null,
+        redes: muro.activo
+          ? muro.redes.map((r) => ({ red: r.caip2, asset: r.asset, nombre: r.nombre }))
+          : null,
       },
     };
 
@@ -305,7 +313,9 @@ export function construirOpenApi(): Record<string, unknown> {
             "una autorización EIP-3009 y reintenta adjuntándola. El pago es inmediato y final: " +
             "no hay escrow ni disputa, y por eso toda salida viaja firmada.\n\n" +
             (muro.activo
-              ? `Muro **encendido** en \`${muro.red.caip2}\`, token \`${muro.red.asset}\`. Las ` +
+              ? `Muro **encendido** en ${muro.redes
+                  .map((r) => `\`${r.caip2}\` (token \`${r.asset}\`)`)
+                  .join(" y ")}. Las ` +
                 "operaciones marcadas con este esquema cobran; el resto sigue siendo gratis."
               : "**Ahora el muro está apagado**, así que estas operaciones responden sin pago; " +
                 "el esquema queda declarado para que un cliente sepa qué esperar cuando se " +

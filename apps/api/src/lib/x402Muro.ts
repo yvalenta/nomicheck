@@ -108,6 +108,39 @@ export function aFormatoV1(cuerpo: Record<string, unknown>, red: RedX402): unkno
 }
 
 /**
+ * Qué red declara el cuerpo que va a `/settle` o `/verify`.
+ *
+ * Es el punto donde el multired se puede romper en silencio. La traducción a v1
+ * cambia el CAIP-2 por el nombre que entiende el facilitador, y ese nombre tiene
+ * que salir de lo que el COMPRADOR pagó. Con una sola red daba igual de dónde
+ * saliera; con dos, tomar la primera significa decirle al facilitador "esto se
+ * pagó en Base" sobre un pago hecho en Avalanche — y el facilitador entonces
+ * busca la transacción en la cadena equivocada.
+ *
+ * Con una sola red configurada se devuelve esa, sin mirar el cuerpo: es
+ * exactamente el comportamiento anterior, y evita que un facilitador que no
+ * eche el `network` rompa un despliegue que hoy funciona.
+ */
+export function redDelPago(redes: RedX402[], cuerpo: Record<string, unknown>): RedX402 {
+  if (redes.length === 1) return redes[0];
+
+  const req = (cuerpo.paymentRequirements ?? {}) as Record<string, unknown>;
+  const pp = (cuerpo.paymentPayload ?? {}) as Record<string, unknown>;
+  const declarada = req.network ?? pp.network;
+
+  const red = redes.find((r) => r.caip2 === declarada || r.nombre === declarada);
+  if (red) return red;
+
+  // No se cae a la primera red a propósito. Liquidar contra la red equivocada
+  // es peor que no liquidar: el comprador ya firmó, y el error aparecería como
+  // "transacción no encontrada" en una cadena donde nunca estuvo.
+  throw new Error(
+    `x402: el pago declara la red ${JSON.stringify(declarada)}, que no está entre las ` +
+      `anunciadas (${redes.map((r) => r.caip2).join(", ")}). No se traduce a v1 a ciegas.`,
+  );
+}
+
+/**
  * El facilitador de Ultravioleta responde `/accepts` sin el objeto `resource`
  * de nivel superior, y el validador v2 de faremeter lo exige: sin este parche
  * cada petición con muro muere en 500 en vez de contestar 402.
@@ -117,7 +150,7 @@ export function aFormatoV1(cuerpo: Record<string, unknown>, red: RedX402): unkno
  * `/accepts` y mirar si el campo está.
  */
 function fetchDelFacilitador(
-  red: RedX402,
+  redes: RedX402[],
   perfil: PerfilFacilitador,
   recursoDe: () => string,
   bazaar?: Record<string, unknown>,
@@ -159,7 +192,7 @@ function fetchDelFacilitador(
       // no el hueco.
       const pp = original.paymentPayload as Record<string, unknown> | undefined;
       const cuerpo = perfil.traduceAV1
-        ? aFormatoV1(original, red)
+        ? aFormatoV1(original, redDelPago(redes, original))
         : {
             x402Version: perfil.versionEnCuerpo,
             ...original,
@@ -211,7 +244,9 @@ function fetchDelFacilitador(
 
 /** Middleware real para una ruta, resuelto una sola vez y cacheado. */
 function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<RequestHandler> {
-  const accepts = [requisitosDePago(cfg, precio)];
+  // Una entrada por red. `requisitosDePago` ya devuelve el array: envolverlo
+  // acá era decidir "cuántas redes hay" en el sitio equivocado.
+  const accepts = requisitosDePago(cfg, precio);
   return Promise.all([import("@faremeter/middleware"), import("@faremeter/middleware/express")])
     .then(([{ createHTTPFacilitatorHandler, common }, { createMiddleware }]) => {
       const handler = createHTTPFacilitatorHandler(cfg.facilitatorURL, {
@@ -221,7 +256,7 @@ function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<Reque
         // manda al facilitador lo que realmente configuramos.
         acceptsOverride: accepts.map(common.relaxedRequirementsToV2),
         fetch: fetchDelFacilitador(
-          cfg.red,
+          cfg.redes,
           perfilFacilitador(cfg.facilitatorURL),
           () => `${cfg.origenPublico}${publica}`,
           extensionBazaar(precio),
@@ -320,7 +355,8 @@ export function montarMuroX402(app: Express): void {
 
   // eslint-disable-next-line no-console
   console.log(
-    `[x402] muro activo en ${cfg.red.nombre} · facilitador ${cfg.facilitatorURL} · ` +
+    `[x402] muro activo en ${cfg.redes.map((r) => r.nombre).join(", ")} · ` +
+      `facilitador ${cfg.facilitatorURL} · ` +
       `cobra a ${cfg.payTo} · ${rutasPublicasConMuro().length} rutas`,
   );
 }

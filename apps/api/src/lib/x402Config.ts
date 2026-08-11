@@ -50,6 +50,56 @@ export const BASE_MAINNET: RedX402 = {
   eip712: { name: "USD Coin", version: "2" },
 };
 
+/**
+ * Avalanche Fuji — la testnet de la casa de Ultravioleta, donde vive el multisig
+ * del DAO y de donde van a venir sus agentes. Se agrega en TESTNET primero: si
+ * anunciamos una red con el dominio EIP-712 equivocado, el comprador firma, el
+ * facilitador rechaza, y el error aparece del lado del comprador — que no sabe
+ * cuál de los dos está mal. Mismo modo de falla que ya nos mordió con ERC-8128.
+ *
+ * El dominio NO se copió de otra red: se leyó de la cadena y se VERIFICÓ
+ * recomputando el `DOMAIN_SEPARATOR` (2026-08-10, RPC público de Fuji):
+ *
+ *   name()      "USD Coin"        version()  "2"
+ *   on-chain    0xfe9fa105a0e9629446730e544caa6b8d05d8d4fc93451750dc50e2ddd6d374b3
+ *   recomputado con esos valores + chainId 43113 + este contrato → IDÉNTICO
+ *
+ * Y la comprobación valió: Base Sepolia dice `"USDC"` donde Fuji dice
+ * `"USD Coin"`. Copiar el dominio de una testnet a otra habría roto la firma
+ * sin que nada lo avisara hasta el primer pago.
+ */
+export const AVALANCHE_FUJI: RedX402 = {
+  caip2: "eip155:43113",
+  // El USDC que el facilitador de Ultravioleta declara en `/supported` para
+  // esta red — comprobado contra su endpoint, no elegido por nosotros.
+  asset: "0x5425890298aed601595a70AB815c96711a31Bc65",
+  nombre: "avalanche-fuji",
+  eip712: { name: "USD Coin", version: "2" },
+};
+
+/**
+ * Avalanche C-Chain — la chain madre de Ultravioleta, donde vive el multisig del
+ * DAO. Es la red que hace que sus agentes puedan pagarnos sin puentear nada.
+ *
+ * Mismo tratamiento que Fuji: el dominio se leyó de la cadena y se VERIFICÓ
+ * recomputando el `DOMAIN_SEPARATOR` (2026-08-10, RPC público de Avalanche):
+ *
+ *   name()   "USD Coin"   version()  "2"   decimals()  6   symbol()  "USDC"
+ *   on-chain     0xbbea200329a938bc3438984a49cb0732e66d66d7bd59c127abacc1710e77f7b3
+ *   recomputado con esos valores + chainId 43114 + este contrato → IDÉNTICO
+ *
+ * La dirección es el USDC NATIVO de Circle en Avalanche, no el bridged
+ * (`USDC.e`, 0xA7D7...). Son dos contratos distintos con el mismo símbolo, y
+ * anunciar el equivocado hace que el comprador firme sobre un token que el
+ * facilitador no liquida.
+ */
+export const AVALANCHE_MAINNET: RedX402 = {
+  caip2: "eip155:43114",
+  asset: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+  nombre: "avalanche",
+  eip712: { name: "USD Coin", version: "2" },
+};
+
 // Base Sepolia, para probar el flujo completo sin mover dinero real.
 export const BASE_SEPOLIA: RedX402 = {
   caip2: "eip155:84532",
@@ -57,6 +107,20 @@ export const BASE_SEPOLIA: RedX402 = {
   nombre: "base-sepolia",
   // OJO: acá dice "USDC", no "USD Coin". Medido con `eth_call` el 2026-07-31.
   eip712: { name: "USDC", version: "2" },
+};
+
+/**
+ * Las redes que se pueden anunciar, por el nombre que usa `X402_RED`.
+ *
+ * El nombre de la clave es el mismo `nombre` de la red, y no por casualidad: es
+ * el que el facilitador de Ultravioleta espera en v1, así que tener dos listas
+ * sería justo el lugar donde desincronizarse. `redPorNombre` lo sujeta.
+ */
+export const REDES_X402: Record<string, RedX402> = {
+  base: BASE_MAINNET,
+  avalanche: AVALANCHE_MAINNET,
+  "base-sepolia": BASE_SEPOLIA,
+  "avalanche-fuji": AVALANCHE_FUJI,
 };
 
 /**
@@ -144,24 +208,74 @@ export function soloAscii(s: string): boolean {
 export interface ConfigX402 {
   activo: boolean;
   facilitatorURL: string;
-  red: RedX402;
+  /**
+   * Las redes en las que se acepta pago, en el orden en que se anuncian. Nunca
+   * vacío: sin `X402_RED` queda `[BASE_MAINNET]`, que es el comportamiento que
+   * había cuando esto era un solo campo.
+   *
+   * El comprador elige UNA del `accepts` y paga en esa. El orden importa poco
+   * para un cliente correcto, pero los que no miran la lista toman la primera.
+   */
+  redes: RedX402[];
+  /** Nombres de `X402_RED` que no corresponden a ninguna red conocida. */
+  redesInvalidas: string[];
   /** Wallet que cobra. En x402 el pago es directo: no hay escrow del que rescatarlo. */
   payTo: string;
   origenPublico: string;
 }
 
+/**
+ * `X402_RED` acepta una lista separada por comas: `base,avalanche`.
+ *
+ * Los nombres desconocidos NO se descartan en silencio — se guardan y
+ * `problemasDeConfig` los convierte en un fallo de arranque. Un typo que hace
+ * que el muro anuncie una red menos es invisible desde acá: el 402 se sigue
+ * viendo perfecto, solo que sin la red por la que alguien iba a pagar.
+ */
 export function leerConfigX402(): ConfigX402 {
-  const red = process.env.X402_RED === "base-sepolia" ? BASE_SEPOLIA : BASE_MAINNET;
+  const pedidas = (process.env.X402_RED ?? "base")
+    .split(",")
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0);
+
+  const redes: RedX402[] = [];
+  const redesInvalidas: string[] = [];
+  for (const nombre of pedidas) {
+    const red = REDES_X402[nombre];
+    if (red === undefined) {
+      redesInvalidas.push(nombre);
+    } else if (!redes.some((r) => r.caip2 === red.caip2)) {
+      // Repetir una red duplicaría su entrada en `accepts`, y un comprador que
+      // ve la misma red dos veces no tiene forma de saber cuál es la buena.
+      redes.push(red);
+    }
+  }
+
   return {
     activo: process.env.X402_ACTIVO === "true",
     facilitatorURL:
       process.env.X402_FACILITATOR ?? "https://facilitator.ultravioletadao.xyz",
-    red,
+    redes: redes.length > 0 ? redes : [BASE_MAINNET],
+    redesInvalidas,
     payTo: process.env.X402_PAY_TO ?? "",
     origenPublico: (
       process.env.NOMICHECK_PUBLIC_ORIGIN ?? "https://nomicheck.ynt.codes"
     ).replace(/\/+$/, ""),
   };
+}
+
+/**
+ * La red que corresponde a un CAIP-2, entre las configuradas.
+ *
+ * Existe por el punto más delicado del multired: cuando el facilitador habla v1
+ * hay que traducirle el CAIP-2 a su nombre de red, y esa traducción tiene que
+ * salir de lo que el COMPRADOR declaró haber pagado, no de una red fija. Con una
+ * sola red daba igual; con dos, resolver mal significa decirle al facilitador
+ * "esto se pagó en Base" sobre un pago hecho en Avalanche.
+ */
+export function redPorCaip2(cfg: ConfigX402, caip2: unknown): RedX402 | undefined {
+  if (typeof caip2 !== "string") return undefined;
+  return cfg.redes.find((r) => r.caip2 === caip2 || r.nombre === caip2);
 }
 
 /**
@@ -219,14 +333,14 @@ export function perfilFacilitador(url: string): PerfilFacilitador {
  * Es también, campo por campo, lo que hay que mandarle a
  * `POST /discovery/register` del facilitador para aparecer en el Bazaar.
  */
-export function requisitosDePago(cfg: ConfigX402, ruta: string) {
+export function requisitoDePago(cfg: ConfigX402, ruta: string, red: RedX402) {
   const usd = PRECIOS_USD[ruta];
   if (usd === undefined) throw new Error(`x402: no hay precio definido para ${ruta}`);
 
   return {
     scheme: "exact" as const,
-    network: cfg.red.caip2,
-    asset: cfg.red.asset,
+    network: red.caip2,
+    asset: red.asset,
     maxAmountRequired: aMicroUsdc(usd),
     payTo: cfg.payTo,
     resource: `${cfg.origenPublico}/api/batch${ruta}`,
@@ -240,11 +354,27 @@ export function requisitosDePago(cfg: ConfigX402, ruta: string) {
     // El facilitador de Ultravioleta NO lo agrega —medido contra `/accepts`, su
     // `extra` trae solo la lista `tokens`— pero sí FUSIONA el que le mandemos.
     // Todo el catálogo que leen los clientes publica estos dos campos.
+    //
+    // Con multired esto se vuelve MÁS crítico, no menos: `name` cambia entre
+    // redes —Base Sepolia dice "USDC" donde las otras tres dicen "USD Coin"— y
+    // entra al dominio EIP-712. Un `extra` copiado entre entradas produce una
+    // firma que el token rechaza, sin error de configuración de por medio.
     extra: {
-      ...cfg.red.eip712,
+      ...red.eip712,
       assetTransferMethod: "eip3009",
     },
   };
+}
+
+/**
+ * El `accepts` completo: una entrada por red configurada.
+ *
+ * Devuelve un array porque eso es lo que x402 anuncia — el comprador elige una.
+ * Antes devolvía un objeto solo y quien llamaba lo envolvía en `[...]`, que
+ * escondía la decisión de cuántas redes hay en el sitio equivocado.
+ */
+export function requisitosDePago(cfg: ConfigX402, ruta: string) {
+  return cfg.redes.map((red) => requisitoDePago(cfg, ruta, red));
 }
 
 /**
@@ -324,6 +454,15 @@ export const RUTAS_CON_MURO = Object.keys(PRECIOS_USD);
 export function problemasDeConfig(cfg: ConfigX402): string[] {
   const p: string[] = [];
   if (!cfg.activo) return p;
+  if (cfg.redesInvalidas.length > 0) {
+    // Se revienta en vez de anunciar una red menos: un typo en `X402_RED` deja
+    // un 402 impecable al que simplemente le falta la red por la que alguien
+    // iba a pagar, y eso no se nota desde acá jamás.
+    p.push(
+      `X402_RED nombra redes desconocidas: ${cfg.redesInvalidas.join(", ")}. ` +
+        `Las conocidas son: ${Object.keys(REDES_X402).join(", ")}`,
+    );
+  }
   if (!/^0x[0-9a-fA-F]{40}$/.test(cfg.payTo)) {
     p.push("X402_PAY_TO no es una dirección EVM válida");
   } else if (cfg.payTo.toLowerCase() === WALLET_COMPROMETIDA) {

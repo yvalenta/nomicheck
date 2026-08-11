@@ -166,8 +166,17 @@ describe("el muro en el documento servido", () => {
     expect(x).toEqual({
       cobra: true,
       precioUsd: PRECIOS_USD["/verificar"],
+      // `red`/`asset` en singular siguen publicados —son la PRIMERA red, y un
+      // cliente ya puede estar leyéndolos—; `redes` es la lista completa.
       red: "eip155:8453",
       asset: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+      redes: [
+        {
+          red: "eip155:8453",
+          asset: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+          nombre: "base",
+        },
+      ],
     });
   });
 
