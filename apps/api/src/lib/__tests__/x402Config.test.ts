@@ -17,6 +17,7 @@ import {
   BASE_SEPOLIA,
   AVALANCHE_MAINNET,
   REDES_X402,
+  facilitadorDe,
   DESCRIPCIONES,
   PRECIOS_USD,
   RUTAS_CON_MURO,
@@ -33,6 +34,7 @@ const LIMPIA = "0x1111111111111111111111111111111111111111";
 const base = (over: Partial<ReturnType<typeof leerConfigX402>> = {}) => ({
   activo: true,
   facilitatorURL: "https://facilitator.ultravioletadao.xyz",
+  facilitadoresPorRed: {},
   redes: [BASE_MAINNET],
   redesInvalidas: [],
   payTo: LIMPIA,
@@ -142,6 +144,45 @@ describe("leerConfigX402", () => {
     const cfg = leerConfigX402();
     expect(cfg.redes).toEqual([BASE_MAINNET]);
     expect(cfg.redesInvalidas).toEqual(["marte"]);
+  });
+
+  it("lee el facilitador por red, y solo de las redes configuradas", () => {
+    process.env.X402_RED = "base,avalanche";
+    process.env.X402_FACILITATOR_AVALANCHE = "https://facilitator.ultravioletadao.xyz";
+    // La huérfana: su red no está anunciada, así que no debe cambiar nada.
+    process.env.X402_FACILITATOR_BASE_SEPOLIA = "https://otro.example";
+    const cfg = leerConfigX402();
+    expect(cfg.facilitadoresPorRed).toEqual({
+      avalanche: "https://facilitator.ultravioletadao.xyz",
+    });
+    expect(facilitadorDe(cfg, AVALANCHE_MAINNET)).toBe("https://facilitator.ultravioletadao.xyz");
+    expect(facilitadorDe(cfg, BASE_MAINNET)).toBe(cfg.facilitatorURL);
+  });
+
+  it("REVIENTA si una red va a CDP y CDP no la liquida", () => {
+    // El motivo entero de los facilitadores por red: anunciar en `accepts` una
+    // red que el facilitador rechaza no falla en ningún lado visible — falla
+    // cuando el comprador ya firmó, y se lee como "nadie quiso comprar".
+    process.env.X402_ACTIVO = "true";
+    process.env.X402_PAY_TO = LIMPIA;
+    process.env.X402_RED = "base,avalanche";
+    process.env.X402_FACILITATOR = "https://api.cdp.coinbase.com/platform/v2/x402";
+    const problemas = problemasDeConfig(leerConfigX402());
+    expect(problemas).toEqual([expect.stringMatching(/avalanche.*CDP.*X402_FACILITATOR_AVALANCHE/s)]);
+
+    // Y con el override, el mismo despliegue queda sano.
+    process.env.X402_FACILITATOR_AVALANCHE = "https://facilitator.ultravioletadao.xyz";
+    expect(problemasDeConfig(leerConfigX402())).toEqual([]);
+  });
+
+  it("el override también tiene que ser https", () => {
+    process.env.X402_ACTIVO = "true";
+    process.env.X402_PAY_TO = LIMPIA;
+    process.env.X402_RED = "base,avalanche";
+    process.env.X402_FACILITATOR_AVALANCHE = "http://inseguro.example";
+    expect(problemasDeConfig(leerConfigX402())).toEqual([
+      expect.stringMatching(/X402_FACILITATOR_AVALANCHE debe ser https/),
+    ]);
   });
 
   it("le quita la barra final al origen público", () => {

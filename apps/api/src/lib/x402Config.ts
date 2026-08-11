@@ -205,9 +205,40 @@ export function soloAscii(s: string): boolean {
   return /^[\x20-\x7E]*$/.test(s);
 }
 
+/**
+ * Las redes que el facilitador de CDP puede liquidar, MEDIDO contra su
+ * documentación el 2026-08-11 (docs.cdp.coinbase.com/x402/network-support):
+ * Base, Base Sepolia, Polygon, Arbitrum, World y Solana. Avalanche NO está.
+ *
+ * Es una lista escrita a mano sobre un hecho ajeno, y eso tiene costo — puede
+ * quedarse vieja. Se acepta el costo porque el modo de falla contrario es peor
+ * y es INVISIBLE: anunciar en `accepts` una red que el facilitador rechaza no
+ * da error de arranque ni de 402 — da compradores que firman, settles que
+ * mueren, y una pérdida que se lee como "nadie quiso comprar". Si CDP agrega
+ * una red, esta lista se actualiza midiendo, no suponiendo.
+ */
+export const REDES_QUE_CDP_LIQUIDA = new Set([
+  "eip155:8453",
+  "eip155:84532",
+  "eip155:137",
+  "eip155:42161",
+  "eip155:480",
+  "eip155:4801",
+]);
+
 export interface ConfigX402 {
   activo: boolean;
   facilitatorURL: string;
+  /**
+   * Facilitador por nombre de red, cuando una red NO va por el default.
+   * Sale de `X402_FACILITATOR_<NOMBRE>` (el nombre de la red en mayúsculas,
+   * `-` → `_`): `X402_FACILITATOR_AVALANCHE=https://facilitator.ultravioletadao.xyz`.
+   *
+   * Existe porque producción cobra Base por CDP —ahí vive el catálogo del
+   * Bazaar— y CDP no liquida Avalanche. Un solo facilitador para todas las
+   * redes obligaría a elegir entre el catálogo y la chain de Ultravioleta.
+   */
+  facilitadoresPorRed: Record<string, string>;
   /**
    * Las redes en las que se acepta pago, en el orden en que se anuncian. Nunca
    * vacío: sin `X402_RED` queda `[BASE_MAINNET]`, que es el comportamiento que
@@ -251,17 +282,34 @@ export function leerConfigX402(): ConfigX402 {
     }
   }
 
+  const definitivas = redes.length > 0 ? redes : [BASE_MAINNET];
+
+  // `X402_FACILITATOR_AVALANCHE`, `X402_FACILITATOR_BASE_SEPOLIA`, etc. Solo se
+  // leen las de redes configuradas: una variable huérfana de una red que no se
+  // anuncia no debe cambiar nada en silencio.
+  const facilitadoresPorRed: Record<string, string> = {};
+  for (const red of definitivas) {
+    const valor = process.env[`X402_FACILITATOR_${red.nombre.toUpperCase().replace(/-/g, "_")}`];
+    if (valor !== undefined && valor.length > 0) facilitadoresPorRed[red.nombre] = valor;
+  }
+
   return {
     activo: process.env.X402_ACTIVO === "true",
     facilitatorURL:
       process.env.X402_FACILITATOR ?? "https://facilitator.ultravioletadao.xyz",
-    redes: redes.length > 0 ? redes : [BASE_MAINNET],
+    facilitadoresPorRed,
+    redes: definitivas,
     redesInvalidas,
     payTo: process.env.X402_PAY_TO ?? "",
     origenPublico: (
       process.env.NOMICHECK_PUBLIC_ORIGIN ?? "https://nomicheck.ynt.codes"
     ).replace(/\/+$/, ""),
   };
+}
+
+/** El facilitador que liquida una red concreta: su override, o el default. */
+export function facilitadorDe(cfg: ConfigX402, red: RedX402): string {
+  return cfg.facilitadoresPorRed[red.nombre] ?? cfg.facilitatorURL;
 }
 
 /**
@@ -476,6 +524,32 @@ export function problemasDeConfig(cfg: ConfigX402): string[] {
   }
   if (!/^https:\/\//.test(cfg.facilitatorURL)) {
     p.push("X402_FACILITATOR debe ser https");
+  }
+  for (const [nombre, url] of Object.entries(cfg.facilitadoresPorRed)) {
+    if (!/^https:\/\//.test(url)) {
+      p.push(`X402_FACILITATOR_${nombre.toUpperCase().replace(/-/g, "_")} debe ser https`);
+    }
+  }
+  // La guarda que motivó los facilitadores por red: una red ruteada a CDP que
+  // CDP no liquida no falla acá — falla cuando un comprador ya firmó, y desde
+  // este lado se ve como "nadie quiso comprar". Reventar al arrancar nombrando
+  // el arreglo es la única versión visible de ese error.
+  for (const red of cfg.redes) {
+    const url = facilitadorDe(cfg, red);
+    const host = ((): string => {
+      try {
+        return new URL(url).host;
+      } catch {
+        return "";
+      }
+    })();
+    if (host === "api.cdp.coinbase.com" && !REDES_QUE_CDP_LIQUIDA.has(red.caip2)) {
+      p.push(
+        `la red ${red.nombre} (${red.caip2}) está ruteada al facilitador de CDP, que no la ` +
+          `liquida (medido 2026-08-11). Declarale un facilitador propio: ` +
+          `X402_FACILITATOR_${red.nombre.toUpperCase().replace(/-/g, "_")}=https://...`,
+      );
+    }
   }
   return p;
 }

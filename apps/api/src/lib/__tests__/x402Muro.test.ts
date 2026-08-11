@@ -18,7 +18,7 @@ import {
   perfilFacilitador,
 } from "../x402Config.js";
 import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../ejemplosBatch.js";
-import { aFormatoV1, redDelPago } from "../x402Muro.js";
+import { aFormatoV1, gruposPorFacilitador, redDelPago } from "../x402Muro.js";
 
 /** Lo que faremeter 0.22.0 manda de verdad, copiado de la corrida real. */
 const CUERPO_V2 = {
@@ -151,6 +151,41 @@ describe("redDelPago", () => {
 
   it("REVIENTA con dos redes y un cuerpo sin red declarada", () => {
     expect(() => redDelPago(DOS, {})).toThrow(/no está entre las anunciadas/);
+  });
+
+  it("cada facilitador recibe SOLO sus redes", () => {
+    // Producción cobra Base por CDP —ahí vive el catálogo del Bazaar— y CDP no
+    // liquida Avalanche. Un handler global con todas las redes le mandaría a
+    // CDP pagos que no puede liquidar, y el fallo aparecería como settle muerto.
+    const cfg = {
+      activo: true,
+      facilitatorURL: "https://api.cdp.coinbase.com/platform/v2/x402",
+      facilitadoresPorRed: { avalanche: "https://facilitator.ultravioletadao.xyz" },
+      redes: [BASE_MAINNET, AVALANCHE_MAINNET],
+      redesInvalidas: [],
+      payTo: "0x1111111111111111111111111111111111111111",
+      origenPublico: "https://nomicheck.ynt.codes",
+    };
+    expect(gruposPorFacilitador(cfg)).toEqual([
+      { url: "https://api.cdp.coinbase.com/platform/v2/x402", redes: [BASE_MAINNET] },
+      { url: "https://facilitator.ultravioletadao.xyz", redes: [AVALANCHE_MAINNET] },
+    ]);
+  });
+
+  it("sin overrides queda un solo grupo con todas las redes", () => {
+    // El comportamiento de siempre: un facilitador, un handler.
+    const cfg = {
+      activo: true,
+      facilitatorURL: "https://facilitator.ultravioletadao.xyz",
+      facilitadoresPorRed: {},
+      redes: [BASE_MAINNET, AVALANCHE_MAINNET],
+      redesInvalidas: [],
+      payTo: "0x1111111111111111111111111111111111111111",
+      origenPublico: "https://nomicheck.ynt.codes",
+    };
+    expect(gruposPorFacilitador(cfg)).toEqual([
+      { url: "https://facilitator.ultravioletadao.xyz", redes: [BASE_MAINNET, AVALANCHE_MAINNET] },
+    ]);
   });
 
   it("el pago en Avalanche se traduce con el nombre de Avalanche", () => {

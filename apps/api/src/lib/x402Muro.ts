@@ -23,6 +23,7 @@ import {
   problemasDeConfig,
   requisitosDePago,
   extensionBazaar,
+  facilitadorDe,
   RUTAS_CON_MURO,
   perfilFacilitador,
   type ConfigX402,
@@ -242,28 +243,61 @@ function fetchDelFacilitador(
   };
 }
 
-/** Middleware real para una ruta, resuelto una sola vez y cacheado. */
+/**
+ * Las redes agrupadas por el facilitador que las liquida, en el orden de
+ * `cfg.redes`. Exportada para poder afirmarla en tests sin levantar faremeter.
+ */
+export function gruposPorFacilitador(cfg: ConfigX402): { url: string; redes: RedX402[] }[] {
+  const grupos: { url: string; redes: RedX402[] }[] = [];
+  for (const red of cfg.redes) {
+    const url = facilitadorDe(cfg, red);
+    const grupo = grupos.find((g) => g.url === url);
+    if (grupo) grupo.redes.push(red);
+    else grupos.push({ url, redes: [red] });
+  }
+  return grupos;
+}
+
+/**
+ * Middleware real para una ruta, resuelto una sola vez y cacheado.
+ *
+ * UN handler por facilitador, no uno global: producción cobra Base por CDP
+ * —ahí vive el catálogo del Bazaar— y CDP no liquida Avalanche, que va por
+ * Ultravioleta. faremeter elige handler por capacidades (red + asset), así que
+ * cada handler declara SOLO las redes de su facilitador; el `pricing` sí lleva
+ * todas, porque es lo que el 402 anuncia.
+ */
 function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<RequestHandler> {
-  // Una entrada por red. `requisitosDePago` ya devuelve el array: envolverlo
-  // acá era decidir "cuántas redes hay" en el sitio equivocado.
-  const accepts = requisitosDePago(cfg, precio);
   return Promise.all([import("@faremeter/middleware"), import("@faremeter/middleware/express")])
     .then(([{ createHTTPFacilitatorHandler, common }, { createMiddleware }]) => {
-      const handler = createHTTPFacilitatorHandler(cfg.facilitatorURL, {
-        capabilities: common.deriveCapabilities(accepts),
-        schemes: common.deriveSchemes(accepts),
-        // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
-        // manda al facilitador lo que realmente configuramos.
-        acceptsOverride: accepts.map(common.relaxedRequirementsToV2),
-        fetch: fetchDelFacilitador(
-          cfg.redes,
-          perfilFacilitador(cfg.facilitatorURL),
-          () => `${cfg.origenPublico}${publica}`,
-          extensionBazaar(precio),
-        ),
+      // Una entrada por red. `requisitosDePago` ya devuelve el array: envolverlo
+      // acá era decidir "cuántas redes hay" en el sitio equivocado.
+      const accepts = requisitosDePago(cfg, precio);
+
+      const handlers = gruposPorFacilitador(cfg).map(({ url, redes }) => {
+        const caip2 = new Set(redes.map((r) => r.caip2));
+        const propios = accepts.filter((a) => caip2.has(a.network));
+        return createHTTPFacilitatorHandler(url, {
+          capabilities: common.deriveCapabilities(propios),
+          schemes: common.deriveSchemes(propios),
+          // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
+          // manda al facilitador lo que realmente configuramos.
+          acceptsOverride: propios.map(common.relaxedRequirementsToV2),
+          // La extensión del Bazaar va SOLO al perfil que la entiende: mandarla
+          // a Ultravioleta no rompe nada, pero registrar la liquidación como
+          // "con extensión declarada" cuando ningún catálogo la va a leer
+          // ensucia la única señal que existe de si el Bazaar nos aceptó.
+          fetch: fetchDelFacilitador(
+            redes,
+            perfilFacilitador(url),
+            () => `${cfg.origenPublico}${publica}`,
+            perfilFacilitador(url).autenticaCdp ? extensionBazaar(precio) : undefined,
+          ),
+        });
       });
+
       return createMiddleware({
-        x402Handlers: [handler],
+        x402Handlers: handlers,
         pricing: common.acceptsToPricing(accepts),
         // v2 es lo que anuncia el Bazaar; v1 queda encendido porque hay
         // clientes que solo hablan esa.
@@ -341,22 +375,22 @@ export function montarMuroX402(app: Express): void {
       // el sha desplegado y se pueda encontrar con el mismo grep que el resto —
       // ver lib/registro.ts y la ley cobrar-antes-de-servir.
       registro.error("x402", "fallo liquidando: el facilitador no confirmó el pago", err, {
-        facilitador: cfg.facilitatorURL,
+        facilitadores: gruposPorFacilitador(cfg).map((g) => g.url),
       });
       res.status(424).json({
         error: "facilitator_error",
         mensaje:
           "El facilitador no confirmó el pago. NO se entregó el recurso. " +
           "El estado del pago es desconocido: comprobá on-chain antes de reintentar.",
-        facilitador: cfg.facilitatorURL,
+        facilitadores: gruposPorFacilitador(cfg).map((g) => g.url),
       });
     });
   });
 
   // eslint-disable-next-line no-console
   console.log(
-    `[x402] muro activo en ${cfg.redes.map((r) => r.nombre).join(", ")} · ` +
-      `facilitador ${cfg.facilitatorURL} · ` +
-      `cobra a ${cfg.payTo} · ${rutasPublicasConMuro().length} rutas`,
+    `[x402] muro activo en ${gruposPorFacilitador(cfg)
+      .map((g) => `${g.redes.map((r) => r.nombre).join(",")}→${new URL(g.url).host}`)
+      .join(" · ")} · cobra a ${cfg.payTo} · ${rutasPublicasConMuro().length} rutas`,
   );
 }
