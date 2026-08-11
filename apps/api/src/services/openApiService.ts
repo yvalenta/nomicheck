@@ -312,6 +312,14 @@ export function construirOpenApi(): Record<string, unknown> {
             "—red, token, monto y el dominio EIP-712 del token en `extra`—, el cliente firma " +
             "una autorización EIP-3009 y reintenta adjuntándola. El pago es inmediato y final: " +
             "no hay escrow ni disputa, y por eso toda salida viaja firmada.\n\n" +
+            // La línea del payTo "anclado" existe porque el pago es final: un 402
+            // interceptado que cambie el payTo se lleva la plata sin dejar rastro
+            // del lado del comprador. El cruce contra el agent card —servido desde
+            // otro dominio y anclado on-chain por el tokenURI del NFT— es la única
+            // verificación out-of-band que un comprador puede hacer en un paso.
+            "**Antes de firmar, cruzá el `payTo` de cada entrada del `accepts` contra el " +
+            "`walletAddress` de `https://ynt.codes/.well-known/agent-card.json`.** El pago " +
+            "x402 es final; un 402 interceptado se delata exactamente ahí.\n\n" +
             (muro.activo
               ? `Muro **encendido** en ${muro.redes
                   .map((r) => `\`${r.caip2}\` (token \`${r.asset}\`)`)
