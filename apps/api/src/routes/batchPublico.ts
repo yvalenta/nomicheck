@@ -17,7 +17,7 @@ import {
   ejecutarBatchPagoOnchain,
   ErrorLoteSinWallets,
 } from "../services/batchPagoOnchainService.js";
-import { ejecutarBatchVerificacion } from "../services/batchVerificacionService.js";
+import { ejecutarBatchVerificacion, resumenPrechequeo } from "../services/batchVerificacionService.js";
 import { generarParametrosSnapshot } from "../services/parametrosSnapshotService.js";
 import {
   batchToCsv,
@@ -341,6 +341,33 @@ batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response
       input: EJEMPLO_VERIFICACION,
       output: salida,
     });
+  } catch (e) {
+    return responderFallo(res, e);
+  }
+});
+
+// El pre-chequeo GRATIS: contesta "¿hay algo, y cuánto pesa?" sin decir qué.
+//
+// Gratis a propósito — el muro matchea por ruta exacta y esta no está en
+// PRECIOS_USD, y eso es una decisión y no un olvido: quien tiene el
+// comprobante limpio se entera gratis y no paga nunca. Cobrar según lo que
+// encontremos sería el incentivo que un verificador no puede tener.
+//
+// Sin detalle a propósito — el conteo y el neto, nada de qué línea ni qué
+// norma: eso es el informe pagado. Y sin firma a propósito: un teaser no
+// pretende ser evidencia, y firmarlo lo disfrazaría de sobre.
+//
+// Corre el MISMO motor que el informe (no una heurística aparte): si el
+// pre-chequeo dice N, el informe pagado encuentra N. Divergir acá sería
+// vender la duda.
+batchPublicoRouter.post("/verificar/prechequeo", async (req: Request, res: Response) => {
+  const parsed = batchVerificacionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_input", detalle: parsed.error.flatten() });
+  }
+  try {
+    const salida = await ejecutarBatchVerificacion(parsed.data);
+    return res.status(200).json(resumenPrechequeo(salida));
   } catch (e) {
     return responderFallo(res, e);
   }

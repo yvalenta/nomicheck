@@ -74,4 +74,33 @@ export async function ejecutarBatchVerificacion(
   return { ...sinFirma, signature: firmarPayload(sinFirma) };
 }
 
+/**
+ * El resumen del pre-chequeo GRATIS: cuántos comprobantes traen algo y cuánto
+ * pesa en neto — jamás qué línea ni qué norma, que es el informe pagado.
+ *
+ * Corre sobre la salida del MISMO motor que el informe: si esto dice N, el
+ * informe encuentra N. Una heurística aparte que divergiera vendería la duda.
+ * Y devuelve `reglasHash` a propósito: el teaser no está firmado, pero declara
+ * contra qué catálogo se midió, así el que luego paga puede exigir el mismo.
+ */
+export function resumenPrechequeo(salida: BatchVerificacionOutput) {
+  const conDiscrepancias = salida.resultados.filter((c) => c.veredicto !== "correcto").length;
+  const deltaNetoTotalEstimado = salida.resultados.reduce(
+    (acc, c) => acc + (c.deltaNetoEstimado ?? 0),
+    0
+  );
+  return {
+    version: "1" as const,
+    generadoEn: salida.generadoEn,
+    reglasHash: salida.reglasHash,
+    comprobantes: salida.resultados.length,
+    conDiscrepancias,
+    deltaNetoTotalEstimado,
+    detalle:
+      "Sin detalle a propósito. El informe línea por línea —qué concepto, cuánto, " +
+      "y el artículo que lo rige— con sobre firmado Ed25519 verificable offline, " +
+      "es el servicio pagado: POST /api/batch/verificar.",
+  };
+}
+
 export { DISCLAIMER as DISCLAIMER_VERIFICACION };

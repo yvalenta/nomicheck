@@ -24,7 +24,7 @@ vi.mock("../../lib/prisma.js", () => ({
   },
 }));
 
-const { ejecutarBatchVerificacion } = await import("../batchVerificacionService.js");
+const { ejecutarBatchVerificacion, resumenPrechequeo } = await import("../batchVerificacionService.js");
 const { hashCatalogo, REGLAS_VERIFICADAS_AL } = await import("../reglasVerificadasService.js");
 const { verificarFirma } = await import("../batchSignatureService.js");
 const { batchVerificacionToCsv } = await import("../batchCsvService.js");
@@ -111,5 +111,44 @@ describe("ejecutarBatchVerificacion", () => {
     expect(csv).toContain(`# reglas_hash: ${salida.reglasHash}`);
     expect(csv).toContain("external_id,veredicto_comprobante");
     expect(csv).toContain("CMP-1,correcto,0,salario_basico,Salario básico,2000000,2000000,0,0,correcto");
+  });
+
+  describe("resumenPrechequeo (el teaser gratis)", () => {
+    it("cuenta cuántos y cuánto, sobre la salida del MISMO motor", async () => {
+      const salida = await ejecutarBatchVerificacion(baseInput());
+      const r = resumenPrechequeo(salida);
+      expect(r.comprobantes).toBe(1);
+      expect(r.conDiscrepancias).toBe(salida.resultados[0].veredicto === "correcto" ? 0 : 1);
+      expect(r.deltaNetoTotalEstimado).toBe(salida.resultados[0].deltaNetoEstimado);
+      expect(r.reglasHash).toBe(salida.reglasHash);
+    });
+
+    it("JAMÁS filtra el detalle: ni líneas, ni normas, ni firma", async () => {
+      const salida = await ejecutarBatchVerificacion(baseInput());
+      const r = resumenPrechequeo(salida);
+      // Las claves EXACTAS: una de más es detalle regalado o firma fingida.
+      expect(Object.keys(r).sort()).toEqual([
+        "comprobantes", "conDiscrepancias", "deltaNetoTotalEstimado",
+        "detalle", "generadoEn", "reglasHash", "version",
+      ]);
+      const texto = JSON.stringify(r);
+      expect(texto).not.toContain("lineas");
+      expect(texto).not.toContain("referenciaLegal");
+      expect(texto).not.toContain("signature");
+    });
+
+    it("un lote limpio da cero y cero — y por eso no paga", async () => {
+      const r = resumenPrechequeo({
+        version: "1", generadoEn: "x", reglasVerificadasAl: "x", reglasHash: "h",
+        disclaimer: "d", habeasData: {} as never,
+        resultados: [
+          { externalId: "A", veredicto: "correcto", deltaNetoEstimado: 0, lineas: [], advertencias: [] },
+          { externalId: "B", veredicto: "correcto", deltaNetoEstimado: 0, lineas: [], advertencias: [] },
+        ],
+        signature: {} as never,
+      } as never);
+      expect(r.conDiscrepancias).toBe(0);
+      expect(r.deltaNetoTotalEstimado).toBe(0);
+    });
   });
 });
