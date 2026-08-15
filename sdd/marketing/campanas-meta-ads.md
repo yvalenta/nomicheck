@@ -12,7 +12,7 @@ Bloque 3 del entregable del **Prompt Maestro** (`SDD.md §16`). Cuatro campañas
 >
 > **La regla que este archivo obedece desde hoy:** ninguna frase sube a Meta antes de que exista lo que promete. Un anuncio es una promesa servida a desconocidos, y no hay forma de retirarla — ver `docs/leyes/cobrar-antes-de-servir.md` en `nomicheck_ops`, que es la misma idea del lado del cobro.
 
-**Decisión de negocio, 2026-08-15 — se toma la salida B: empresas y agentes.** Eso reordena este archivo: **las campañas 3 y 4 son las elegidas**, y la 1 y la 2 quedan **parqueadas**, no borradas. Ver la tabla de presupuesto, que tiene el compromiso que esa decisión abre.
+**Decisión de negocio, 2026-08-15 — se toma la salida B: empresas y agentes, con reparto 70/30 en frío y CERO gasto en B2C.** Eso reordena este archivo: **la campaña 3 (empresas) y la 4 (contadores) son las que se suben**, y la 1 y la 2 quedan **parqueadas, no borradas** — se reactivan el día que exista una forma de que un humano pague. El costo de esa decisión está escrito junto a la tabla de presupuesto, no escondido: se pierde el pool de retargeting del que la campaña 3 pensaba sacar su mejor audiencia.
 
 **Línea base medida el 2026-08-15: la audiencia humana es CERO.** No baja: cero. El 99,7 % del tráfico a la API es nuestro propio centinela, y lo que queda como humano es casi todo la máquina de la casa. Eso es **bueno para medir** —cualquier cosa que se mueva después será atribuible sin discusión— y a la vez significa que **ningún KPI de este archivo tiene todavía un dato histórico que lo respalde**: son objetivos propuestos, no medidos.
 
@@ -44,14 +44,22 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 
 | Campaña | % original | **% bajo salida B** | Justificación |
 |---|---|---|---|
-| 1 — Verifica tu pago (A) | ~~60 %~~ | **parqueada (0 %)** | B2C. No hay forma de que un humano pague. Ver el compromiso de abajo antes de dejarla en cero |
+| 1 — Verifica tu pago (A) | ~~60 %~~ | **parqueada (0 %)** | B2C. No hay forma de que un humano pague: cada peso de anuncio compraría costo de hosting, no ingreso |
 | 2 — ¿Te robaron? (B) | ~~15 %~~ | **parqueada (0 %)** | B2C, y además optimiza por dos eventos que **nadie emite** |
 | 3 — Automatiza tu nómina (C) | ~~20 %~~ | **70 %** | La audiencia elegida. Empresa que puede pagar por transferencia o factura |
 | 4 — Aliado técnico (D) | ~~5 %~~ | **30 %** | Multiplicador: un contador trae varias pymes. Sube porque ya no compite con la 1 |
 
-> **El compromiso que esto abre, y que hay que decidir a ojos abiertos.** La campaña 3 declaraba su mejor audiencia como retargeting de quienes llegan por la 1 — *el trabajador comparte el PDF y el dueño llega curioseando*, el «caballo de Troya» del archivo original. **Parquear la 1 apaga ese pool.** La 3 arranca entonces con segmentación por intereses en frío, que rinde peor.
+> **El compromiso que esto abre, dicho de frente.** La campaña 3 declaraba su mejor audiencia como retargeting de quienes llegan por la 1 — *el trabajador comparte el PDF y el dueño llega curioseando*, el «caballo de Troya» del archivo original. **Parquear la 1 apaga ese pool**, y la 3 arranca con segmentación por intereses en frío, que rinde peor.
 >
-> Las dos salidas son defendibles y **la elige Yonatan**: (a) 70/30 en frío, sin gastar en B2C; o (b) dejar un piso chico en la 1 —10-15 %— comprado **explícitamente como generador de audiencia B2B**, no como adquisición, y midiéndolo por `registro_empresa`, nunca por verificaciones.
+> ~~Las dos salidas son defendibles y la elige Yonatan.~~ **Decidido el 2026-08-15: 70/30 en frío, sin gastar un peso en B2C.** Se sabía el costo y se aceptó: no se compra tráfico de una audiencia que no puede pagar ni siquiera para alimentar un lookalike. La consecuencia operativa está aplicada en la segmentación de la campaña 3 — sin audiencia personalizada, todo frío.
+>
+> **Lo que esto cambia en cómo se lee el piloto:** en frío, el CPL de la primera semana va a salir **peor** que el que este archivo propone como objetivo, y eso no es señal de que la campaña esté mal. Los KPIs de abajo se fijaron suponiendo un pool caliente que ya no existe. Tratarlos como piso y no como meta hasta que haya una vuelta medida.
+
+**Lo que reemplaza al pool apagado, y no cuesta nada.** Arrancar en frío no significa arrancar sin superficie: el B2C sigue **servido gratis** aunque no se le compre tráfico, y la puerta B2B que faltaba ya está puesta. Lo que existe hoy sin gastar un peso:
+
+- **`/servicios` con vista de empresa** — desde el 2026-08-15 ofrece las tres acciones que le faltaban (registrar con NIT, entrar al portal, escribir), junto a la calculadora de ahorro con supuestos editables. Es el mejor argumento B2B que hay y ahora tiene salida.
+- **La sección `#empresas` del landing** sigue viva para cualquiera que llegue por su cuenta: el «caballo de Troya» no se desmontó, solo dejó de comprarse.
+- **Los indexadores de agentes y de IA llegan solos** —`erc-8004-indexer`, `OAI-SearchBot`, `ClaudeBot`, `Amazonbot`, `Googlebot`— al agent card y a `llms.txt`. Es la única audiencia que hoy existe de verdad, y es la otra mitad de la salida B.
 
 **No reasignar por CPA antes de que exista medición.** El texto original mandaba rebalancear a los 7 días «según CPA real»; hoy no hay CPA real que mirar, porque el pixel no está y la conversión primaria no se emite. Primero la precondición dura de arriba, después el piloto, después el rebalanceo.
 
@@ -72,7 +80,9 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 
 ---
 
-## Campaña 1 — Verifica tu pago (Audiencia A)
+## Campaña 1 — Verifica tu pago (Audiencia A) · **PARQUEADA**
+
+> **No se sube. Presupuesto 0 % por la decisión de salida B del 2026-08-15.** Se conserva entera y no se borra: el día que exista una forma de que un humano pague, esta es la campaña que se reactiva, y rehacerla desde cero costaría más que leerla. Nada de acá se ejecuta hoy.
 
 **Objetivo Meta:** *Tráfico* (primeras 2 semanas) → migrar a *Conversiones* optimizando por `verificacion_completada` cuando haya volumen (≥ 50 eventos/semana por conjunto).
 
@@ -113,7 +123,9 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 
 ---
 
-## Campaña 2 — ¿Te robaron en la liquidación? (Audiencia B)
+## Campaña 2 — ¿Te robaron en la liquidación? (Audiencia B) · **PARQUEADA**
+
+> **No se sube. Presupuesto 0 % por la decisión de salida B del 2026-08-15.** Y aunque se reactivara mañana, no podría correr como está escrita: optimiza por `verificacion_completada` y arma su lookalike sobre `discrepancia_detectada`, **y ninguno de los dos lo emite nadie**. Reactivarla exige primero esos dos eventos.
 
 **Objetivo Meta:** *Conversiones* directo — optimizar por `verificacion_completada` y, cuando pool ≥ 500, migrar a `discrepancia_detectada`.
 
@@ -172,8 +184,8 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 | Edad | 28–55 |
 | Intereses | Software de gestión contable (Siigo, Alegra, Contapyme, Nubox), asociaciones de pymes (Acopi, Fenalco), "gerencia de restaurantes", "administración de comercio" |
 | Datos demográficos | Cargo: "propietario de negocio", "gerente general", "administrador" — donde Meta permita ese detalle |
-| Audiencias personalizadas | Retargeting de visitantes de `/lanzamiento` que llegaron a la sección "puente B2B" (deep scroll o click en CTA "¿Tienes un negocio?"). Este es el **caballo de Troya** — el trabajador comparte el PDF y el dueño llega curioseando. |
-| Exclusiones | Empresas ya registradas |
+| Audiencias personalizadas | ~~Retargeting de visitantes de `/lanzamiento` que llegaron a la sección "puente B2B" (deep scroll o click en CTA "¿Tienes un negocio?"). Este es el **caballo de Troya** — el trabajador comparte el PDF y el dueño llega curioseando.~~ **Ninguna.** El «caballo de Troya» dependía de la campaña 1, parqueada por la decisión de salida B: sin gasto en B2C no hay visitantes que retargetear. **Arranca en frío, y eso es deliberado.** |
+| Exclusiones | Empresas ya registradas. *(Y nada más: no hay pool propio del cual excluir todavía.)* |
 
 **Ubicaciones:** Feed de Facebook + Feed de Instagram + Marketplace. Sin Reels ni Stories — el buyer profesional consume feed, no vertical.
 
@@ -222,7 +234,7 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 | Datos profesionales | Cargo: "contador público", "analista de nómina", "consultor RRHH", "gestor contable" (Meta tiene targeting por cargo profesional para Colombia) |
 | Intereses | "Junta Central de Contadores", "Instituto Nacional de Contadores Públicos", "Contapyme", "Siigo Contador", "declaración de renta persona natural" |
 | Grupos y páginas | Páginas afines de contaduría y asesoría contable en Colombia |
-| Exclusiones | Empresas ya registradas y contadores ya inscritos al programa |
+| Exclusiones | Empresas ya registradas. ~~Y contadores ya inscritos al programa~~ — **no hay programa ni inscripción**, así que esa exclusión no tiene sobre qué aplicarse |
 
 **Ubicaciones:** Feed de Facebook + Feed de Instagram + LinkedIn (si activa después el conector). Sin video vertical.
 
