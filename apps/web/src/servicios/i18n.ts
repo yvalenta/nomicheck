@@ -50,6 +50,12 @@ export interface Textos {
   hero: { eyebrow: string; titulo1: string; titulo2: string; bajada: string };
   datos: { servicios: string; parametros: string; reglas: string; llave: string };
   agente: { titulo: string; orden: string; copiar: string; copiado: string; pago: string };
+  /** El paso siguiente para una empresa. Existía para agentes (`agente`) y no
+   *  para empresas: la página argumentaba muy bien y después no ofrecía ninguna
+   *  acción — medido el 2026-08-15, sus únicos dos enlaces eran el Swagger y el
+   *  verificador. El portal, el registro con NIT y el panel de nómina ya
+   *  estaban construidos; lo que faltaba era decirlo acá. */
+  empresaCta: { titulo: string; entrar: string; registrar: string; escribir: string; nota: string };
   audiencias: Record<Audiencia, PerfilAudiencia>;
   calculadora: {
     insignia: string;
@@ -156,6 +162,13 @@ const ES: Textos = {
     copiar: "Copiar",
     copiado: "Copiado",
     pago: "pago: HTTP 402 (x402)",
+  },
+  empresaCta: {
+    titulo: "El siguiente paso para tu empresa",
+    entrar: "Entrar al portal",
+    registrar: "Registrar mi empresa",
+    escribir: "Escríbenos",
+    nota: "El registro pide NIT y sector. El portal liquida por periodo, marca discrepancias y deja la auditoría firmada.",
   },
   audiencias: {
     persona: {
@@ -358,6 +371,13 @@ const EN: Textos = {
     copiar: "Copy",
     copiado: "Copied",
     pago: "payment: HTTP 402 (x402)",
+  },
+  empresaCta: {
+    titulo: "Next step for your company",
+    entrar: "Go to the portal",
+    registrar: "Register my company",
+    escribir: "Write to us",
+    nota: "Signing up asks for your tax ID and sector. The portal runs payroll per period, flags discrepancies and leaves a signed audit trail.",
   },
   audiencias: {
     persona: {

@@ -33,6 +33,7 @@ import {
   type Textos,
 } from "./i18n";
 import CatalogoVivo from "./CatalogoVivo";
+import { contactoDe } from "./catalogo";
 
 const CalculadoraLiquidacion = lazy(() => import("./CalculadoraLiquidacion"));
 // recharts es el vendor más pesado de la página: se baja al llegar acá, no al
@@ -79,6 +80,11 @@ interface Vivo {
   /** `x-x402.precioUsd` de `/liquidar` — el cálculo del que vive una empresa.
    *  Se lee del servidor y no se escribe acá, igual que todo lo demás. */
   precioLiquidarUsd: number | null;
+  /** La dirección de contacto que el API publica en su OpenAPI. `null` mientras
+   *  carga o si el servidor no la declara — y en ese caso NO se ofrece enlace:
+   *  ver `contactoDe` en `catalogo.ts`, escrito sobre un `mailto:` que estuvo
+   *  servido apuntando a un dominio inexistente. */
+  contacto: string | null;
 }
 
 function useDatosVivos(): Vivo {
@@ -88,6 +94,7 @@ function useDatosVivos(): Vivo {
     parametros: null,
     operaciones: null,
     precioLiquidarUsd: null,
+    contacto: null,
   });
 
   useEffect(() => {
@@ -116,6 +123,7 @@ function useDatosVivos(): Vivo {
             typeof doc?.paths?.["/liquidar"]?.post?.["x-x402"]?.precioUsd === "number"
               ? doc.paths["/liquidar"].post["x-x402"].precioUsd
               : null,
+          contacto: doc ? contactoDe(doc) : null,
         });
       })
       .catch(() => undefined);
@@ -239,6 +247,54 @@ function ParaTuAgente({ t }: { t: Textos }) {
   );
 }
 
+/** El paso siguiente para una empresa — el espejo de `ParaTuAgente`.
+ *
+ *  Existía para agentes y no para empresas, y eso se midió el 2026-08-15: en
+ *  toda la página había cinco botones (idioma, las tres audiencias y "calcular
+ *  gratis") y dos enlaces (Swagger y el verificador). Quien leía "Liquidar es
+ *  fácil. Demostrar que está bien, no", movía la calculadora de costos y veía
+ *  el ahorro, **no tenía después ninguna acción que tomar** — mientras el
+ *  portal de empresa, el registro con NIT y el panel de nómina ya llevaban
+ *  meses construidos y servidos en `/empresa`.
+ *
+ *  `contacto` llega del OpenAPI del servidor. Si no llega, el botón de escribir
+ *  **no se pinta**: un `mailto:` a una dirección que no existe se ve idéntico a
+ *  uno que funciona, y el que escribe no se entera nunca. */
+function ParaTuEmpresa({ t, contacto }: { t: Textos; contacto: string | null }) {
+  return (
+    <div className="mt-8">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-white/45 font-[family-name:var(--font-display)] mb-2">
+        {t.empresaCta.titulo}
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <a
+          href="/empresa"
+          className="inline-flex items-center gap-1.5 rounded-md bg-white text-slate-900 px-3.5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
+        >
+          <Building2 className="w-3.5 h-3.5" aria-hidden />
+          {t.empresaCta.registrar}
+        </a>
+        <a
+          href="/login?rol=empresa"
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/20 hover:border-white/40 px-3.5 py-2 text-[13px] text-white/80 transition-colors"
+        >
+          {t.empresaCta.entrar}
+          <ArrowUpRight className="w-3.5 h-3.5" aria-hidden />
+        </a>
+        {contacto && (
+          <a
+            href={`mailto:${contacto}?subject=${encodeURIComponent("NomiCheck para empresas")}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/20 hover:border-white/40 px-3.5 py-2 text-[13px] text-white/80 transition-colors"
+          >
+            {t.empresaCta.escribir}
+          </a>
+        )}
+      </div>
+      <p className="mt-3 text-[11px] text-white/40 max-w-xl leading-relaxed">{t.empresaCta.nota}</p>
+    </div>
+  );
+}
+
 export default function Servicios() {
   const [idioma, setIdioma] = useState<Idioma>(idiomaInicial);
   const [audiencia, setAudiencia] = useState<Audiencia>("persona");
@@ -307,6 +363,7 @@ export default function Servicios() {
           </div>
 
           {audiencia === "bot" && <ParaTuAgente t={t} />}
+          {audiencia === "empresa" && <ParaTuEmpresa t={t} contacto={vivo.contacto} />}
 
           {/* Franja de datos — TODOS leídos del servidor. Un número escrito
               aquí se volvería falso sin que nadie se entere. */}

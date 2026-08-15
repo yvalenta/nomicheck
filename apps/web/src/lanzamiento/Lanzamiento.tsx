@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Scale, Shield, Zap } from "lucide-react";
 import ReciboDemo from "./ReciboDemo.tsx";
 import { trackEvento } from "./tracking.ts";
+import { contactoDe } from "../servicios/catalogo.ts";
 
 // Landing canónica (SDD §16 + sdd/marketing/posicionamiento.md). Sirve a las
 // 4 campañas Meta Ads simultáneamente vía anclas (#hero, #caso-real, #empresas,
@@ -479,10 +480,30 @@ export default function Lanzamiento() {
     trackEvento("registro_empresa", { paso: "landing_cta" });
     window.location.href = "/login?rol=empresa";
   }
-  function irAContadores() {
+  // El destino se PREGUNTA al servidor, no se escribe acá.
+  //
+  // Hasta el 2026-08-15 esta función mandaba a `mailto:hola@nomicheck.co`, y
+  // ese dominio **no existe**: sin NS, sin A y sin MX, medido. O sea que cada
+  // contador que hizo click abrió su cliente de correo, escribió, envió — y el
+  // mensaje rebotó lejos de acá. Nada se veía roto: un `mailto:` a un dominio
+  // muerto es visualmente idéntico a uno que funciona, y el único que se entera
+  // es quien escribió.
+  //
+  // La dirección buena ya la publica el API en su propio OpenAPI, así que se
+  // lee de ahí. Si no se puede leer, se manda a `/servicios` —que argumenta el
+  // caso y ofrece registro y portal— en vez de ofrecer un correo que rebota.
+  async function irAContadores() {
     trackEvento("interes_partners", {});
-    // TODO: crear /programa-contadores cuando el volumen justifique landing propia.
-    window.location.href = "mailto:hola@nomicheck.co?subject=Programa%20para%20contadores";
+    let correo: string | null = null;
+    try {
+      const r = await fetch("/api/batch/openapi.json");
+      correo = r.ok ? contactoDe(await r.json()) : null;
+    } catch {
+      correo = null;
+    }
+    window.location.href = correo
+      ? `mailto:${correo}?subject=${encodeURIComponent("Programa para contadores")}`
+      : "/servicios";
   }
 
   useEffect(() => {

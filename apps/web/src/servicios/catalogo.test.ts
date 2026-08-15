@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serviciosDe } from "./catalogo";
+import { contactoDe, serviciosDe } from "./catalogo";
 
 // El modo de falla que importa: que la landing pinte "Gratis" sobre algo que
 // cobra, o un precio sobre algo que no. Las dos versiones mienten al visitante,
@@ -76,5 +76,42 @@ describe("catálogo leído del OpenAPI", () => {
 
   it("un documento sin `paths` devuelve lista vacía en vez de reventar", () => {
     expect(serviciosDe({})).toEqual([]);
+  });
+});
+
+// El contacto se DERIVA del servidor por un error que estuvo servido: el CTA
+// para contadores mandaba a `hola@nomicheck.co`, un dominio sin NS, sin A y sin
+// MX. El correo se escribía y rebotaba, y la página se veía perfecta.
+//
+// La regla que estas pruebas fijan: **ante la duda, no hay enlace.** Ofrecer un
+// `mailto:` roto es peor que no ofrecer ninguno — el que no está se nota, el
+// que rebota no.
+describe("contacto leído del OpenAPI", () => {
+  it("devuelve la dirección que el servidor publica", () => {
+    expect(contactoDe({ info: { contact: { email: "hola@ejemplo.org" } } })).toBe(
+      "hola@ejemplo.org",
+    );
+  });
+
+  it("un documento sin `info` no revienta: devuelve null", () => {
+    expect(contactoDe({})).toBeNull();
+    expect(contactoDe({ info: {} })).toBeNull();
+    expect(contactoDe({ info: { contact: {} } })).toBeNull();
+  });
+
+  it("una cadena vacía o un marcador de posición NO se vuelven un mailto", () => {
+    expect(contactoDe({ info: { contact: { email: "" } } })).toBeNull();
+    expect(contactoDe({ info: { contact: { email: "  " } } })).toBeNull();
+    expect(contactoDe({ info: { contact: { email: "pendiente" } } })).toBeNull();
+  });
+
+  it("un `null` servido explícitamente también es null", () => {
+    expect(contactoDe({ info: { contact: { email: null } } })).toBeNull();
+  });
+
+  it("recorta los espacios de alrededor en vez de armar un mailto con ellos", () => {
+    expect(contactoDe({ info: { contact: { email: " hola@ejemplo.org " } } })).toBe(
+      "hola@ejemplo.org",
+    );
   });
 });
