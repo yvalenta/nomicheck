@@ -7,6 +7,7 @@ import cors from "cors";
 import router from "./routes/index.js";
 import { detenerBoss, getBoss } from "./lib/boss.js";
 import { delegadoCors } from "./lib/corsPublico.js";
+import { construirLlmsTxt } from "./services/llmsTxtService.js";
 import { registro } from "./lib/registro.js";
 import { montarMuroX402 } from "./lib/x402Muro.js";
 import { registrarAcceso } from "./middleware/acceso.js";
@@ -44,6 +45,16 @@ app.use(express.json());
 montarMuroX402(app);
 
 app.use("/api", router);
+
+// `/llms.txt` va ANTES del fallback del SPA, y esa posición es el arreglo.
+// Con el catch-all adelante, cualquier ruta fuera de `/api` devolvía el HTML
+// de React con 200: un agente pedía este archivo, recibía una página, y no
+// tenía forma de saber que no existía. Un 200 que miente es peor que un 404.
+app.get("/llms.txt", (_req, res) => {
+  res.type("text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.send(construirLlmsTxt());
+});
 
 // Esta misma imagen sirve el build estático de apps/web (un solo contenedor, un
 // solo puerto) — no hay separación api/web en runtime. Lo construye

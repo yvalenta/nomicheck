@@ -18,6 +18,7 @@ import {
   ErrorLoteSinWallets,
 } from "../services/batchPagoOnchainService.js";
 import { ejecutarBatchVerificacion, resumenPrechequeo } from "../services/batchVerificacionService.js";
+import { construirQuickstart } from "../services/quickstartService.js";
 import { generarParametrosSnapshot } from "../services/parametrosSnapshotService.js";
 import {
   batchToCsv,
@@ -422,6 +423,18 @@ const jsonSchemaLiquidacionFinal = zodToJsonSchema(batchLiquidacionFinalSchema, 
 batchPublicoRouter.get("/openapi.json", (_req: Request, res: Response) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
   return res.status(200).json(construirOpenApi());
+});
+
+// TODO lo que un agente comprador necesita, en UNA llamada: qué es, qué es
+// gratis, cuánto cuesta lo pagado, cómo se paga, cómo se verifica la salida sin
+// confiar en nosotros, y qué NO hace. Las piezas ya existían desparramadas en
+// media docena de endpoints; esto es la puerta que las ordena.
+//
+// Se genera del código —el precio sale de la misma constante que cobra el muro—
+// para que no pueda mentir el día que algo cambie.
+batchPublicoRouter.get("/quickstart", (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json(construirQuickstart());
 });
 
 batchPublicoRouter.get("/liquidacion-final/schema/v1.json", (_req: Request, res: Response) => {
