@@ -122,6 +122,13 @@ export function construirQuickstart() {
       "No calcula la nómina: verifica una que ya existe.",
     ],
 
+    manifiesto: {
+      url: `${base}/api/batch/manifiesto`,
+      queTrae:
+        "En qué creemos, qué NO afirmamos, y las debilidades que conocemos — " +
+        "con fecha. Incluida la más incómoda: todavía nadie nos compró.",
+    },
+
     limites: {
       docs: `${base}/api/batch/schema/v1.json`,
       nota: "Los topes por lote se publican como `maxItems` en el esquema servido.",

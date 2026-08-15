@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { problemaDeEntrada, rutasPagasSinEsquema } from "../validacionPrevia.js";
 import { PRECIOS_USD, RUTAS_CON_MURO } from "../x402Config.js";
 import { construirPricing, rutasPagasSinPorque } from "../../services/pricingService.js";
+import { cantidadDeDebilidades, construirManifiesto } from "../../services/manifiestoService.js";
+import { compararComprobante } from "../../services/verificacionComprobanteService.js";
 
 // En x402 el pago es inmediato y final. Lo que estas pruebas defienden no es
 // una función: es que un comprador no pague por su propio typo.
@@ -89,5 +91,40 @@ describe("pricing", () => {
       expect(g.porque.length).toBeGreaterThan(40);
       expect(g.precioUsd).toBe(0);
     }
+  });
+});
+
+describe("manifiesto", () => {
+  it("declara debilidades conocidas — una lista vacía deja de ser honesta", () => {
+    expect(cantidadDeDebilidades()).toBeGreaterThanOrEqual(5);
+  });
+
+  it("cada debilidad trae CUÁNDO pasó: sin fecha es humildad de folleto", () => {
+    for (const d of construirManifiesto().debilidadesConocidas) {
+      expect(d.cuando.length).toBeGreaterThan(2);
+      expect(d.detalle.length).toBeGreaterThan(60);
+    }
+  });
+
+  it("incluye la más incómoda: que todavía nadie compró", () => {
+    const texto = construirManifiesto().debilidadesConocidas.map((d) => d.que).join(" ");
+    expect(texto).toMatch(/nadie nos ha comprado/i);
+  });
+
+  it("dice lo que NO afirma, no solo en lo que cree", () => {
+    const m = construirManifiesto();
+    expect(m.loQueNoAfirmamos.length).toBeGreaterThanOrEqual(4);
+    expect(m.loQueNoAfirmamos.join(" ")).toMatch(/no_verificable_extralegal/);
+  });
+
+  it("el principio de null vs 0 está declarado, y el código lo cumple", () => {
+    expect(construirManifiesto().enQueCreemos.join(" ")).toMatch(/ausencia de dato es `null`, nunca `0`/);
+    // Y la otra mitad: que el motor de verdad devuelva null para lo extralegal.
+    const linea = compararComprobante(
+      [{ nombre: "Bono de productividad", valor: 500000 }],
+      []
+    ).lineas.find((l) => l.veredicto === "no_verificable_extralegal");
+    expect(linea?.valorCalculado).toBeNull();
+    expect(linea?.delta).toBeNull();
   });
 });

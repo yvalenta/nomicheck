@@ -78,9 +78,22 @@ export interface LineaVerificada {
   claveConcepto: ClaveConceptoLegal | "extralegal";
   nombreDeclarado: string;
   valorDeclarado: number;
-  valorCalculado: number;
-  /** valorDeclarado - valorCalculado, sin ajustar por dirección devengo/deducción. */
-  delta: number;
+  /**
+   * Lo que la ley manda para esta línea, o **`null` cuando no hay con qué
+   * derivarlo** (líneas extralegales: bonos, comisiones).
+   *
+   * Antes iba `0` en ese caso, y `0` es una afirmación: dice "la ley manda
+   * cero". La verdad es "no tengo base legal para saberlo", y quien lee
+   * `declarado $500.000 · ley $0` entiende que le pagaron de más. La ausencia
+   * de dato es `null`, nunca `0`.
+   */
+  valorCalculado: number | null;
+  /**
+   * `valorDeclarado - valorCalculado`, sin ajustar por dirección
+   * devengo/deducción. `null` cuando `valorCalculado` lo es: una resta contra
+   * lo desconocido no da cero, no da nada.
+   */
+  delta: number | null;
   /** Efecto neto sobre lo que recibe el trabajador: devengo usa `delta` tal
    * cual, deducción usa `-delta` (deducir de más reduce el neto). */
   impactoNeto: number;

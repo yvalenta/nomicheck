@@ -18,6 +18,7 @@ import {
   ErrorLoteSinWallets,
 } from "../services/batchPagoOnchainService.js";
 import { ejecutarBatchVerificacion, resumenPrechequeo } from "../services/batchVerificacionService.js";
+import { construirManifiesto } from "../services/manifiestoService.js";
 import { construirPricing } from "../services/pricingService.js";
 import { construirQuickstart } from "../services/quickstartService.js";
 import { generarParametrosSnapshot } from "../services/parametrosSnapshotService.js";
@@ -436,6 +437,14 @@ batchPublicoRouter.get("/openapi.json", (_req: Request, res: Response) => {
 // Que cuesta cada cosa Y POR QUE. El precio ya estaba publicado; el criterio
 // que lo decide, no — vivia en comentarios de codigo. Un precio sin defensa
 // escrita es el que nadie revisa: se pone una vez y se queda.
+// En que creemos, que NO afirmamos, y que sabemos que esta flojo. La tercera
+// seccion es la que importa: un servicio que vende evidencia verificable y
+// esconde sus fallas esta pidiendo la confianza que dice no necesitar.
+batchPublicoRouter.get("/manifiesto", (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json(construirManifiesto());
+});
+
 batchPublicoRouter.get("/pricing", (_req: Request, res: Response) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
   return res.status(200).json(construirPricing());

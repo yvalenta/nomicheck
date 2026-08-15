@@ -76,8 +76,12 @@ export function compararComprobante(
         claveConcepto: "extralegal",
         nombreDeclarado: item.nombre,
         valorDeclarado: item.valor,
-        valorCalculado: 0,
-        delta: 0,
+        // `null` y no `0`: no hay base legal para derivar un bono o una
+        // comisión, y decir "la ley manda cero" es una afirmación que nadie
+        // midió. `impactoNeto` SÍ es 0 —no puede sumar lo que no se sabe— y
+        // por eso queda fuera del delta neto sin ensuciarlo.
+        valorCalculado: null,
+        delta: null,
         impactoNeto: 0,
         veredicto: "no_verificable_extralegal",
       });
