@@ -1,10 +1,20 @@
-# Campañas Meta Ads — NomiCheck (v1, jul 2026)
+# Campañas Meta Ads — NomiCheck (v1 jul 2026 · **auditada contra producción el 2026-08-15**)
 
 Bloque 3 del entregable del **Prompt Maestro** (`SDD.md §16`). Cuatro campañas —una por audiencia— listas para crear vía el MCP de Meta Ads en **estado pausado**, con confirmación explícita antes de activar. No las creo yo desde este agente: esta ficha es el input verbatim para la sesión que las cree.
 
 **Fundamento de marca:** todo el copy sigue `sdd/marketing/posicionamiento.md` — tono claro/firme/cercano/riguroso/silencioso, nunca alarmista. Cualquier variante creativa que rompa esos adjetivos se descarta antes de subir a la cuenta.
 
-**Landing de destino:** `https://nomicheck.co/lanzamiento` (o el dominio final que se configure). Todas las campañas apuntan a la misma landing con anclas específicas y `utm_campaign` distinto para atribución.
+**Landing de destino:** `https://nomicheck.ynt.codes/lanzamiento`. Todas las campañas apuntan a la misma landing con anclas específicas y `utm_campaign` distinto para atribución. Las cuatro anclas (`#hero`, `#caso-real`, `#empresas`, `#contadores`) **existen y se comprobaron** en el landing servido.
+
+> ⚠️ **Este archivo se escribió en jul-2026 y se auditó contra producción el 2026-08-15.** Lo que decía antes no era un borrador impreciso: era falso en cinco puntos, y tres de ellos habrían gastado plata sin devolver nada. Cada corrección queda con su medición al lado.
+>
+> ~~`https://nomicheck.co/lanzamiento`~~ — **ese dominio no existe**: sin NS, sin registro A y sin MX, medido. Subir las campañas con ese destino mandaba **el presupuesto entero a una URL que no carga**. Producción es `nomicheck.ynt.codes`.
+>
+> **La regla que este archivo obedece desde hoy:** ninguna frase sube a Meta antes de que exista lo que promete. Un anuncio es una promesa servida a desconocidos, y no hay forma de retirarla — ver `docs/leyes/cobrar-antes-de-servir.md` en `nomicheck_ops`, que es la misma idea del lado del cobro.
+
+**Decisión de negocio, 2026-08-15 — se toma la salida B: empresas y agentes.** Eso reordena este archivo: **las campañas 3 y 4 son las elegidas**, y la 1 y la 2 quedan **parqueadas**, no borradas. Ver la tabla de presupuesto, que tiene el compromiso que esa decisión abre.
+
+**Línea base medida el 2026-08-15: la audiencia humana es CERO.** No baja: cero. El 99,7 % del tráfico a la API es nuestro propio centinela, y lo que queda como humano es casi todo la máquina de la casa. Eso es **bueno para medir** —cualquier cosa que se mueva después será atribuible sin discusión— y a la vez significa que **ningún KPI de este archivo tiene todavía un dato histórico que lo respalde**: son objetivos propuestos, no medidos.
 
 ---
 
@@ -12,26 +22,38 @@ Bloque 3 del entregable del **Prompt Maestro** (`SDD.md §16`). Cuatro campañas
 
 ### Pixel y eventos personalizados
 
-Meta Pixel base + eventos personalizados que el frontend ya emite (ver `apps/web/src/lib/tracking.ts`):
+El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ruta que decía este archivo, `apps/web/src/lib/tracking.ts`, **no existe**). Los nombres son fuente de verdad: cambiar uno acá sin sincronizarlo con Meta rompe la optimización.
 
-| Evento | Momento | Uso en optimización |
+**Lo que este archivo daba por hecho y no es cierto: el frontend NO emite estos eventos hoy.** Medido el 2026-08-15 sobre producción.
+
+| Evento | Momento previsto | **Estado medido** |
 |---|---|---|
-| `verificacion_iniciada` | Usuario abre el flujo del verificador (click "Verifica tu pago") | Micro-conversión — evento de "Interés" |
-| `verificacion_completada` | El motor produjo un `ResultadoNomina` visible al usuario | **Conversión primaria** — optimizar por este a partir de 50 eventos/semana por conjunto |
-| `discrepancia_detectada` | El resultado tiene al menos un semáforo ámbar/rojo | Evento cualificador — usar para audiencia lookalike de Campaña 2 |
-| `registro_empresa` | Un dueño completó el signup B2B | **Conversión primaria** para Campañas 3 y 4 |
-| `interes_partners` | Contador dio click en "Programa de referidos" | Micro-conversión Campaña 4 |
+| `verificacion_iniciada` | Usuario abre el flujo del verificador | **Se emite, pero mide otra cosa**: dispara al *cargar* el landing y al hacer *click* en el CTA — no cuando alguien abre el verificador |
+| `verificacion_completada` | El motor produjo un `ResultadoNomina` visible | 🔴 **No lo emite nadie.** Cero llamadas en todo el código. Era la *conversión primaria* de las campañas 1 y 2 |
+| `discrepancia_detectada` | El resultado tiene un semáforo ámbar/rojo | 🔴 **No lo emite nadie.** Era la base del lookalike de la campaña 2 |
+| `registro_empresa` | Un dueño completó el signup B2B | 🟠 **Dispara al hacer click en el CTA del landing**, no al completar el registro. Optimizar Meta contra eso es **pagar por curiosidad** |
+| `interes_partners` | Contador dio click en "Programa de referidos" | 🟠 Se emite, pero el programa que anuncia no existe (ver campaña 4) |
+
+**Y el Pixel no está instalado.** Medido en el landing servido: `typeof window.fbq === "undefined"`. `tracking.ts` lo dice de frente — sin `fbq`, las cinco funciones son no-op. O sea que **hoy no hay ninguna medición de conversión**, y no la habrá por instalar el pixel solo: faltan además los dos eventos que nadie emite.
+
+> **Precondición dura, antes de gastar un peso:** instalar el Pixel base **y** emitir `verificacion_completada` y `registro_empresa` en el momento real (resultado a la vista / registro completado, no click). Sin eso, Meta optimiza contra la señal equivocada y el presupuesto compra clicks de gente que nunca llegó a nada. No es un pendiente de marketing: es trabajo de producto, y va primero.
 
 ### Distribución de presupuesto (fase de aprendizaje, 7-14 días)
 
-| Campaña | % del presupuesto total | Justificación |
-|---|---|---|
-| 1 — Verifica tu pago (A) | **60%** | Adquisición masiva. Alimenta el pool para lookalike de Campaña 2. |
-| 2 — ¿Te robaron? (B) | **15%** | Alta intención pero audiencia limitada; escala solo cuando el pool de lookalike de "discrepancia_detectada" tenga suficiente base. |
-| 3 — Automatiza tu nómina (C) | **20%** | Menor volumen pero LTV alto; se mantiene incluso con CPA alto por relación CAC/LTV. |
-| 4 — Aliado técnico (D) | **5%** | Canal de referidos, siembra a bajo costo. Escala solo si los primeros 3-5 contadores convierten a >10 pymes. |
+**Reordenado el 2026-08-15 por la decisión de salida B.** El reparto original —60 % a la campaña 1, que es B2C— llevaba el grueso del dinero a la audiencia que **no puede pagar**: medido, la única forma de pago servida es USDC, y todo lo que un empleado colombiano puede usar es gratis. Traer trabajadores compra costo de hosting, no ingreso.
 
-Reasignación después de 7 días según CPA real. Si Campaña 1 tira por debajo de CPA objetivo (por definir después del primer piloto), rebalance a 40/25/25/10.
+| Campaña | % original | **% bajo salida B** | Justificación |
+|---|---|---|---|
+| 1 — Verifica tu pago (A) | ~~60 %~~ | **parqueada (0 %)** | B2C. No hay forma de que un humano pague. Ver el compromiso de abajo antes de dejarla en cero |
+| 2 — ¿Te robaron? (B) | ~~15 %~~ | **parqueada (0 %)** | B2C, y además optimiza por dos eventos que **nadie emite** |
+| 3 — Automatiza tu nómina (C) | ~~20 %~~ | **70 %** | La audiencia elegida. Empresa que puede pagar por transferencia o factura |
+| 4 — Aliado técnico (D) | ~~5 %~~ | **30 %** | Multiplicador: un contador trae varias pymes. Sube porque ya no compite con la 1 |
+
+> **El compromiso que esto abre, y que hay que decidir a ojos abiertos.** La campaña 3 declaraba su mejor audiencia como retargeting de quienes llegan por la 1 — *el trabajador comparte el PDF y el dueño llega curioseando*, el «caballo de Troya» del archivo original. **Parquear la 1 apaga ese pool.** La 3 arranca entonces con segmentación por intereses en frío, que rinde peor.
+>
+> Las dos salidas son defendibles y **la elige Yonatan**: (a) 70/30 en frío, sin gastar en B2C; o (b) dejar un piso chico en la 1 —10-15 %— comprado **explícitamente como generador de audiencia B2B**, no como adquisición, y midiéndolo por `registro_empresa`, nunca por verificaciones.
+
+**No reasignar por CPA antes de que exista medición.** El texto original mandaba rebalancear a los 7 días «según CPA real»; hoy no hay CPA real que mirar, porque el pixel no está y la conversión primaria no se emite. Primero la precondición dura de arriba, después el piloto, después el rebalanceo.
 
 ### Reglas creative
 
@@ -117,7 +139,10 @@ Reasignación después de 7 días según CPA real. Si Campaña 1 tira por debajo
 **Gancho creativo (3 variantes):**
 1. **Dolor:** *"El mes pasado te sentiste raro con tu comprobante. Hoy puedes saber si tenías razón."*
 2. **Curiosidad:** *"Tres cifras que suelen faltar en el pago de fin de mes."* → carrusel con recargo dominical, hora extra nocturna, liquidación de prima.
-3. **Cifra:** *"$127.400 — la diferencia promedio que encuentran quienes verifican su domingo."*
+3. ~~**Cifra:** *"$127.400 — la diferencia promedio que encuentran quienes verifican su domingo."*~~ 🔴 **NO SUBIR. Es una estadística inventada presentada como medición.**
+   *"La diferencia promedio que encuentran quienes verifican"* afirma un dato agregado sobre usuarios reales. **No existe ni puede existir**: la audiencia medida es cero, y el verificador público es **anónimo y sin estado por diseño** — no persiste nada del visitante, así que ese promedio no se podrá calcular nunca a partir de nuestros propios datos, ni con tráfico.
+   Es distinto del gancho 3 de la campaña 1 (*"$127.400 — lo que la ley dice de tu domingo"*), que es **un cálculo reproducible** sobre un caso declarado: ese se sostiene si se publica con sus supuestos.
+   **Reemplazo propuesto:** *"Cuatro horas de domingo a las 10pm tienen un número exacto en el CST. Mirá cuál es."* — sin promedio, sin promesa de plata recuperada, y verificable contra el motor.
 
 **Copy del anuncio:**
 
@@ -159,14 +184,19 @@ Reasignación después de 7 días según CPA real. Si Campaña 1 tira por debajo
 **Gancho creativo (3 variantes):**
 1. **Dolor:** *"Pagar mal la liquidación no es un error contable. Es un pasivo legal."*
 2. **Curiosidad:** *"El motor de nómina que usan los contadores, ahora tú lo usas directo."*
-3. **Cifra:** *"Un contador cuesta $600.000/mes. NomiCheck Empresas cuesta menos que un almuerzo por empleado."* (validar cifras exactas con producto antes de subir)
+3. ~~**Cifra:** *"Un contador cuesta $600.000/mes. NomiCheck Empresas cuesta menos que un almuerzo por empleado."*~~ 🔴 **NO SUBIR.** El archivo pedía *validar cifras exactas con producto*; validado el 2026-08-15: **no hay cifra que validar.** El portal de empresa **no tiene precio** — ni plan, ni mensualidad, ni suscripción, buscado en la API y en los paquetes. Los únicos precios del producto son los US$0,02 por llamada del muro x402, que son de la API y no del portal. La frase inventa un precio y además lo compara.
+   **Reemplazo propuesto, mientras no haya precio de lista:** *"El mismo motor que audita liquidaciones, ahora liquidando las tuyas — con el artículo al lado de cada peso."* Sin cifra.
 
 **Copy del anuncio:**
 
 > **Liquida nómina sin miedo a incumplir.**
 > Prestaciones sociales, seguridad social, retención en la fuente — el motor calcula cada línea con la ley vigente y cita el artículo detrás. Tus colaboradores verifican solos su recibo. Tú duermes tranquilo.
 >
-> Prueba gratis 30 días. Sin tarjeta.
+> ~~Prueba gratis 30 días. Sin tarjeta.~~ → **Registra tu empresa y liquida tu primer periodo.**
+
+> 🔴 **La línea tachada prometía dos cosas falsas a la vez.** No hay prueba de 30 días —no existe *trial* en ninguna parte del producto— y al decir «prueba» implica que **después se paga**, cuando tampoco hay precio. Medido el 2026-08-15.
+>
+> El reemplazo describe **lo que la empresa realmente puede hacer hoy**, que además es fuerte: registrarse con NIT y sector, y liquidar de verdad. Y el registro **sí** es sin tarjeta — eso es cierto, pero se cae solo del texto porque nadie la pide.
 
 **CTA:** "Prueba NomiCheck Empresas" — Formulario de leads nativo pidiendo: nombre, email, teléfono, número de empleados, sector. Redirige después a `/lanzamiento?utm_campaign=empresas&utm_source=meta&utm_medium=paid_social#empresas`.
 
@@ -198,19 +228,22 @@ Reasignación después de 7 días según CPA real. Si Campaña 1 tira por debajo
 
 **Formato:**
 - Feed estático con texto largo (el buyer profesional lee). Enfoque en eficiencia y en el motor siempre actualizado.
-- Segunda variante: carrusel con 4 tarjetas mostrando (1) auditoría inmutable, (2) motor determinístico con leyes citadas, (3) exportación PILA compatible, (4) programa de referidos con comisión.
+- Segunda variante: carrusel con 4 tarjetas mostrando (1) auditoría inmutable, (2) motor determinístico con leyes citadas, (3) exportación PILA compatible, ~~(4) programa de referidos con comisión~~.
+
+> **Las tres primeras tarjetas se comprobaron y se sostienen** (2026-08-15): la bitácora de cambios existe (`AuditoriaEmpresa`), el motor cita el artículo en cada línea, y la PILA por periodo es un endpoint real (`GET /empresa/periodos/:id/pila`, con IBC real de cada recibo y no un salario estimado). **La cuarta no**: el programa de referidos no existe. Reemplazarla por una cuarta tarjeta cierta —por ejemplo, la verificación firmada que el colaborador puede hacer por su cuenta— o dejar el carrusel en tres.
 
 **Gancho creativo (3 variantes):**
 1. **Dolor:** *"Atiendes 12 pymes y pierdes 8 horas al mes verificando cálculos. NomiCheck te devuelve esas horas."*
 2. **Curiosidad:** *"El motor de reglas que audita las liquidaciones, ahora también trabaja para ti."*
-3. **Cifra:** *"Programa para contadores: 20% de comisión recurrente por cada pyme que traigas."* (validar % con producto)
+3. ~~**Cifra:** *"Programa para contadores: 20% de comisión recurrente por cada pyme que traigas."*~~ 🔴 **NO SUBIR.** Validado el 2026-08-15: **el programa de referidos no existe.** No hay comisiones, ni inscripción de contadores, ni forma de atribuir una pyme a quien la trajo — buscado en la API, los paquetes y la web. Y una comisión del 20 % **recurrente** sobre un producto que **no cobra nada** es un porcentaje de cero.
+   **Reemplazo propuesto:** *"Estamos armando el programa para contadores. Si atendés pymes, contanos qué necesitás que haga."* — convierte el anuncio en lo que de verdad es hoy: una conversación, no una oferta.
 
 **Copy del anuncio:**
 
 > **El motor de reglas actualizado con cada reforma. Ya no persigues decretos.**
 > Cada cambio del CST o del salario mínimo entra al motor con su fecha de vigencia. Tus liquidaciones usan la ley del periodo, no la de hoy. Verificas o liquidas — o ambos.
 >
-> Únete al programa para contadores.
+> ~~Únete al programa para contadores.~~ → **Contanos qué necesitás que haga.**
 
 **CTA:** "Conoce el programa para contadores" — Formulario de leads: nombre, email, teléfono, número de clientes atendidos, ciudad. Link a `/lanzamiento?utm_campaign=contadores&utm_source=meta&utm_medium=paid_social#contadores`.
 
@@ -223,10 +256,20 @@ Reasignación después de 7 días según CPA real. Si Campaña 1 tira por debajo
 
 ## Instrucciones al agente que ejecute vía MCP de Meta Ads
 
-1. **Crear la cuenta publicitaria** (o usar la que el usuario indique) y confirmar que el pixel base de NomiCheck y los eventos personalizados (`verificacion_iniciada`, `verificacion_completada`, `discrepancia_detectada`, `registro_empresa`, `interes_partners`) están disparando correctamente en `/lanzamiento`.
+0. **Puerta de entrada — no seguir si algo de esto falla.** Estas cuatro se comprobaron en rojo el 2026-08-15; hasta que estén en verde, crear campañas es preparar un gasto que no se puede evaluar:
+
+   | Precondición | Cómo se comprueba | Estado 2026-08-15 |
+   |---|---|---|
+   | El landing carga en el dominio destino | `curl -s -o /dev/null -w '%{http_code}' https://nomicheck.ynt.codes/lanzamiento` → 200 | ✅ (con el dominio corregido) |
+   | El Pixel base está instalado | en el landing servido, `typeof window.fbq === "function"` | 🔴 `undefined` |
+   | `verificacion_completada` se emite al ver el resultado | disparar el flujo y mirar el evento | 🔴 nadie lo emite |
+   | `registro_empresa` se emite **al completar el registro**, no al hacer click | completar el alta y mirar el evento | 🔴 dispara en el click del CTA |
+
+1. **Crear la cuenta publicitaria** (o usar la que el usuario indique) y confirmar que el pixel base y los eventos personalizados (`verificacion_iniciada`, `verificacion_completada`, `discrepancia_detectada`, `registro_empresa`, `interes_partners`) están disparando **de verdad** en `/lanzamiento` — no que existan en el código: que Meta los reciba.
 2. **Crear las 4 campañas en estado `PAUSED`** con los objetivos, segmentaciones, ubicaciones, formatos, copies, CTAs, presupuestos y trackings de arriba.
 3. **Estructura por campaña:** 1 Campaña → 1 Conjunto de anuncios inicial → 3 Anuncios (uno por variante de gancho).
 4. **Presupuesto**: total mensual sugerido a definir con el usuario. Distribuir según % de la tabla de arriba. Preferir CBO (Campaign Budget Optimization) sobre presupuesto a nivel de conjunto.
 5. **Verificar y esperar confirmación explícita del humano antes de activar cualquier campaña.** No activar automáticamente. Esta es una acción que gasta dinero real.
+   **Y no subir NADA de lo tachado en este archivo.** Son cuatro promesas que el producto no cumple —un promedio de usuarios que no existen, un precio que no existe, una prueba de 30 días que no existe y una comisión sobre cero— más la tarjeta de carrusel y el cierre que dependen de esa última. Cada tachado lleva su reemplazo propuesto al lado. Un anuncio publicado es una promesa servida a desconocidos y **no hay forma de retirarla** — lo mismo que ya nos costó plata del lado del cobro (`leyes/cobrar-antes-de-servir`).
 6. **Configurar reglas automáticas** después de activar: pausar automáticamente cualquier anuncio con CPA > 2× el CPA promedio del conjunto después de 3 días con ≥ 20 conversiones.
 7. **Reporte semanal automático** al humano con CPA/CTR/tasa de conversión por conjunto — el humano decide reasignación de presupuesto.
