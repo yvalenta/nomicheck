@@ -54,6 +54,43 @@ export function rutasPublicasConMuro(): { publica: string; precio: string }[] {
 }
 
 /**
+ * El 402 con el que un `GET` a una ruta paga se presenta.
+ *
+ * Existe porque el descubrimiento no usa el verbo del comprador. El facilitador
+ * de Ultravioleta —y cualquier crawler de catálogo— sondea con `GET`, y estas
+ * rutas solo tenían `.post()`: la sonda anotaba `httpStatus: 404` en las cinco
+ * mientras el muro cobraba perfecto. Medido el 2026-08-15 sobre 1.000 recursos
+ * del catálogo, el 97% contesta 402 a ese GET; éramos del ~3% que daba 404.
+ *
+ * Es la ley `guardas-miden-lo-servido` dada vuelta: nuestra guarda mide el
+ * camino que el comprador recorre y da verde con razón, la del catálogo mide el
+ * suyo y daba 404 con razón, y el comprador igual no nos veía.
+ *
+ * `accepts` sale de `requisitosDePago`, la MISMA función que arma el 402 del
+ * POST. No es una copia amable para catálogos: si divergieran, el catálogo
+ * anunciaría un precio que el muro no cobra, y el error saldría del lado del
+ * comprador.
+ *
+ * `x402Version: 1` no es un default: es lo que el muro contesta de verdad.
+ * Medido el 2026-08-15 pidiéndole v2 por tres cabeceras distintas — faremeter
+ * anuncia v1 en el desafío igual. Anunciar 2 acá haría que el desafío de
+ * descubrimiento y el que enfrenta el comprador no coincidan.
+ */
+export function desafioDeDescubrimiento(cfg: ConfigX402, precio: string, publica: string) {
+  return {
+    x402Version: 1,
+    accepts: requisitosDePago(cfg, precio),
+    // El campo `error` ya existe en el 402 del muro (vacío cuando no hay). Se
+    // usa como el canal para decir el verbo porque es el que los clientes x402
+    // muestran; un campo propio de nivel superior lo ignoraría cualquiera.
+    error:
+      `Este recurso se compra con POST ${publica}, no con GET. ` +
+      "Esta respuesta es el desafío de pago para descubrimiento: anuncia el " +
+      "precio real, y no liquida nada.",
+  };
+}
+
+/**
  * Traduce a v1 el cuerpo que faremeter manda a `/settle` y `/verify`.
  *
  * El facilitador de Ultravioleta **habla dos versiones distintas según el
@@ -344,11 +381,32 @@ export function montarMuroX402(app: Express): void {
   // archivo existe para arreglar: Express le saca el prefijo a `req.url`, y el
   // middleware terminaría anunciando `/` otra vez.
   app.use((req, res, next) => {
-    // Solo POST: los GET (`/publickey`, `/parametros`, `/schema/v1.json`,
-    // `/ejemplo`) quedan gratis a propósito — son los que permiten integrar
-    // antes de pagar y verificar la firma después.
-    const precio = req.method === "POST" ? porRuta.get(req.path) : undefined;
+    // Los GET de integración (`/publickey`, `/parametros`, `/schema/v1.json`,
+    // `/ejemplo`, `/prechequeo`) NO están en este mapa y siguen gratis: son los
+    // que permiten integrar antes de pagar y verificar la firma después.
+    const precio = porRuta.get(req.path);
     if (precio === undefined) return next();
+
+    // ── GET/HEAD: desafío de descubrimiento, nunca una venta ────────────────
+    if (req.method === "GET" || req.method === "HEAD") {
+      // Un GET con `X-PAYMENT` NO se liquida. Es la ley `cobrar-antes-de-servir`
+      // en su forma más cruda: por GET no hay cuerpo que procesar, así que
+      // aceptar el pago sería cobrar por algo que no podemos entregar, y el
+      // pago x402 es inmediato y final — no habría cómo devolverlo.
+      if (req.headers["x-payment"]) {
+        return res.status(405).set("Allow", "POST").json({
+          error: "wrong_method",
+          mensaje:
+            `Llegó un pago por GET y NO se liquidó. Este recurso se sirve con ` +
+            `POST ${req.path}: por GET no hay cuerpo que procesar, y cobrar por ` +
+            "algo que no se puede entregar no tiene vuelta atrás en x402. " +
+            "Reintentá el POST con la misma autorización.",
+        });
+      }
+      return res.status(402).set("Allow", "POST").json(desafioDeDescubrimiento(cfg, precio, req.path));
+    }
+
+    if (req.method !== "POST") return next();
 
     // El origen se normaliza al público configurado en vez de confiar en los
     // headers: así el 402 anuncia siempre la URL por la que se compra, venga

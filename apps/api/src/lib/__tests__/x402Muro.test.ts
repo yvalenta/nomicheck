@@ -16,9 +16,16 @@ import {
   BASE_SEPOLIA,
   extensionBazaar,
   perfilFacilitador,
+  requisitosDePago,
 } from "../x402Config.js";
 import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../ejemplosBatch.js";
-import { aFormatoV1, gruposPorFacilitador, redDelPago } from "../x402Muro.js";
+import {
+  aFormatoV1,
+  desafioDeDescubrimiento,
+  gruposPorFacilitador,
+  redDelPago,
+  rutasPublicasConMuro,
+} from "../x402Muro.js";
 
 /** Lo que faremeter 0.22.0 manda de verdad, copiado de la corrida real. */
 const CUERPO_V2 = {
@@ -302,5 +309,61 @@ describe("extensionBazaar", () => {
     expect(ext.info.input.method).toBe("POST");
     expect(ext.info.input.type).toBe("http");
     expect(ext.info.input.bodyType).toBe("json");
+  });
+});
+
+// El desafío que contesta un GET a una ruta paga.
+//
+// Lo que protegen estas pruebas no es el 402: es que ese 402 NO sea una segunda
+// fuente. El catálogo se sondea con GET y estas rutas solo tenían `.post()`, así
+// que la sonda del facilitador anotaba 404 en las cinco mientras el muro cobraba
+// perfecto — medido el 2026-08-15, con el 97% del catálogo contestando 402 al
+// mismo GET. La tentación al arreglarlo es escribir un 402 "para catálogos"; si
+// divergiera del que cobra, el catálogo anunciaría un precio que el muro no
+// cobra y el error saldría del lado del comprador.
+describe("desafío de descubrimiento (GET a una ruta paga)", () => {
+  const cfg = {
+    activo: true,
+    facilitatorURL: "https://facilitator.ultravioletadao.xyz",
+    facilitadoresPorRed: {},
+    redes: [BASE_MAINNET, AVALANCHE_MAINNET],
+    redesInvalidas: [],
+    payTo: "0x1111111111111111111111111111111111111111",
+    origenPublico: "https://nomicheck.ynt.codes",
+  };
+
+  it("el `accepts` es EL MISMO que el del muro, no una copia para catálogos", () => {
+    const d = desafioDeDescubrimiento(cfg, "/verificar", "/api/batch/verificar");
+    expect(d.accepts).toEqual(requisitosDePago(cfg, "/verificar"));
+  });
+
+  it("anuncia todas las redes configuradas, no solo la primera", () => {
+    const d = desafioDeDescubrimiento(cfg, "/verificar", "/api/batch/verificar");
+    expect(d.accepts.map((a) => a.network)).toEqual([
+      BASE_MAINNET.caip2,
+      AVALANCHE_MAINNET.caip2,
+    ]);
+  });
+
+  it("dice x402Version 1 — que es la que el muro contesta de verdad", () => {
+    // No es un default: el 2026-08-15 se le pidió v2 al muro desplegado por tres
+    // cabeceras distintas y contestó v1 en las tres. Si el desafío dijera 2, el
+    // comprador vería una versión en el catálogo y otra al comprar.
+    expect(desafioDeDescubrimiento(cfg, "/verificar", "/api/batch/verificar").x402Version).toBe(1);
+  });
+
+  it("dice el VERBO: un 402 sin eso manda a pagar por GET", () => {
+    const d = desafioDeDescubrimiento(cfg, "/verificar", "/api/batch/verificar");
+    expect(d.error).toContain("POST /api/batch/verificar");
+    expect(d.error).toMatch(/no liquida nada/);
+  });
+
+  it("el precio del desafío es el precio que cobra el muro", () => {
+    for (const { publica, precio } of rutasPublicasConMuro()) {
+      const d = desafioDeDescubrimiento(cfg, precio, publica);
+      expect(d.accepts[0].maxAmountRequired).toBe(requisitosDePago(cfg, precio)[0].maxAmountRequired);
+      // Y el recurso anunciado es el de la ruta paga, no el de otra.
+      expect(d.accepts[0].resource).toBe(`${cfg.origenPublico}/api/batch${precio}`);
+    }
   });
 });
