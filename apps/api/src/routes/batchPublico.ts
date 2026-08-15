@@ -18,6 +18,7 @@ import {
   ErrorLoteSinWallets,
 } from "../services/batchPagoOnchainService.js";
 import { ejecutarBatchVerificacion, resumenPrechequeo } from "../services/batchVerificacionService.js";
+import { construirPricing } from "../services/pricingService.js";
 import { construirQuickstart } from "../services/quickstartService.js";
 import { generarParametrosSnapshot } from "../services/parametrosSnapshotService.js";
 import {
@@ -432,6 +433,14 @@ batchPublicoRouter.get("/openapi.json", (_req: Request, res: Response) => {
 //
 // Se genera del código —el precio sale de la misma constante que cobra el muro—
 // para que no pueda mentir el día que algo cambie.
+// Que cuesta cada cosa Y POR QUE. El precio ya estaba publicado; el criterio
+// que lo decide, no — vivia en comentarios de codigo. Un precio sin defensa
+// escrita es el que nadie revisa: se pone una vez y se queda.
+batchPublicoRouter.get("/pricing", (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json(construirPricing());
+});
+
 batchPublicoRouter.get("/quickstart", (_req: Request, res: Response) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
   return res.status(200).json(construirQuickstart());

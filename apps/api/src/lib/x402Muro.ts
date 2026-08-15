@@ -32,6 +32,7 @@ import {
 } from "./x402Config.js";
 import { credencialesCdp, jwtCdp } from "./cdpAuth.js";
 import { registro } from "./registro.js";
+import { problemaDeEntrada, rutasPagasSinEsquema } from "./validacionPrevia.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
 const PREFIJO = "/api/batch";
@@ -311,6 +312,16 @@ export function montarMuroX402(app: Express): void {
   if (!cfg.activo) return;
 
   const problemas = problemasDeConfig(cfg);
+  // Una ruta que cobra sin esquema de validacion previa vuelve a abrir el
+  // agujero del "typo pagado". Se revienta al arrancar, no con el primer
+  // comprador.
+  const sinEsquema = rutasPagasSinEsquema(RUTAS_CON_MURO);
+  if (sinEsquema.length > 0) {
+    problemas.push(
+      `estas rutas cobran sin validacion previa: ${sinEsquema.join(", ")} ` +
+        "(agregales su esquema en lib/validacionPrevia.ts)"
+    );
+  }
   if (problemas.length > 0) {
     // Reventar al arrancar y no en la primera petición: un muro mal
     // configurado que falla recién cuando llega un comprador es peor que uno
@@ -344,6 +355,17 @@ export function montarMuroX402(app: Express): void {
     // el request por donde venga. Nada aguas abajo lee host/protocolo.
     req.headers.host = publico.host;
     req.headers["x-forwarded-proto"] = publico.protocol.replace(":", "");
+
+    // VALIDAR ANTES DE COBRAR. En x402 el pago es inmediato y final: un cuerpo
+    // mal formado que llegue al muro se liquida igual, y el comprador termina
+    // pagando por su propio typo y recibiendo un 400. Validar no es servir —
+    // no revela resultado, no corre el motor, no toca la base— asi que va
+    // antes del cobro sin tocar la ley de "cobrar antes de servir".
+    const malFormado = problemaDeEntrada(precio, req.body);
+    if (malFormado) {
+      registro.info("x402", `rechazado sin cobrar: ${req.path} con cuerpo invalido`);
+      return res.status(400).json(malFormado);
+    }
 
     let m = cache.get(req.path);
     if (!m) {
