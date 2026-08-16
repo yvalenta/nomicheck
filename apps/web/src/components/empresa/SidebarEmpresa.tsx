@@ -10,13 +10,14 @@ import {
   LayoutDashboard,
   Menu,
   PanelLeftClose,
+  Receipt,
   ShieldCheck,
   Users,
   Wallet,
   X,
 } from "lucide-react";
 
-// Navegación del panel. Reemplaza al SegmentedControl: diez secciones no caben
+// Navegación del panel. Reemplaza al SegmentedControl: once secciones no caben
 // en una fila (el scroll horizontal era un parche), y sin agrupar no se lee la
 // relación entre ellas. Aquí van en cuatro grupos que siguen el flujo real de
 // trabajo — a quién le pagas, cómo liquidas, qué revisas, qué administras.
@@ -35,7 +36,8 @@ export type Seccion =
   | "pila"
   | "cumplimiento"
   | "sedes"
-  | "auditoria";
+  | "auditoria"
+  | "cuenta";
 
 type Item = { valor: Seccion; etiqueta: string; Icon: typeof Users };
 
@@ -66,6 +68,10 @@ const GRUPOS: { titulo: string; items: Item[] }[] = [
       { valor: "cumplimiento", etiqueta: "Cumplimiento", Icon: ShieldCheck },
       { valor: "discrepancias", etiqueta: "Discrepancias", Icon: AlertTriangle },
       { valor: "auditoria", etiqueta: "Auditoría", Icon: History },
+      // Va en Control y no en Liquidación a propósito: no es un paso de la
+      // nómina, es lo que la empresa mira para saber qué se le va a cobrar
+      // antes de que le llegue el documento.
+      { valor: "cuenta", etiqueta: "Tu cuenta", Icon: Receipt },
     ],
   },
 ];

@@ -25,6 +25,7 @@ const PilaEmpresa = lazy(() => import("./components/empresa/PilaEmpresa.tsx"));
 const CumplimientoEmpresa = lazy(() => import("./components/empresa/CumplimientoEmpresa.tsx"));
 const SedesEmpresa = lazy(() => import("./components/empresa/SedesEmpresa.tsx"));
 const AuditoriaEmpresa = lazy(() => import("./components/empresa/AuditoriaEmpresa.tsx"));
+const CuentaEmpresa = lazy(() => import("./components/empresa/CuentaEmpresa.tsx"));
 
 
 export default function EmpresaApp() {
@@ -105,6 +106,7 @@ const PRECARGA: Record<Seccion, () => Promise<unknown>> = {
   cumplimiento: () => import("./components/empresa/CumplimientoEmpresa.tsx"),
   sedes: () => import("./components/empresa/SedesEmpresa.tsx"),
   auditoria: () => import("./components/empresa/AuditoriaEmpresa.tsx"),
+  cuenta: () => import("./components/empresa/CuentaEmpresa.tsx"),
 };
 
 function PanelConRutas() {
@@ -133,6 +135,7 @@ function PanelConRutas() {
         <Route path="/cumplimiento" element={<CumplimientoEmpresa />} />
         <Route path="/sedes" element={<SedesEmpresa />} />
         <Route path="/auditoria" element={<AuditoriaEmpresa />} />
+        <Route path="/cuenta" element={<CuentaEmpresa />} />
       </Routes>
         </Suspense>
       </div>

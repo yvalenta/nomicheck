@@ -596,3 +596,48 @@ export interface FiltrosAuditoriaCliente {
 export function listarAuditoria(f: FiltrosAuditoriaCliente = {}): Promise<RespuestaPaginada<EntradaAuditoria>> {
   return autenticado(`/empresa/auditoria${qs({ ...f, limit: f.limit ?? 25 })}`);
 }
+
+// --- Estado de cuenta: qué se le va a cobrar a la empresa este mes ---
+//
+// El monto NO se calcula acá. Sale del mismo servicio que produce la cuenta de
+// cobro (`services/medidorCierres.ts`, sitio de afirmación del precio), así que
+// esta pantalla no puede mostrarle a la empresa un número distinto del que
+// después le llega. Replicar la tabla de bandas en el cliente sería exactamente
+// la clase de segunda copia que este repo evita.
+
+export interface BandaPrecio {
+  desde: number;
+  hasta: number | null;
+  precioCop: number | null;
+  etiqueta: string;
+}
+
+export interface CierreDeCuenta {
+  periodoId: number;
+  fechaInicio: string;
+  fechaFin: string;
+  estadoCierre: string;
+  conEvidencia: number;
+  cerradoEn: string;
+  firmaValida: boolean;
+}
+
+export interface EstadoCuenta {
+  mes: string;
+  empresaId: number;
+  cierresTotales: number;
+  cierresFacturables: number;
+  /** Los que NO se cobran, con su motivo. Se muestran: un descuento sin
+   *  explicación genera la misma llamada que un cobro de más. */
+  excluidos: { periodoId: number; motivo: string }[];
+  empleadosFacturables: number;
+  banda: BandaPrecio | null;
+  precioCop: number | null;
+  requiereConversacion: boolean;
+  bandas: BandaPrecio[];
+  detalle: CierreDeCuenta[];
+}
+
+export function obtenerEstadoCuenta(mes?: string): Promise<EstadoCuenta> {
+  return autenticado(`/empresa/cuenta${mes ? `?mes=${mes}` : ""}`);
+}
