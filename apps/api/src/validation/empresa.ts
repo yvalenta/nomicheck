@@ -10,6 +10,21 @@ export const registroSchema = z.object({
     nit: z.string().min(1),
     sector: z.string().min(1),
   }),
+  // La campaña que trajo a esta empresa. El cliente ya la normaliza y la
+  // valida (`web/src/lanzamiento/origenCampana.ts`); acá se vuelve a acotar con
+  // la MISMA forma porque el cliente es un lugar del que no se puede depender:
+  // este endpoint es público y cualquiera puede postear lo que quiera.
+  //
+  // Un campo libre que viaja del anuncio a la base es donde termina apareciendo
+  // un dato personal que nadie pidió, así que lo que no calza no se guarda —
+  // pero tampoco rechaza el registro: perder la atribución es barato, perder un
+  // alta de empresa no.
+  origen: z
+    .string()
+    .max(120)
+    .regex(/^[a-z0-9][a-z0-9._/-]*$/)
+    .optional()
+    .catch(undefined),
 });
 
 // Onboarding manual por admin_plataforma (SDD §09 POST /api/admin/empresas):

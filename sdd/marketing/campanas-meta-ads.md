@@ -31,12 +31,27 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 | `verificacion_iniciada` | Usuario abre el flujo del verificador | **Se emite, pero mide otra cosa**: dispara al *cargar* el landing y al hacer *click* en el CTA — no cuando alguien abre el verificador |
 | `verificacion_completada` | El motor produjo un `ResultadoNomina` visible | 🔴 **No lo emite nadie.** Cero llamadas en todo el código. Era la *conversión primaria* de las campañas 1 y 2 |
 | `discrepancia_detectada` | El resultado tiene un semáforo ámbar/rojo | 🔴 **No lo emite nadie.** Era la base del lookalike de la campaña 2 |
-| `registro_empresa` | Un dueño completó el signup B2B | 🟠 **Dispara al hacer click en el CTA del landing**, no al completar el registro. Optimizar Meta contra eso es **pagar por curiosidad** |
+| `registro_empresa` | Un dueño completó el signup B2B | ✅ **Corregido el 2026-08-16**: se emite al completarse el alta. El click del CTA pasó a `interes_empresa` |
 | `interes_partners` | Contador dio click en "Programa de referidos" | 🟠 Se emite, pero el programa que anuncia no existe (ver campaña 4) |
 
-**Y el Pixel no está instalado.** Medido en el landing servido: `typeof window.fbq === "undefined"`. `tracking.ts` lo dice de frente — sin `fbq`, las cinco funciones son no-op. O sea que **hoy no hay ninguna medición de conversión**, y no la habrá por instalar el pixel solo: faltan además los dos eventos que nadie emite.
+**Y el Pixel no está instalado — ni se va a instalar.** Medido en el landing servido: `typeof window.fbq === "undefined"`, así que las cinco funciones son no-op. El porqué está en el bloque de abajo: rompe dos promesas servidas, la campaña 3 no lo necesita, y la atribución que sí hacía falta se resolvió de primera persona.
 
-> **Precondición dura, antes de gastar un peso:** instalar el Pixel base **y** emitir `verificacion_completada` y `registro_empresa` en el momento real (resultado a la vista / registro completado, no click). Sin eso, Meta optimiza contra la señal equivocada y el presupuesto compra clicks de gente que nunca llegó a nada. No es un pendiente de marketing: es trabajo de producto, y va primero.
+> **El Pixel NO se instala, y no es una demora: es una decisión medida (2026-08-16).**
+>
+> Rompe dos promesas que el producto **ya sirve**, citadas textuales:
+>
+> 1. `ynt.codes/verificar`, en español y en inglés: *«no hay scripts externos, ni analítica, ni peticiones»*. Un pixel la vuelve falsa de forma literal. Esa misma frase ya obligó a apagar el beacon de Cloudflare el 2026-08-06.
+> 2. El FAQ de `/lanzamiento`, contestando *«¿Mi jefe puede saber que usé esto?»*: *«El uso es anónimo — sin login, sin registro, sin correo. Nadie más que tú ve el resultado.»*
+>
+> Lo segundo es lo grave. `discrepancia_detectada` estaba pensado como **semilla de audiencia lookalike**: o sea, construir dentro de Meta un público de trabajadores que descubrieron que les pagaron de menos. Es el dato más sensible que este producto toca, y mandarlo contradice la respuesta que la propia landing le da a esa pregunta.
+>
+> **Y resulta que la campaña 3 no lo necesita.** Ya eligió *formulario de leads nativo*, que Meta mide de su lado sin tocar nuestro sitio. Lo único que el pixel habría agregado es saber **qué anuncio trajo a cada empresa** — y eso quedó resuelto de primera persona:
+>
+> **Atribución sin pixel (desde el 2026-08-16).** El `utm_*` de la campaña se anota al entrar al landing, sobrevive landing → login → registro, y queda guardado en la fila de la empresa (`Empresa.origen`). Solo del lado B2B: un dueño que se registra da su NIT y su correo, no está en el flujo anónimo. El valor se acota en el cliente **y otra vez en el servidor** —un `utm_campaign` lo escribe quien arma el anuncio, y ahí a veces se cuela un correo—; lo que no calza se descarta sin rechazar el alta.
+>
+> **Lo que sí quedó pendiente y es real:** `registro_empresa` se disparaba en el **click** del CTA del landing. Un click es curiosidad, y optimizar contra curiosidad es pagar por gente que nunca llegó a nada. Corregido: el evento se emite cuando el alta se completa, y el click pasó a llamarse `interes_empresa`.
+>
+> **Lo que queda sin medir, dicho de frente:** sin pixel no hay retargeting ni lookalike propios, y no se mide el abandono. Se sabe quién se registró y por qué anuncio; no se sabe quién miró y se fue. Es el precio de no romper las dos promesas, y se paga a ojos abiertos.
 
 ### Distribución de presupuesto (fase de aprendizaje, 7-14 días)
 
@@ -275,11 +290,12 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
    | Precondición | Cómo se comprueba | Estado 2026-08-15 |
    |---|---|---|
    | El landing carga en el dominio destino | `curl -s -o /dev/null -w '%{http_code}' https://nomicheck.ynt.codes/lanzamiento` → 200 | ✅ (con el dominio corregido) |
-   | El Pixel base está instalado | en el landing servido, `typeof window.fbq === "function"` | 🔴 `undefined` |
-   | `verificacion_completada` se emite al ver el resultado | disparar el flujo y mirar el evento | 🔴 nadie lo emite |
-   | `registro_empresa` se emite **al completar el registro**, no al hacer click | completar el alta y mirar el evento | 🔴 dispara en el click del CTA |
+   | ~~El Pixel base está instalado~~ | — | **No aplica: el pixel no se instala.** La campaña 3 usa formulario de leads nativo, que Meta mide de su lado. Ver el bloque del setup |
+   | ~~`verificacion_completada` se emite~~ | — | **No aplica bajo salida B**: es la conversión de las campañas 1 y 2, parqueadas |
+   | `registro_empresa` se emite al completar el registro | completar un alta y mirar `Empresa.origen` | ✅ desde el 2026-08-16 |
+   | La atribución llega a la base | registrar con `?utm_campaign=x` y ver `origen` en la fila | ✅ desde el 2026-08-16 |
 
-1. **Crear la cuenta publicitaria** (o usar la que el usuario indique) y confirmar que el pixel base y los eventos personalizados (`verificacion_iniciada`, `verificacion_completada`, `discrepancia_detectada`, `registro_empresa`, `interes_partners`) están disparando **de verdad** en `/lanzamiento` — no que existan en el código: que Meta los reciba.
+1. **Crear la cuenta publicitaria** (o usar la que el usuario indique). **No instalar el pixel** — ver el bloque del setup. La conversión de la campaña 3 se mide con el formulario de leads nativo de Meta, y la atribución con el `utm_campaign` que queda guardado en `Empresa.origen`: para saber qué anuncio funcionó se consulta **nuestra base**, no el panel de Meta.
 2. **Crear las 4 campañas en estado `PAUSED`** con los objetivos, segmentaciones, ubicaciones, formatos, copies, CTAs, presupuestos y trackings de arriba.
 3. **Estructura por campaña:** 1 Campaña → 1 Conjunto de anuncios inicial → 3 Anuncios (uno por variante de gancho).
 4. **Presupuesto**: total mensual sugerido a definir con el usuario. Distribuir según % de la tabla de arriba. Preferir CBO (Campaign Budget Optimization) sobre presupuesto a nivel de conjunto.

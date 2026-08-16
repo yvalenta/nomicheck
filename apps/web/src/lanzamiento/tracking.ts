@@ -11,6 +11,10 @@ export type EventoMeta =
   | "verificacion_completada"
   | "discrepancia_detectada"
   | "registro_empresa"
+  // Click en el CTA de empresas del landing. Es INTERES, no conversion: se
+  // separo de `registro_empresa` el 2026-08-16, que hasta entonces se disparaba
+  // en este click y hacia que Meta optimizara contra curiosidad.
+  | "interes_empresa"
   | "interes_partners";
 
 interface WindowConPixel extends Window {

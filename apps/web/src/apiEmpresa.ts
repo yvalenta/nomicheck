@@ -79,6 +79,9 @@ export interface DatosRegistro {
   password: string;
   nombre: string;
   empresa: { nombre: string; nit: string; sector: string };
+  /** La campaña que trajo a esta empresa, si se pudo saber. Ver
+   *  `lanzamiento/origenCampana.ts` — existe en vez del Meta Pixel. */
+  origen?: string;
 }
 
 export function registrarEmpresa(datos: DatosRegistro) {

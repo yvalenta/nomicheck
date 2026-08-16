@@ -31,7 +31,9 @@ export async function registrarEmpresa(datos: z.infer<typeof registroSchema>) {
   }
 
   try {
-    const empresa = await prisma.empresa.create({ data: datos.empresa });
+    const empresa = await prisma.empresa.create({
+      data: { ...datos.empresa, origen: datos.origen ?? null },
+    });
     const usuario = await prisma.usuario.create({
       data: {
         id: authData.user.id,

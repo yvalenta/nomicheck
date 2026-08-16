@@ -3,6 +3,7 @@ import { ArrowRight, Check, ChevronDown, Scale, Shield, Zap } from "lucide-react
 import ReciboDemo from "./ReciboDemo.tsx";
 import { trackEvento } from "./tracking.ts";
 import { contactoDe } from "../servicios/catalogo.ts";
+import { capturarOrigen } from "./origenCampana.ts";
 
 // Landing canónica (SDD §16 + sdd/marketing/posicionamiento.md). Sirve a las
 // 4 campañas Meta Ads simultáneamente vía anclas (#hero, #caso-real, #empresas,
@@ -477,7 +478,11 @@ export default function Lanzamiento() {
     window.location.href = "/";
   }
   function irAEmpresas() {
-    trackEvento("registro_empresa", { paso: "landing_cta" });
+    // Antes disparaba `registro_empresa` acá. Un click en un CTA no es un alta:
+    // optimizar una campaña contra eso es pagar por curiosidad. El evento
+    // ahora se emite cuando el registro se completa de verdad, en
+    // `components/empresa/AuthEmpresa.tsx`.
+    trackEvento("interes_empresa", { paso: "landing_cta" });
     window.location.href = "/login?rol=empresa";
   }
   // El destino se PREGUNTA al servidor, no se escribe acá.
@@ -507,8 +512,11 @@ export default function Lanzamiento() {
   }
 
   useEffect(() => {
-    // Cargó la landing — el pixel base ya disparó PageView; este trackCustom
-    // marca la visita como "audiencia calificada de la landing" para lookalike.
+    // La campaña que trajo a esta visita, anotada en sessionStorage para que
+    // sobreviva landing -> login -> registro. Es lo que reemplaza al Meta Pixel
+    // del lado B2B sin romper las promesas que el producto ya sirve; el porqué
+    // está en `origenCampana.ts`.
+    capturarOrigen(window.location.search);
     trackEvento("verificacion_iniciada", { origen: "landing_load", accion: "view" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

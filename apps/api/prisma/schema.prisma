@@ -100,6 +100,16 @@ model Empresa {
   // lotes de USDC. REFERENCIAL — NomiCheck nunca controla esta wallet ni sus
   // fondos (modelo no-custodial); se usa para verificar el `from` del tx.
   walletPagadora String?
+  // De dónde vino esta empresa: el `utm_*` de la campaña que la trajo, anotado
+  // al registrarse y nunca después. `null` = llegó por su cuenta O se perdió el
+  // rastro; NO se distingue, y decir "directo" sobre el segundo caso sería
+  // inventar atribución.
+  //
+  // Existe en vez del Meta Pixel, que habría dado lo mismo rompiendo dos
+  // promesas ya servidas: el verificador afirma que no carga scripts externos
+  // ni analítica, y el FAQ de la landing promete que nadie más que el
+  // trabajador ve su resultado. Ver `apps/web/src/lanzamiento/origenCampana.ts`.
+  origen         String?
 
   usuarios     Usuario[]
   empleados    Empleado[]

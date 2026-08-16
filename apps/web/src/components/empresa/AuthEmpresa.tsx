@@ -2,6 +2,8 @@ import { useState } from "react";
 import { AlertTriangle, ArrowRight, Building2, Chrome } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { registrarEmpresa } from "../../apiEmpresa";
+import { leerOrigen } from "../../lanzamiento/origenCampana.ts";
+import { trackEvento } from "../../lanzamiento/tracking.ts";
 import PaycheckCard from "../PaycheckCard.tsx";
 
 const inputCls =
@@ -59,7 +61,15 @@ export default function AuthEmpresa() {
           password,
           nombre,
           empresa: { nombre: nombreEmpresa, nit, sector },
+          // La campaña que trajo a esta empresa, anotada al entrar al landing.
+          // `undefined` si llegó por su cuenta o si se perdió el rastro.
+          origen: leerOrigen() ?? undefined,
         });
+        // `registro_empresa` se emite ACÁ y no en el click del CTA del landing,
+        // que es donde estaba: un click es curiosidad, y optimizar una campaña
+        // contra curiosidad es pagar por gente que nunca llegó a nada. Este es
+        // el alta consumada.
+        trackEvento("registro_empresa", { paso: "alta_completada" });
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
