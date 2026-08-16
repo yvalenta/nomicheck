@@ -80,14 +80,18 @@ Contra ese piso, a una tasa medida de **3.137,74 COP/USD** (2026-08-16) los $12 
 
 ## Lo que hay que construir para poder cobrarlo
 
-El precio está decidido; **el mecanismo no existe**. Hoy `/empresa/*` está detrás de autenticación y no de un medidor: una empresa registrada usa todo, gratis, para siempre. Lo que falta, en orden:
+~~El precio está decidido; **el mecanismo no existe**.~~ **Construido el 2026-08-16** (`356a876`). Lo que hay:
 
-1. **Contar cierres de periodo con evidencia por empresa y por mes.** Sin el contador no hay qué facturar. Es lo primero y es chico.
-2. **Banda por número de empleados activos**, recalculada al cierre — no al registrarse, porque la empresa crece.
-3. **Un estado de cuenta que la empresa pueda ver** antes de que le llegue la factura. Un cobro que aparece sin haberse podido anticipar es una disputa.
-4. **La factura en sí**, que al principio puede ser manual: con las primeras empresas, emitirla a mano cuesta menos que integrar una pasarela, y enseña qué hace falta de verdad.
+1. ~~Contar cierres de periodo con evidencia por empresa y por mes~~ — `services/medidorCierres.ts`, puro y con pruebas. **Es el sitio de afirmación del precio**: la tabla de bandas vive ahí y en ningún otro lado.
+2. ~~Banda recalculada al cierre~~ — y la fija el **máximo de empleados del mes**, no la suma: sumar las dos quincenas de la misma gente duplicaba la nómina y empujaba a una banda que no toca.
+3. ~~Un estado de cuenta que la empresa pueda ver antes de la factura~~ — `GET /empresa/cuenta`, con el mismo cálculo que producirá el monto, y diciendo qué **no** se cobra y por qué.
+4. **La factura en sí — lo único que falta.** Al principio puede ser manual: con las primeras empresas, emitirla a mano cuesta menos que integrar una pasarela, y enseña qué hace falta de verdad.
 
-> **Y una guarda, del mismo tipo que ya rige el muro x402** (`leyes/cobrar-antes-de-servir`): **no se factura un cierre cuya evidencia no verifique.** Si la firma no valida contra la llave pública servida, ese cierre no entra en la cuenta. Cobrar por una prueba que no prueba sería exactamente el error que este producto existe para señalar.
+**Lo que hubo que construir antes y no estaba previsto acá: el portal no firmaba nada.** El servicio de firma existía, pero solo lo usaba la API batch — así que «cobrar la evidencia» no tenía sujeto. Ahora cada cierre terminal deja una `EvidenciaCierre` firmada con Ed25519 sobre el payload canónico, con el `reglasHash` del catálogo que lo produjo.
+
+> **La guarda del mismo tipo que rige el muro x402** (`leyes/cobrar-antes-de-servir`): **no se factura un cierre cuya evidencia no verifique.**
+>
+> Verificado contra Postgres de verdad, no solo en pruebas: se editó la fila en la base para saltar de banda (`conEvidencia` de 8 a 400), la firma dejó de validar, **ese cierre quedó excluido, la banda se mantuvo en 8 y el estado de cuenta nombró cuál quedó afuera**. La manipulación no compró nada. Cobrar por una prueba que no prueba sería exactamente el error que este producto existe para señalar.
 
 ---
 
