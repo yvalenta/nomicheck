@@ -113,6 +113,58 @@ describe("del cierre firmado a lo que se factura", () => {
     expect(r.excluidos[0].motivo).toBe("la firma de la evidencia no verifica");
   });
 
+  it("firmada con OTRA llave no se confunde con manipulada", () => {
+    // El caso que más caro sale y que no se ve venir: si la llave de firma
+    // rotara, todos los cierres pasados dejarían de verificar de golpe. Sin
+    // esta distinción, el estado de cuenta acusaría manipulación —a un cliente
+    // que no hizo nada— y dejaría de facturar meses enteros sin decir por qué.
+    //
+    // Es el mismo error que el verificador público del sobre cometía con
+    // emisores ajenos; acá además hay plata de por medio.
+    // Cómo se ve una rotación desde el lector: la firma NO valida con la llave
+    // de hoy, y el `publicKeyId` que declara no es el de hoy. Se simula
+    // firmando otro payload —así los bytes no verifican— y etiquetándolo con
+    // una llave ajena. Cambiar solo la etiqueta no serviría: `verificarFirma`
+    // comprueba los bytes, no el rótulo.
+    const payload = construirPayload(base);
+    const firma = {
+      ...firmarPayload(construirPayload({ ...base, conEvidencia: 999 })),
+      publicKeyId: "llave-de-antes-de-la-rotacion",
+    };
+    const medido = medirCierre({
+      periodoId: 1,
+      conEvidencia: 8,
+      payload,
+      firma,
+    });
+    expect(medido.firmaValida).toBe(false);
+    expect(medido.firmadaConOtraLlave).toBe(true);
+
+    // Tampoco se factura —no se cobra lo que no se puede verificar— pero el
+    // motivo apunta a nosotros y no al cliente.
+    const r = resumirMes("2026-08", [medido]);
+    expect(r.precioCop).toBeNull();
+    expect(r.excluidos[0].motivo).toContain("revisar de nuestro lado");
+    expect(r.excluidos[0].motivo).not.toContain("no verifica");
+  });
+
+  it("manipulada con la llave ACTUAL sigue diciendo que no verifica", () => {
+    // La contraparte: si el `publicKeyId` es el de hoy y aun así falla, es
+    // manipulación de verdad y el motivo tiene que decirlo.
+    const payload = construirPayload(base);
+    const firma = firmarPayload(payload);
+    const medido = medirCierre({
+      periodoId: 1,
+      conEvidencia: 400,
+      payload: { ...payload, conEvidencia: 400 },
+      firma,
+    });
+    expect(medido.firmadaConOtraLlave).toBe(false);
+    expect(resumirMes("2026-08", [medido]).excluidos[0].motivo).toBe(
+      "la firma de la evidencia no verifica"
+    );
+  });
+
   it("una firma con forma inesperada no tumba el estado de cuenta", () => {
     // Basura en la columna (migración a medias, escritura manual) tiene que
     // dar "no verifica", no una excepción que deja a la empresa sin poder ver

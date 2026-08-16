@@ -17,7 +17,12 @@
 // produjeron cada número.
 import type { Prisma } from "@prisma/client";
 import type { ClienteAcotado } from "../lib/alcance.js";
-import { firmarPayload, verificarFirma, type FirmaBatch } from "./batchSignatureService.js";
+import {
+  firmarPayload,
+  obtenerPublicKeyId,
+  verificarFirma,
+  type FirmaBatch,
+} from "./batchSignatureService.js";
 import { obtenerLedgerReglas } from "./reglasVerificadasService.js";
 import { mesColombiano, type CierreMedido } from "./medidorCierres.js";
 
@@ -122,8 +127,21 @@ export function medirCierre(fila: {
   firma: unknown;
 }): CierreMedido {
   let firmaValida = false;
+  let firmadaConOtraLlave = false;
   try {
     firmaValida = verificarFirma(fila.payload, fila.firma as FirmaBatch);
+    if (!firmaValida) {
+      // ¿Rota, o firmada por otra llave? La evidencia guarda el `publicKeyId`
+      // con el que se firmó, así que se puede distinguir — y hay que hacerlo.
+      //
+      // Si la llave de firma rotara, TODOS los cierres pasados dejarían de
+      // verificar de golpe y el estado de cuenta acusaría manipulación donde
+      // solo hubo un cambio nuestro. Es el mismo error que el verificador
+      // público del sobre cometía con emisores ajenos, y acá además deja de
+      // facturar meses enteros sin decir por qué.
+      const id = (fila.firma as FirmaBatch | null)?.publicKeyId;
+      firmadaConOtraLlave = typeof id === "string" && id.length > 0 && id !== obtenerPublicKeyId();
+    }
   } catch {
     // Una firma con forma inesperada es una firma que no verifica, no una
     // excepción que tumba el estado de cuenta entero.
@@ -133,5 +151,6 @@ export function medirCierre(fila: {
     periodoId: fila.periodoId,
     empleadosConEvidencia: fila.conEvidencia,
     firmaValida,
+    firmadaConOtraLlave,
   };
 }

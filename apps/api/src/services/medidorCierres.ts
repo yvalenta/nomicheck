@@ -83,6 +83,21 @@ export interface CierreMedido {
   empleadosConEvidencia: number;
   /** Resultado de `verificarFirma` sobre el payload guardado. */
   firmaValida: boolean;
+  /**
+   * La evidencia se firmó con una llave DISTINTA de la que corre hoy.
+   *
+   * No es lo mismo que una firma rota, y confundirlos ya costó caro una vez en
+   * el verificador público del sobre: decirle «inválido, no confíes» a un
+   * emisor honesto. Acá el error es peor, porque además cobra — o más bien deja
+   * de cobrar: si la llave de firma rotara, **todos los cierres pasados
+   * quedarían sin facturar** y el estado de cuenta acusaría manipulación donde
+   * solo hubo un cambio de llave nuestro.
+   *
+   * Ninguno de los dos casos se factura —no se cobra lo que no se puede
+   * verificar—, pero se nombran distinto: uno es un problema del cliente y el
+   * otro es un problema NUESTRO.
+   */
+  firmadaConOtraLlave?: boolean;
 }
 
 export interface ResumenMes {
@@ -127,7 +142,15 @@ export function resumirMes(mes: string, cierres: CierreMedido[]): ResumenMes {
 
   for (const c of cierres) {
     if (!c.firmaValida) {
-      excluidos.push({ periodoId: c.periodoId, motivo: "la firma de la evidencia no verifica" });
+      excluidos.push({
+        periodoId: c.periodoId,
+        motivo: c.firmadaConOtraLlave
+          ? // Nuestro problema, no del cliente: la evidencia está sana pero la
+            // firmó una llave que ya no corre. Hay que re-firmar o reponer la
+            // llave antes de cobrar este mes.
+            "firmada con una llave anterior a la que corre hoy — revisar de nuestro lado antes de cobrar"
+          : "la firma de la evidencia no verifica",
+      });
       continue;
     }
     // Un cierre sin nadie con evidencia no produjo nada que cobrar. Pasa de

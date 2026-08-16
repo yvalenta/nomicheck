@@ -12,7 +12,8 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "test": "vitest run",
-    "db:desechable": "bash scripts/base-desechable.sh"
+    "db:desechable": "bash scripts/base-desechable.sh",
+    "cobro": "tsx scripts/cuenta-de-cobro.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
