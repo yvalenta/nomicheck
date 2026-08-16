@@ -74,6 +74,7 @@ import {
   quitarStaffCtrl,
 } from "../controllers/sedesController.js";
 import { listar as listarAuditoriaCtrl } from "../controllers/auditoriaController.js";
+import { estadoCuenta as estadoCuentaCtrl } from "../controllers/cuentaController.js";
 import { requiereAuth, requiereEmpresaEdicion, requiereEmpresaLectura, requiereRol } from "../middleware/auth.js";
 
 const router = Router();
@@ -269,6 +270,12 @@ router.delete("/empresa/staff/:id", ...soloAdminEmpresa, quitarStaffCtrl);
 // Bitácora de cambios (SDD §15, pilar 1B) — solo lectura para todos los
 // roles de empresa. El auditor la usa para verificar quién tocó qué.
 router.get("/empresa/auditoria", ...empresaLectura, listarAuditoriaCtrl);
+
+// Estado de cuenta: qué se le va a cobrar este mes y por qué. Lectura para
+// todos los roles de empresa a propósito — un cobro que solo puede anticipar
+// el admin es un cobro que sorprende a quien lo recibe. El monto sale del
+// mismo cálculo que producirá la factura (`services/medidorCierres.ts`).
+router.get("/empresa/cuenta", ...empresaLectura, estadoCuentaCtrl);
 
 // Portal colaborador (Fase 7): un colaborador solo ve/reporta sobre SUS
 // propios recibos — requiereAuth ya adjunta empleadoId, el controller

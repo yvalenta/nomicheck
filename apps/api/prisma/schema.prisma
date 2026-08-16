@@ -12,7 +12,7 @@ model ReglaLegal {
   id           Int      @id @default(autoincrement())
   clave        String
   valor        Float
-  vigenteDesde String   // ISO date YYYY-MM-DD
+  vigenteDesde String // ISO date YYYY-MM-DD
   vigenteHasta String?
   fuente       String?
   creadoEn     DateTime @default(now())
@@ -29,11 +29,11 @@ model Festivo {
 // Perfil de dominio 1:1 con auth.users de Supabase (id = mismo UUID).
 // La identidad/credenciales viven en Supabase Auth, no aquí (SDD.md §07).
 model Usuario {
-  id        String  @id @db.Uuid
+  id        String   @id @db.Uuid
   nombre    String
   // Correo denormalizado desde Supabase Auth (allí viven las credenciales) —
   // permite buscar la cuenta por correo al invitar sin paginar todo Auth.
-  email     String? @unique
+  email     String?  @unique
   // admin_plataforma | admin_empresa | analista_rrhh | auditor | colaborador | individual
   //
   // Roles dentro de una empresa (SDD §15, pilar 1):
@@ -54,13 +54,13 @@ model Usuario {
   // Una cuenta se liga a varios Empleado a lo largo del tiempo (historial de
   // empresas) — solo uno "activo aceptado" a la vez (índice único parcial en
   // la migración). Ver invitacionAceptadaEn en Empleado.
-  empleados         Empleado[]          @relation("EmpleadoUsuario")
-  reportes          ReporteDiscrepancia[]
-  liquidaciones     Liquidacion[]
+  empleados      Empleado[]            @relation("EmpleadoUsuario")
+  reportes       ReporteDiscrepancia[]
+  liquidaciones  Liquidacion[]
   // Sedes asignadas a un analista_rrhh (many-to-many). Vacío = ve todas las
   // de su empresa (útil para empresas chicas sin sucursales).
-  sedesAsignadas    UsuarioSede[]
-  creadoEn          DateTime            @default(now())
+  sedesAsignadas UsuarioSede[]
+  creadoEn       DateTime              @default(now())
 
   @@index([empresaId])
 }
@@ -87,15 +87,15 @@ model Liquidacion {
 }
 
 model Empresa {
-  id       Int    @id @default(autoincrement())
-  nombre   String
-  nit      String @unique
-  sector   String
-  creadoEn DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  nombre         String
+  nit            String   @unique
+  sector         String
+  creadoEn       DateTime @default(now())
   // Suspender bloquea de verdad el acceso (403 en requiereAuth) para
   // admin_empresa y colaboradores de esta empresa — admin_plataforma sigue
   // viendo/reactivando la empresa sin problema (SDD.md §03 Módulo D).
-  activa   Boolean @default(true)
+  activa         Boolean  @default(true)
   // Pago on-chain (SDD §17): dirección EVM desde la que la empresa firma los
   // lotes de USDC. REFERENCIAL — NomiCheck nunca controla esta wallet ni sus
   // fondos (modelo no-custodial); se usa para verificar el `from` del tx.
@@ -106,6 +106,7 @@ model Empresa {
   contratistas Contratista[]
   periodos     PeriodoNomina[]
   sedes        Sede[]
+  evidencias   EvidenciaCierre[]
 }
 
 // Sucursal/departamento dentro de una empresa (SDD §15, pilar 1). Modelo
@@ -120,8 +121,8 @@ model Sede {
   nombre    String
   creadoEn  DateTime @default(now())
 
-  empleados      Empleado[]
-  analistas      UsuarioSede[]
+  empleados Empleado[]
+  analistas UsuarioSede[]
 
   @@unique([empresaId, nombre])
   @@index([empresaId])
@@ -131,7 +132,7 @@ model Sede {
 // se interpreta como "ve todas las sedes de su empresa" (ver comentario en
 // Usuario.rol) — importante para no bloquear empresas sin sucursales.
 model UsuarioSede {
-  usuarioId String @db.Uuid
+  usuarioId String  @db.Uuid
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   sedeId    Int
   sede      Sede    @relation(fields: [sedeId], references: [id], onDelete: Cascade)
@@ -141,55 +142,55 @@ model UsuarioSede {
 }
 
 model Empleado {
-  id                Int      @id @default(autoincrement())
-  empresaId         Int
-  empresa           Empresa  @relation(fields: [empresaId], references: [id])
+  id                   Int       @id @default(autoincrement())
+  empresaId            Int
+  empresa              Empresa   @relation(fields: [empresaId], references: [id])
   // FK a la cuenta que reclama este registro. NO es único: una cuenta puede
   // aparecer en varios Empleado (distintas empresas / épocas). La unicidad
   // "una empresa activa por cuenta" la impone un índice parcial en la migración.
-  usuarioId         String?  @db.Uuid
-  usuario           Usuario? @relation("EmpleadoUsuario", fields: [usuarioId], references: [id])
+  usuarioId            String?   @db.Uuid
+  usuario              Usuario?  @relation("EmpleadoUsuario", fields: [usuarioId], references: [id])
   // Null con usuarioId seteado = invitación PENDIENTE (cuenta existente aún sin
   // aceptar). Con fecha = ACEPTADA (o vínculo directo de cuenta nueva). Doble
   // uso como auditoría de cuándo se unió.
   invitacionAceptadaEn DateTime?
-  nombre            String
-  documento         String
-  salarioBase       Float
-  tipoNomina        String // turnos | fijo
-  auxilioTransporte Boolean @default(false)
-  fechaIngreso      String // YYYY-MM-DD — base de antigüedad para prestaciones sociales
-  fechaRetiro       String? // YYYY-MM-DD — si está seteada, el empleado puede liquidarse (prestacionesService)
+  nombre               String
+  documento            String
+  salarioBase          Float
+  tipoNomina           String // turnos | fijo
+  auxilioTransporte    Boolean   @default(false)
+  fechaIngreso         String // YYYY-MM-DD — base de antigüedad para prestaciones sociales
+  fechaRetiro          String? // YYYY-MM-DD — si está seteada, el empleado puede liquidarse (prestacionesService)
   // indefinido (default) | fijo | obra_labor | tiempo_parcial | aprendizaje_sena_lectiva |
   // aprendizaje_sena_practica — ver TipoContrato en @pv/reglas.
   // "servicios" NO se modela aquí: no es contrato laboral (SDD §07).
-  tipoContrato      String  @default("indefinido")
+  tipoContrato         String    @default("indefinido")
   // Clase de riesgo laboral ARL (I a V, Decreto 1772 de 1994) — 1 = riesgo
   // mínimo (oficinas/comercio). Antes solo existía como parámetro de
   // cálculo con default silencioso a 1 para todos; persistirla por
   // empleado es lo que hace "exacta" la liquidación PILA (packages/reglas
   // costoEmpleador.ts, calcularLiquidacionPilaEmpleado).
-  claseRiesgoArl    Int     @default(1)
+  claseRiesgoArl       Int       @default(1)
   // Sede/sucursal a la que pertenece — opcional. null = sin sede asignada
   // (empresa chica sin sucursales). Los analistas_rrhh con UsuarioSede
   // definido solo ven empleados con sedeId en su lista.
-  sedeId            Int?
-  sede              Sede?    @relation(fields: [sedeId], references: [id])
-  activo            Boolean @default(true)
+  sedeId               Int?
+  sede                 Sede?     @relation(fields: [sedeId], references: [id])
+  activo               Boolean   @default(true)
   // Pago on-chain (SDD §17): SOLO constancia complementaria — el salario
   // legal SIEMPRE se paga en COP (CST art. 134-136, moneda legal). Esta
   // wallet nunca entra a un BatchPago en fase 1; queda para registro
   // voluntario de pagos extralegales cuando la regulación lo permita.
-  walletAddress     String?
+  walletAddress        String?
   // Soft delete: `activo=false` es "retirado" (con fecha legal), `eliminadoEn`
   // es "creado por error, ocultar" — se conserva la fila para no romper FKs
   // de recibos/turnos históricos. Todas las lecturas filtran eliminadoEn IS NULL
   // por default (empleadosService.listar + empleadoAccesible).
-  eliminadoEn       DateTime?
-  creadoEn          DateTime @default(now())
+  eliminadoEn          DateTime?
+  creadoEn             DateTime  @default(now())
 
-  turnos  Turno[]
-  recibos ReciboPago[]
+  turnos           Turno[]
+  recibos          ReciboPago[]
   periodosIncluido PeriodoNominaEmpleado[]
 
   @@unique([empresaId, documento])
@@ -225,11 +226,11 @@ model Contratista {
 }
 
 model PeriodoNomina {
-  id          Int      @id @default(autoincrement())
-  empresaId   Int
-  empresa     Empresa  @relation(fields: [empresaId], references: [id])
-  fechaInicio String // YYYY-MM-DD
-  fechaFin    String // YYYY-MM-DD
+  id                 Int       @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa   @relation(fields: [empresaId], references: [id])
+  fechaInicio        String // YYYY-MM-DD
+  fechaFin           String // YYYY-MM-DD
   // borrador | liquidando | liquidado | liquidado_con_rechazos | fallido | pagado
   // Máquina de estados (SDD §15, escalabilidad enterprise):
   //   borrador → liquidando → (liquidado | liquidado_con_rechazos | fallido)
@@ -240,12 +241,12 @@ model PeriodoNomina {
   // QA quedaron con recibo; los rechazados quedan reportados en
   // `erroresLiquidacion` sin recibo — permite revisar y volver a intentar
   // solo esos, en vez de bloquear al resto del payroll a esta escala.
-  estado      String   @default("borrador")
-  creadoEn    DateTime @default(now())
+  estado             String    @default("borrador")
+  creadoEn           DateTime  @default(now())
   // Rastro de auditoría de la última edición de fechas (solo se permite en
   // borrador — un periodo liquidado se revierte primero). Null = nunca editado.
-  notaEdicion String?
-  editadoEn   DateTime?
+  notaEdicion        String?
+  editadoEn          DateTime?
   // Concurrencia optimista: cada write bumpea version. liquidarPeriodo /
   // revertirABorrador exigen where {id, version: X} y capturan P2025 como
   // ErrorConflicto (HTTP 409) — evita que dos analistas pisen el mismo
@@ -254,20 +255,21 @@ model PeriodoNomina {
   // hecho de que solo el job dueño de jobId escribe mientras estado='liquidando');
   // las TRANSICIONES de estado (→liquidando, →liquidado*, →fallido) sí van con
   // version para detectar ediciones concurrentes reales.
-  version     Int      @default(0)
+  version            Int       @default(0)
   // Liquidación asíncrona (SDD §15, escalabilidad enterprise). Null cuando el
   // periodo nunca se encoló; se rellena al transicionar a `liquidando`.
-  jobId       String?
-  progreso    Int      @default(0)
+  jobId              String?
+  progreso           Int       @default(0)
   // Cuando el periodo termina en `liquidado_con_rechazos` o `fallido`, aquí
   // queda el detalle tipado — { empleadoId, nombre, issues[] } para rechazos
   // por-empleado (QA), o { mensaje, contexto } para fallo catastrófico.
   erroresLiquidacion Json?
 
-  turnos  Turno[]
-  recibos ReciboPago[]
+  turnos             Turno[]
+  recibos            ReciboPago[]
   empleadosIncluidos PeriodoNominaEmpleado[]
-  batchesPago BatchPago[]
+  batchesPago        BatchPago[]
+  evidencias         EvidenciaCierre[]
 
   // El listado pagina por empresa ordenando fechaInicio desc — el compuesto
   // sirve filtro + ORDER BY de una vez (reemplaza al índice de empresaId sola).
@@ -292,14 +294,14 @@ model PeriodoNominaEmpleado {
 // dominical/extra a partir de fecha+horaInicio+horaFin; nada de eso se
 // persiste aquí (SDD.md §07).
 model Turno {
-  id          Int           @id @default(autoincrement())
-  empleadoId  Int
-  empleado    Empleado      @relation(fields: [empleadoId], references: [id])
-  periodoId   Int
-  periodo     PeriodoNomina @relation(fields: [periodoId], references: [id])
-  fecha       String // YYYY-MM-DD
-  horaInicio  String // HH:mm
-  horaFin     String // HH:mm
+  id         Int           @id @default(autoincrement())
+  empleadoId Int
+  empleado   Empleado      @relation(fields: [empleadoId], references: [id])
+  periodoId  Int
+  periodo    PeriodoNomina @relation(fields: [periodoId], references: [id])
+  fecha      String // YYYY-MM-DD
+  horaInicio String // HH:mm
+  horaFin    String // HH:mm
 
   @@index([empleadoId, periodoId])
   // Leer/guardar los turnos de un periodo completo consulta por periodoId
@@ -311,26 +313,26 @@ model Turno {
 // Pertenece a exactamente uno de empleado/contratista (CHECK en el SQL de
 // la migración — un contratista de servicios no es Empleado, SDD §07).
 model ReciboPago {
-  id              Int           @id @default(autoincrement())
-  empleadoId      Int?
-  empleado        Empleado?     @relation(fields: [empleadoId], references: [id])
-  contratistaId   Int?
-  contratista     Contratista?  @relation(fields: [contratistaId], references: [id])
-  periodoId       Int
-  periodo         PeriodoNomina @relation(fields: [periodoId], references: [id])
-  lineas          Json // [{ concepto, tipo, formula, referenciaLegal, cantidad?, valor }]
+  id             Int           @id @default(autoincrement())
+  empleadoId     Int?
+  empleado       Empleado?     @relation(fields: [empleadoId], references: [id])
+  contratistaId  Int?
+  contratista    Contratista?  @relation(fields: [contratistaId], references: [id])
+  periodoId      Int
+  periodo        PeriodoNomina @relation(fields: [periodoId], references: [id])
+  lineas         Json // [{ concepto, tipo, formula, referenciaLegal, cantidad?, valor }]
   // string[] — advertencias del ResultadoNomina del motor en el momento de
   // liquidar (ej. preaviso/indemnización para término no indefinido, IBC de
   // tiempo parcial). Antes se descartaban al persistir el recibo.
-  advertencias    Json          @default("[]")
-  totalDevengado  Float
-  totalDeducido   Float
-  neto            Float
+  advertencias   Json          @default("[]")
+  totalDevengado Float
+  totalDeducido  Float
+  neto           Float
   // IssueQA[] del motor de QA (SDD §15). Solo se pobla si el recibo se
   // liquidó "con_advertencias" (rechazada bloquea la liquidación antes de
   // persistir). null = QA aprobada / recibo pre-QA.
-  qaIssues        Json?
-  liquidadoEn     DateTime      @default(now())
+  qaIssues       Json?
+  liquidadoEn    DateTime      @default(now())
 
   reportes ReporteDiscrepancia[]
 
@@ -351,15 +353,15 @@ model ReciboPago {
 // esa doble capa protege futuros clientes vía roles authenticated de
 // Supabase (mismo criterio que el resto de RLS del proyecto).
 model AuditoriaCambio {
-  id                  BigInt   @id @default(autoincrement())
-  empresaId           Int?
-  usuarioId           String?  @db.Uuid
-  tabla               String
-  registroId          String
-  accion              String   // INSERT | UPDATE | DELETE
-  valoresAnteriores   Json?
-  valoresNuevos       Json?
-  creadoEn            DateTime @default(now())
+  id                BigInt   @id @default(autoincrement())
+  empresaId         Int?
+  usuarioId         String?  @db.Uuid
+  tabla             String
+  registroId        String
+  accion            String // INSERT | UPDATE | DELETE
+  valoresAnteriores Json?
+  valoresNuevos     Json?
+  creadoEn          DateTime @default(now())
 
   @@index([empresaId, creadoEn])
   @@index([tabla, registroId])
@@ -428,4 +430,41 @@ model PagoItem {
   montoUsdc     Float // 6 decimales
 
   @@index([batchId])
+}
+
+// La evidencia de un cierre de periodo, y la unidad de lo que se le cobra a una
+// empresa (`services/medidorCierres.ts`, que tiene la tabla de precios).
+//
+// Se escribe UNA vez por cierre terminal que produjo recibos, dentro de la misma
+// transacción que marca el periodo — si el cierre se revierte a borrador y se
+// vuelve a cerrar, se escribe otra fila. Eso NO cobra dos veces: la factura es
+// por mes y no por cierre, así que reliquidar suma filas y no montos.
+//
+// `payload` se guarda entero, y no solo su hash, porque el guard que importa es
+// **verificar** la firma antes de facturar: sin el payload original solo se
+// podría comprobar que el hash coincide consigo mismo. Son ~200 bytes por
+// cierre.
+model EvidenciaCierre {
+  id           Int           @id @default(autoincrement())
+  empresaId    Int
+  empresa      Empresa       @relation(fields: [empresaId], references: [id])
+  periodoId    Int
+  periodo      PeriodoNomina @relation(fields: [periodoId], references: [id])
+  // Mes calendario COLOMBIANO (YYYY-MM) en que ocurrió el cierre. Se congela al
+  // escribir y no se deriva después de `creadoEn`: un cierre del 31 a las 9 de
+  // la noche en Bogotá es 1 de septiembre en UTC, y recalcularlo en otra zona
+  // le movería el mes —y a veces la banda— a la empresa.
+  mes          String
+  // Cuántos empleados/contratistas quedaron con recibo. Es lo que fija la banda,
+  // y no el total de la empresa: no se cobra por gente para la que no se produjo
+  // evidencia.
+  conEvidencia Int
+  estadoCierre String // liquidado | liquidado_con_rechazos
+  payload      Json
+  firma        Json // FirmaBatch: { algo, valor, publicKeyId, cubreCampos, canonical }
+  creadoEn     DateTime      @default(now())
+
+  // El estado de cuenta consulta siempre por (empresa, mes).
+  @@index([empresaId, mes])
+  @@index([periodoId])
 }

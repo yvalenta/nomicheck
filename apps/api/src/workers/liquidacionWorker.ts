@@ -27,6 +27,8 @@ import {
   type RechazoQA,
 } from "../services/liquidacionCalculo.js";
 import { COLA_LIQUIDACION, type DatosJobLiquidacion } from "../lib/boss.js";
+import { registrarEvidenciaCierre } from "../services/evidenciaCierreService.js";
+import { registro } from "../lib/registro.js";
 
 // Tamaño de lote configurable por env — benchmark en periodos de 600
 // empleados (dev, jul 2026) mostró que 50 es óptimo (ver §13). Valores
@@ -67,6 +69,47 @@ async function marcarTerminal(
   // fue el gate; no queremos que un update de progreso concurrente bumpee
   // version y nos deje colgados con un P2025.
   void versionAlEncolar;
+}
+
+/**
+ * La evidencia firmada del cierre — lo que la empresa realmente compra, y la
+ * unidad que mide `medidorCierres.ts`.
+ *
+ * **Nunca tumba el cierre.** Si falla —la llave, la base, el ledger de reglas—,
+ * el periodo ya quedó liquidado y la empresa ya puede ver sus recibos; lo que
+ * se pierde es la evidencia, o sea algo que NO se le va a cobrar. Al revés
+ * —tumbar una nómina ya calculada porque el medidor tuvo un mal día— sería
+ * inaceptable.
+ */
+async function registrarEvidencia(
+  empresaId: number,
+  periodoId: number,
+  periodo: { fechaInicio: string; fechaFin: string },
+  estadoCierre: "liquidado" | "liquidado_con_rechazos"
+): Promise<void> {
+  try {
+    // Cuántos quedaron con recibo de verdad. En `liquidado_con_rechazos` es
+    // menos que la nómina: no se produce evidencia de quien QA rechazó, y por
+    // lo tanto tampoco se cobra por él.
+    const conEvidencia = await prisma.reciboPago.count({
+      where: { periodoId, periodo: { empresaId } },
+    });
+    await registrarEvidenciaCierre(prisma, {
+      empresaId,
+      periodoId,
+      fechaInicio: periodo.fechaInicio,
+      fechaFin: periodo.fechaFin,
+      estadoCierre,
+      conEvidencia,
+    });
+  } catch (err) {
+    registro.error(
+      "liquidacionWorker",
+      "cierre liquidado SIN evidencia firmada: no se factura este cierre",
+      err,
+      { periodoId, empresaId }
+    );
+  }
 }
 
 export async function ejecutarJobLiquidacion(datos: DatosJobLiquidacion): Promise<void> {
@@ -120,6 +163,10 @@ export async function ejecutarJobLiquidacion(datos: DatosJobLiquidacion): Promis
         ? "liquidado_con_rechazos"
         : "liquidado";
       await marcarTerminal(periodoId, periodo.version, estadoFinal, errores as Prisma.InputJsonValue | null, usuarioId);
+      // Este camino tambien CIERRA, asi que tambien deja evidencia: pasa cuando
+      // un intento anterior alcanzo a crear los recibos y murio antes de marcar
+      // terminal. Sin esto, ese cierre quedaria sin nada que facturar.
+      await registrarEvidencia(empresaId, periodoId, periodo, estadoFinal);
       return;
     }
 
@@ -176,6 +223,8 @@ export async function ejecutarJobLiquidacion(datos: DatosJobLiquidacion): Promis
       ? (rechazosAcumulados as unknown as Prisma.InputJsonValue)
       : null;
     await marcarTerminal(periodoId, periodo.version, estadoFinal, errores, usuarioId);
+
+    await registrarEvidencia(empresaId, periodoId, periodo, estadoFinal);
   } catch (err) {
     // Cualquier excepción no-QA (DB caída, dato inválido inesperado) deja el
     // periodo en `fallido` con detalle en erroresLiquidacion. Los recibos ya
