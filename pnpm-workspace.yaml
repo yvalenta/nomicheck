@@ -11,3 +11,13 @@ allowBuilds:
   '@scarf/scarf': false
   esbuild: true
   prisma: true
+
+# Dos avisos de `pnpm audit` que entran por la cadena de las herramientas de
+# prueba (`vitest > vite > postcss > nanoid`), no por nada que corra en
+# producción: las dependencias de runtime de la API son express, prisma, zod,
+# viem y compañía. Aun así se suben, porque un `audit` con ruido crónico entrena
+# a ignorarlo, y el día que aparezca uno que SÍ llegue a producción va a estar
+# en la misma lista que estos.
+overrides:
+  postcss: '>=8.5.23'
+  nanoid: '>=3.3.18'
