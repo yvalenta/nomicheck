@@ -21,7 +21,7 @@ Una empresa se registra con NIT, carga su gente, liquida sus periodos, revisa di
 
 **Por mes, no por periodo.** Una empresa con nómina quincenal cierra dos veces y paga una: cobrar por cierre castigaría a quien paga más seguido a su gente, que es exactamente al revés de lo que queremos premiar.
 
-**Facturado en COP**, por transferencia o factura. No hay tarjeta ni USDC de por medio: fue el hueco que bloqueó todo el funnel humano, y en B2B no hace falta cruzarlo — una empresa ya sabe pagar una factura.
+**Cobrado en COP**, por transferencia. No hay tarjeta ni USDC de por medio: fue el hueco que bloqueó todo el funnel humano, y en B2B no hace falta cruzarlo — una empresa ya sabe pagar contra un documento de cobro. **Ojo con la palabra:** hoy se emite una *cuenta de cobro*, no una factura, y la diferencia es legal, no de estilo — ver el punto 4 de «lo que hay que construir».
 
 ---
 
@@ -85,7 +85,13 @@ Contra ese piso, a una tasa medida de **3.137,74 COP/USD** (2026-08-16) los $12 
 1. ~~Contar cierres de periodo con evidencia por empresa y por mes~~ — `services/medidorCierres.ts`, puro y con pruebas. **Es el sitio de afirmación del precio**: la tabla de bandas vive ahí y en ningún otro lado.
 2. ~~Banda recalculada al cierre~~ — y la fija el **máximo de empleados del mes**, no la suma: sumar las dos quincenas de la misma gente duplicaba la nómina y empujaba a una banda que no toca.
 3. ~~Un estado de cuenta que la empresa pueda ver antes de la factura~~ — `GET /empresa/cuenta`, con el mismo cálculo que producirá el monto, y diciendo qué **no** se cobra y por qué.
-4. **La factura en sí — lo único que falta.** Al principio puede ser manual: con las primeras empresas, emitirla a mano cuesta menos que integrar una pasarela, y enseña qué hace falta de verdad.
+4. ~~La factura en sí~~ — **hecha el 2026-08-16** (`7ddf215`): `pnpm cobro --empresa N --mes YYYY-MM`, con `--listar` para ver quién tiene algo que cobrar. **Y no se llama factura**: emite una **cuenta de cobro**, y lo dice en su propio cuerpo.
+
+> **Por qué cuenta de cobro y no factura.** En Colombia una factura de venta de alguien obligado a facturar es un documento con forma legal —numeración autorizada por la DIAN, UBL, validación previa por un proveedor tecnológico—, y nada de eso lo produce un script. La cuenta de cobro es el instrumento de quien **no** está obligado a facturar: pide un pago, no da derecho a descontar IVA, y no sustituye una factura.
+>
+> Llamarla «factura» sería regalar exactamente el error que este producto existe para señalar: un papel que afirma una naturaleza jurídica que no tiene. **Si Ynt-labs pasa a estar obligado a facturar electrónicamente, esta herramienta deja de servir** y hay que emitir por el camino de la DIAN.
+
+El documento **se niega a emitirse** —en vez de improvisar— si faltan los datos del emisor (no hay valores por defecto: una cuenta de cobro con la identificación de otro es peor que ninguna), si el mes no tiene cierres facturables, o si la banda es de las que se conversan. Y el monto no se recalcula: sale del mismo estado de cuenta que la empresa ve en su portal.
 
 **Lo que hubo que construir antes y no estaba previsto acá: el portal no firmaba nada.** El servicio de firma existía, pero solo lo usaba la API batch — así que «cobrar la evidencia» no tenía sujeto. Ahora cada cierre terminal deja una `EvidenciaCierre` firmada con Ed25519 sobre el payload canónico, con el `reglasHash` del catálogo que lo produjo.
 
