@@ -20,6 +20,12 @@
 // defecto: una cuenta de cobro con la identificación de otro, o sin cuenta a
 // dónde consignar, es peor que no tener documento. Si falta algo, el script
 // dice exactamente qué y no emite.
+//
+// Se leen de `apps/api/.env` (que está en .gitignore), no de la línea de
+// comando: una identificación y una cuenta bancaria escritas en el shell quedan
+// en su historial. Las plantillas están en `.env.example`.
+
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import type { ClienteAcotado } from "../src/lib/alcance.js";
 import { obtenerEstadoCuenta, mesCorriente } from "../src/services/cuentaEmpresaService.js";
