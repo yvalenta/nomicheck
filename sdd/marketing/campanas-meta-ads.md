@@ -196,8 +196,8 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 **Gancho creativo (3 variantes):**
 1. **Dolor:** *"Pagar mal la liquidación no es un error contable. Es un pasivo legal."*
 2. **Curiosidad:** *"El motor de nómina que usan los contadores, ahora tú lo usas directo."*
-3. ~~**Cifra:** *"Un contador cuesta $600.000/mes. NomiCheck Empresas cuesta menos que un almuerzo por empleado."*~~ 🔴 **NO SUBIR.** El archivo pedía *validar cifras exactas con producto*; validado el 2026-08-15: **no hay cifra que validar.** El portal de empresa **no tiene precio** — ni plan, ni mensualidad, ni suscripción, buscado en la API y en los paquetes. Los únicos precios del producto son los US$0,02 por llamada del muro x402, que son de la API y no del portal. La frase inventa un precio y además lo compara.
-   **Reemplazo propuesto, mientras no haya precio de lista:** *"El mismo motor que audita liquidaciones, ahora liquidando las tuyas — con el artículo al lado de cada peso."* Sin cifra.
+3. ~~**Cifra:** *"Un contador cuesta $600.000/mes. NomiCheck Empresas cuesta menos que un almuerzo por empleado."*~~ El archivo pedía *validar cifras exactas con producto*. Se validó el 2026-08-15 y **no había ninguna**: el portal no tenía precio de ninguna clase. La frase inventaba un precio y encima lo comparaba contra otro sin fuente.
+   **Ya hay precio decidido** (ver `precio-empresas.md`), así que este gancho se puede escribir con cifra — pero con **la nuestra**, no con una del contador que nadie midió: *"Liquidar es gratis. Lo que cuesta es poder probarlo: desde $19.000 al mes."*
 
 **Copy del anuncio:**
 
@@ -206,9 +206,11 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 >
 > ~~Prueba gratis 30 días. Sin tarjeta.~~ → **Registra tu empresa y liquida tu primer periodo.**
 
-> 🔴 **La línea tachada prometía dos cosas falsas a la vez.** No hay prueba de 30 días —no existe *trial* en ninguna parte del producto— y al decir «prueba» implica que **después se paga**, cuando tampoco hay precio. Medido el 2026-08-15.
+> 🔴 **La línea tachada prometía dos cosas falsas a la vez.** No hay prueba de 30 días —no existe *trial* en ninguna parte del producto— y al decir «prueba» implica que después se paga por lo mismo. Medido el 2026-08-15.
 >
-> El reemplazo describe **lo que la empresa realmente puede hacer hoy**, que además es fuerte: registrarse con NIT y sector, y liquidar de verdad. Y el registro **sí** es sin tarjeta — eso es cierto, pero se cae solo del texto porque nadie la pide.
+> **Y sigue tachada aunque ya haya precio**, porque el precio decidido va por otro lado: el portal **no es una prueba de 30 días, es gratis sin límite de tiempo**, y lo que se paga es cerrar el periodo con evidencia firmada (`precio-empresas.md`). Decir «prueba gratis» sería vender peor de lo que la cosa es.
+>
+> El reemplazo describe lo que la empresa realmente puede hacer hoy, que además es más fuerte: registrarse con NIT y liquidar de verdad, sin reloj corriendo.
 
 **CTA:** "Prueba NomiCheck Empresas" — Formulario de leads nativo pidiendo: nombre, email, teléfono, número de empleados, sector. Redirige después a `/lanzamiento?utm_campaign=empresas&utm_source=meta&utm_medium=paid_social#empresas`.
 
@@ -282,6 +284,6 @@ El contrato de eventos vive en **`apps/web/src/lanzamiento/tracking.ts`** (la ru
 3. **Estructura por campaña:** 1 Campaña → 1 Conjunto de anuncios inicial → 3 Anuncios (uno por variante de gancho).
 4. **Presupuesto**: total mensual sugerido a definir con el usuario. Distribuir según % de la tabla de arriba. Preferir CBO (Campaign Budget Optimization) sobre presupuesto a nivel de conjunto.
 5. **Verificar y esperar confirmación explícita del humano antes de activar cualquier campaña.** No activar automáticamente. Esta es una acción que gasta dinero real.
-   **Y no subir NADA de lo tachado en este archivo.** Son cuatro promesas que el producto no cumple —un promedio de usuarios que no existen, un precio que no existe, una prueba de 30 días que no existe y una comisión sobre cero— más la tarjeta de carrusel y el cierre que dependen de esa última. Cada tachado lleva su reemplazo propuesto al lado. Un anuncio publicado es una promesa servida a desconocidos y **no hay forma de retirarla** — lo mismo que ya nos costó plata del lado del cobro (`leyes/cobrar-antes-de-servir`).
+   **Y no subir NADA de lo tachado en este archivo.** Cada tachado lleva su reemplazo al lado. Son cuatro promesas que el producto no cumplía: un promedio de usuarios que no existen, un precio comparado contra otro sin fuente, una prueba de 30 días que no existe, y una comisión sobre cero — más la tarjeta de carrusel y el cierre que dependen de esa última. **Ojo con la del precio:** ya hay uno decidido (`precio-empresas.md`), pero eso **no rehabilita la frase original** — el gancho se reescribe con nuestra cifra, no con la del contador que nadie midió, y el portal se anuncia gratis sin límite, nunca como «prueba». Un anuncio publicado es una promesa servida a desconocidos y **no hay forma de retirarla** — lo mismo que ya nos costó plata del lado del cobro (`leyes/cobrar-antes-de-servir`).
 6. **Configurar reglas automáticas** después de activar: pausar automáticamente cualquier anuncio con CPA > 2× el CPA promedio del conjunto después de 3 días con ≥ 20 conversiones.
 7. **Reporte semanal automático** al humano con CPA/CTR/tasa de conversión por conjunto — el humano decide reasignación de presupuesto.
