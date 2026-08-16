@@ -166,12 +166,29 @@ for _ in $(seq 1 30); do
     # servicio no declara `environment:` en el compose, se configura entero por
     # `env_file: ./apps/nomicheck/.env`. Mirar el archivo equivocado haría que
     # esta guarda nunca se dispare, que es la peor clase de guarda.
+    #
+    # ── Por qué la sonda usa un GET y no un POST con `{}` ────────────────────
+    #
+    # Hasta el 2026-08-16 sondeaba con `POST {}`, y ese cuerpo YA NO llega al
+    # muro: desde `42d78fc` un cuerpo mal formado se rechaza con 400 **antes**
+    # de liquidar el pago, a propósito, para no cobrarle a un comprador por su
+    # propio typo. O sea que la guarda empezó a gritar «NO cobra» en un deploy
+    # donde el muro cobraba perfecto — y solo se vio ahora, cinco commits
+    # después, porque en el medio nadie desplegó.
+    #
+    # Una guarda que grita en verde es peor que ninguna: la próxima vez que
+    # avise de verdad, nadie le va a creer. Es la misma lección que ya está
+    # escrita arriba sobre los reintentos del apex.
+    #
+    # El `GET` es la sonda correcta porque no depende del contrato del cuerpo:
+    # desde `d95cd19` una ruta paga contesta su 402 a cualquier verbo, que es
+    # justo lo que hacen el facilitador y los crawlers. Un cuerpo de ejemplo
+    # habría vuelto a atar esta guarda a un esquema que puede cambiar.
     if grep -qE '^X402_ACTIVO=true' "$APP_DIR/.env" 2>/dev/null; then
-      CODIGO_402="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-        http://localhost:3002/api/batch/verificar \
-        -H 'content-type: application/json' -d '{}' 2>/dev/null || true)"
+      CODIGO_402="$(curl -s -o /dev/null -w '%{http_code}' \
+        http://localhost:3002/api/batch/verificar 2>/dev/null || true)"
       if [[ "$CODIGO_402" == "402" ]]; then
-        echo "✓ el muro x402 cobra: /api/batch/verificar responde 402 sin pago"
+        echo "✓ el muro x402 cobra: un GET a /api/batch/verificar responde 402 sin pago"
       else
         echo "⚠ $APP_DIR/.env pide X402_ACTIVO=true pero lo servido NO cobra" >&2
         echo "  (/api/batch/verificar responde ${CODIGO_402:-sin respuesta}, no 402)." >&2
