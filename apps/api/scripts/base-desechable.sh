@@ -77,6 +77,22 @@ for d in "$DIR"/prisma/migrations/*/; do
   n=$((n + 1))
 done
 
+# Cero migraciones NO es exito. Si el glob no encuentra nada —directorio movido,
+# `$DIR` mal resuelto, un checkout a medias— el bucle no itera, `n` queda en 0 y
+# sin esta guarda el script imprime un ✓ y sale con 0 habiendo aplicado NADA.
+# Despues alguien prueba contra una base vacia creyendo que tiene el esquema.
+#
+# Es el mismo modo de falla que una sesion hermana pago el 2026-08-18 con un
+# chequeo de secretos que "salio limpio" porque en zsh `for d in $VARIABLE` no
+# separa palabras: itero una vez sobre la cadena entera y no reviso nada. **Salir
+# limpio por vacio se ve igual que salir limpio por sano**, y esa es justo la
+# clase de verde que este repo no se puede permitir.
+if [[ "$n" -eq 0 ]]; then
+  echo "✗ no se aplico NINGUNA migracion — el glob de $DIR/prisma/migrations/*/ no encontro nada." >&2
+  echo "  La base quedo vacia. Un '0 migraciones' no es exito: es no haber hecho nada." >&2
+  exit 1
+fi
+
 echo "✓ $n migraciones aplicadas sobre base vacía"
 echo
 echo "  $URL"
