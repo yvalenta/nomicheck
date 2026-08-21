@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import type { Textos } from "./i18n";
+import DateField from "../components/DateField.tsx";
 
 // La calculadora GRATIS de la landing, contra el endpoint real.
 //
@@ -195,23 +196,16 @@ export default function CalculadoraLiquidacion({ t }: { t: Textos }) {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <label className="block">
             <span className="text-xs font-medium text-[color:var(--color-ink)]">{c.ingreso}</span>
-            <input
-              type="date"
-              required
-              value={ingreso}
-              onChange={(e) => setIngreso(e.target.value)}
-              className="mt-1 w-full px-2 py-2 rounded-md border border-slate-200 outline-none focus:border-[color:var(--color-indigo)] font-[family-name:var(--font-mono)] text-xs"
-            />
+            <div className="mt-1">
+              <DateField required value={ingreso} onChange={setIngreso} className="w-full" />
+            </div>
           </label>
           <label className="block">
             <span className="text-xs font-medium text-[color:var(--color-ink)]">{c.retiro}</span>
-            <input
-              type="date"
-              required
-              value={retiro}
-              onChange={(e) => setRetiro(e.target.value)}
-              className="mt-1 w-full px-2 py-2 rounded-md border border-slate-200 outline-none focus:border-[color:var(--color-indigo)] font-[family-name:var(--font-mono)] text-xs"
-            />
+            <div className="mt-1">
+              {/* minimo=ingreso: no hay retiro antes de entrar — el calendario lo impone solo */}
+              <DateField required value={retiro} onChange={setRetiro} minimo={ingreso} className="w-full" />
+            </div>
           </label>
         </div>
 

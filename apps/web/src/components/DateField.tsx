@@ -14,13 +14,17 @@ interface Props {
   required?: boolean;
   /** YYYY-MM-DD — deshabilita fechas anteriores (ej. no retirar antes del ingreso). */
   minimo?: string;
+  /** YYYY-MM-DD — deshabilita fechas posteriores (ej. un turno fuera del periodo). */
+  maximo?: string;
+  /** Clases extra para el botón (ancho en flex/grid: "w-full", "sm:flex-1"). */
+  className?: string;
 }
 
 // Reemplaza <input type="date"> por un selector con calendario visible (mismo
 // componente en toda la app: Calendar + Popover, ya instalados vía shadcn/
 // react-day-picker). Sigue produciendo un string YYYY-MM-DD — los llamadores
 // no cambian su manejo de estado, solo el input nativo por este.
-export default function DateField({ value, onChange, placeholder = "Selecciona una fecha", required, minimo }: Props) {
+export default function DateField({ value, onChange, placeholder = "Selecciona una fecha", required, minimo, maximo, className = "" }: Props) {
   const seleccionada = value ? parseISO(value) : undefined;
 
   return (
@@ -28,7 +32,7 @@ export default function DateField({ value, onChange, placeholder = "Selecciona u
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`${inputCls} flex items-center justify-between gap-2 text-left ${!value ? "text-muted" : "text-ink"}`}
+          className={`${inputCls} flex items-center justify-between gap-2 text-left ${!value ? "text-muted" : "text-ink"} ${className}`}
         >
           <span>{seleccionada ? format(seleccionada, "d MMM yyyy", { locale: es }) : placeholder}</span>
           <CalendarDays size={16} className="text-muted shrink-0" />
@@ -41,7 +45,16 @@ export default function DateField({ value, onChange, placeholder = "Selecciona u
           defaultMonth={seleccionada}
           onSelect={(d) => d && onChange(format(d, "yyyy-MM-dd"))}
           required={required}
-          disabled={minimo ? { before: parseISO(minimo) } : undefined}
+          disabled={
+            // Array = OR de matchers. Un solo objeto {before, after} seria el
+            // INTERVALO entre ambas — lo contrario de lo que se quiere aca.
+            minimo || maximo
+              ? [
+                  ...(minimo ? [{ before: parseISO(minimo) }] : []),
+                  ...(maximo ? [{ after: parseISO(maximo) }] : []),
+                ]
+              : undefined
+          }
         />
       </PopoverContent>
     </Popover>

@@ -16,6 +16,7 @@ import {
   type ReglaAgrupada,
 } from "../../apiAdmin";
 import PaycheckCard from "../PaycheckCard.tsx";
+import DateField from "../DateField.tsx";
 import EmptyState from "../EmptyState.tsx";
 import Skeleton from "../Skeleton.tsx";
 
@@ -451,7 +452,7 @@ function FormNuevaVigencia({
     <form onSubmit={enviar} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3">
       <div className="grid grid-cols-2 gap-2">
         <input required type="number" step="any" placeholder="Nuevo valor" value={valor} onChange={(e) => setValor(e.target.value)} className={inputCls} />
-        <input required type="date" value={vigenteDesde} onChange={(e) => setVigenteDesde(e.target.value)} className={inputCls} />
+        <DateField required value={vigenteDesde} onChange={setVigenteDesde} className="w-full" />
       </div>
       <input placeholder="Fuente legal (opcional)" value={fuente} onChange={(e) => setFuente(e.target.value)} className={inputCls} />
       {error && <p className="text-xs text-coral">{error}</p>}
@@ -505,7 +506,7 @@ function Festivos() {
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
       <PaycheckCard>
         <form onSubmit={agregar} className="px-3 pt-3 flex gap-2">
-          <input required type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
+          <DateField required value={fecha} onChange={setFecha} className="w-full" />
           <input required placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className={`${inputCls} flex-1`} />
           <button type="submit" className="rounded-xl bg-mint text-white px-3 hover:bg-mint-dark transition-colors duration-200">
             <CalendarPlus size={16} />

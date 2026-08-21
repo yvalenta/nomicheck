@@ -47,6 +47,7 @@ import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
 import PaycheckCard from "../PaycheckCard.tsx";
 import ValidationRow from "../ValidationRow.tsx";
 import ComprobanteNomina from "../ComprobanteNomina.tsx";
+import DateField from "../DateField.tsx";
 import DateRangeField from "../DateRangeField.tsx";
 import EmptyState from "../EmptyState.tsx";
 import HorarioSemanalEditor from "../HorarioSemanalEditor.tsx";
@@ -164,24 +165,12 @@ export default function PeriodosEmpresa() {
             { valor: "pagado", etiqueta: "Pagado" },
           ]}
         />
-        <label className="flex items-center gap-1.5 text-xs text-muted">
-          Desde
-          <input
-            type="date"
-            value={filtros.desde}
-            onChange={(e) => cambiarFiltro({ desde: e.target.value })}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-muted">
-          Hasta
-          <input
-            type="date"
-            value={filtros.hasta}
-            onChange={(e) => cambiarFiltro({ hasta: e.target.value })}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
-          />
-        </label>
+        <DateRangeField
+          desde={filtros.desde}
+          hasta={filtros.hasta}
+          onCambio={(d, h) => cambiarFiltro({ desde: d, hasta: h })}
+          placeholder="Cualquier fecha"
+        />
         {(filtros.estado || filtros.desde || filtros.hasta) && (
           <button onClick={() => setFiltros(DEFAULTS_PERIODOS)} className="text-xs text-mint-dark hover:underline ml-auto">
             Limpiar
@@ -809,13 +798,12 @@ function DetallePeriodo({
                       )}
                       {turnosEmpleado.map((t, i) => (
                         <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-slate-50 rounded-xl p-2.5">
-                          <input
-                            type="date"
+                          <DateField
                             value={t.fecha}
-                            min={periodo.fechaInicio}
-                            max={periodo.fechaFin}
-                            onChange={(e) => actualizarTurno(t, { fecha: e.target.value })}
-                            className={`${inputCls} sm:flex-1`}
+                            minimo={periodo.fechaInicio}
+                            maximo={periodo.fechaFin}
+                            onChange={(fecha) => actualizarTurno(t, { fecha })}
+                            className="sm:flex-1"
                           />
                           <div className="flex items-center gap-2">
                             <input

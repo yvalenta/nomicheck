@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, FileClock, MinusCircle, PencilLine, PlusCircle, XCircle } from "lucide-react";
 import { listarAuditoria, type EntradaAuditoria, type RespuestaPaginada } from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
+import DateRangeField from "../DateRangeField.tsx";
 import CampoBusqueda from "../filtros/CampoBusqueda.tsx";
 import SelectFiltro from "../filtros/SelectFiltro.tsx";
 import Paginador from "../filtros/Paginador.tsx";
@@ -108,24 +109,12 @@ export default function AuditoriaEmpresa() {
             />
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <label className="flex items-center gap-1.5 text-xs text-muted">
-              Desde
-              <input
-                type="date"
-                value={filtros.desde}
-                onChange={(e) => cambiarFiltro({ desde: e.target.value })}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-muted">
-              Hasta
-              <input
-                type="date"
-                value={filtros.hasta}
-                onChange={(e) => cambiarFiltro({ hasta: e.target.value })}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
-              />
-            </label>
+            <DateRangeField
+              desde={filtros.desde}
+              hasta={filtros.hasta}
+              onCambio={(d, h) => cambiarFiltro({ desde: d, hasta: h })}
+              placeholder="Cualquier fecha"
+            />
             {(filtros.q || filtros.tabla || filtros.accion || filtros.desde || filtros.hasta) && (
               <button
                 onClick={() => setFiltros(DEFAULTS)}
