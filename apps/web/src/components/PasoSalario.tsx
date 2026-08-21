@@ -1,15 +1,5 @@
 import { useEffect } from "react";
-import {
-  ArrowRight,
-  Banknote,
-  Bus,
-  CalendarRange,
-  Gavel,
-  HandCoins,
-  PiggyBank,
-  RefreshCw,
-  Wallet,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
@@ -124,11 +114,10 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
         if (listo) onSiguiente();
       }}
     >
-      <PaycheckCard titulo="Tu salario">
-        <div className="px-3 pb-3 pt-1 flex flex-col gap-4">
+      <PaycheckCard titulo="Tu salario y periodo">
+        <div className="px-3 pb-4 pt-1 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            <span className="flex items-center gap-2">
-              <Wallet size={16} className="text-mint-dark" />{" "}
+            <span>
               {datos.tipoContrato === "servicios"
                 ? "Honorarios mensuales pactados"
                 : "Salario básico mensual pactado"}
@@ -163,14 +152,13 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
                 type="checkbox"
                 checked={datos.auxilio}
                 onChange={(e) => set("auxilio", e.target.checked)}
-                className="w-4 h-4 accent-emerald-500"
+                className="w-4 h-4 accent-mint"
               />
-              <Bus size={16} className="text-muted" /> Recibo auxilio de transporte
+              Recibo auxilio de transporte
             </label>
           )}
           {superaTopeAuxilio && esLaboralOrdinario && (
-            <p className="text-xs text-muted flex items-center gap-2">
-              <Bus size={16} className="text-muted shrink-0" />
+            <p className="text-xs text-muted">
               No aplica auxilio de transporte: tu salario supera{" "}
               {parametros?.auxilioTransporteTopeSmlmv} SMLMV (Decreto de salario mínimo vigente).
             </p>
@@ -215,67 +203,92 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
               </span>
             )}
           </label>
+
+          {/* El periodo vive con el salario: son la misma pregunta (¿cuánto y
+              cuándo?), y el par periodicidad/período aprovecha una sola fila. */}
+          <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+              <span>Periodicidad de pago</span>
+              <select
+                value={datos.periodicidad}
+                onChange={(e) => cambiarPeriodicidad(e.target.value as Periodicidad)}
+                className={inputCls}
+              >
+                {(Object.keys(PERIODICIDAD_LABEL) as Periodicidad[]).map((p) => (
+                  <option key={p} value={p}>
+                    {PERIODICIDAD_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+              <span>Período a revisar</span>
+              <DateRangeField required desde={datos.desde} hasta={datos.hasta} onCambio={cambiarPeriodo} placeholder="Selecciona el período" />
+            </label>
+          </div>
+          {datos.periodicidad !== "personalizado" && (
+            <p className="text-xs text-muted -mt-1">
+              El fin se calcula solo según la periodicidad — edítalo si tu periodo real fue
+              distinto.
+            </p>
+          )}
         </div>
       </PaycheckCard>
 
       {datos.tipoContrato !== "servicios" && (
-      <PaycheckCard titulo="Deducciones opcionales — marca solo las que apliquen">
-        <div className="px-3 pb-3 pt-1 flex flex-col gap-3.5">
-          <CheckMonto
-            icono={PiggyBank}
-            etiqueta="Aporte a cuenta AFC"
-            ayuda="Descuento por convenio — no afecta tu salud ni tu pensión."
-            marcado={datos.aporteAfc !== ""}
-            valor={datos.aporteAfc}
-            onMarcar={(m) => set("aporteAfc", m ? "0" : "")}
-            onValor={(v) => set("aporteAfc", v)}
-          />
-          <CheckMonto
-            icono={Banknote}
-            etiqueta="Préstamo con la empresa"
-            marcado={datos.prestamo !== ""}
-            valor={datos.prestamo}
-            onMarcar={(m) => set("prestamo", m ? "0" : "")}
-            onValor={(v) => set("prestamo", v)}
-          />
-          <CheckMonto
-            icono={HandCoins}
-            etiqueta="Ahorro programado"
-            marcado={datos.ahorro !== ""}
-            valor={datos.ahorro}
-            onMarcar={(m) => set("ahorro", m ? "0" : "")}
-            onValor={(v) => set("ahorro", v)}
-          />
-          <CheckMonto
-            icono={RefreshCw}
-            etiqueta="Reproceso"
-            ayuda="Descuento por un error o novedad operativa acordada con la empresa."
-            marcado={datos.reproceso !== ""}
-            valor={datos.reproceso}
-            onMarcar={(m) => set("reproceso", m ? "0" : "")}
-            onValor={(v) => set("reproceso", v)}
-          />
+      <PaycheckCard titulo="Deducciones opcionales">
+        <div className="px-3 pb-4 pt-1 flex flex-col gap-3.5">
+          <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            <CheckMonto
+              etiqueta="Aporte a cuenta AFC"
+              ayuda="Descuento por convenio — no afecta tu salud ni tu pensión."
+              marcado={datos.aporteAfc !== ""}
+              valor={datos.aporteAfc}
+              onMarcar={(m) => set("aporteAfc", m ? "0" : "")}
+              onValor={(v) => set("aporteAfc", v)}
+            />
+            <CheckMonto
+              etiqueta="Préstamo con la empresa"
+              marcado={datos.prestamo !== ""}
+              valor={datos.prestamo}
+              onMarcar={(m) => set("prestamo", m ? "0" : "")}
+              onValor={(v) => set("prestamo", v)}
+            />
+            <CheckMonto
+              etiqueta="Ahorro programado"
+              marcado={datos.ahorro !== ""}
+              valor={datos.ahorro}
+              onMarcar={(m) => set("ahorro", m ? "0" : "")}
+              onValor={(v) => set("ahorro", v)}
+            />
+            <CheckMonto
+              etiqueta="Reproceso"
+              ayuda="Descuento por un error o novedad operativa acordada con la empresa."
+              marcado={datos.reproceso !== ""}
+              valor={datos.reproceso}
+              onMarcar={(m) => set("reproceso", m ? "0" : "")}
+              onValor={(v) => set("reproceso", v)}
+            />
+          </div>
 
           <div className="border-t border-slate-100 pt-3.5 flex flex-col gap-2">
-            <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+            <label className="flex items-center gap-2.5 text-sm text-ink">
               <input
                 type="checkbox"
                 checked={datos.embargoTipo === "ordinario"}
                 onChange={(e) => marcarEmbargo("ordinario", e.target.checked)}
-                className="w-4 h-4 accent-coral"
+                className="w-4 h-4 accent-mint"
               />
-              <Gavel size={16} className="text-coral" /> Tengo un embargo ordinario (bancos,
-              tarjetas, créditos)
+              Tengo un embargo ordinario (bancos, tarjetas, créditos)
             </label>
-            <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+            <label className="flex items-center gap-2.5 text-sm text-ink">
               <input
                 type="checkbox"
                 checked={datos.embargoTipo === "alimentos_o_cooperativa"}
                 onChange={(e) => marcarEmbargo("alimentos_o_cooperativa", e.target.checked)}
-                className="w-4 h-4 accent-coral"
+                className="w-4 h-4 accent-mint"
               />
-              <Gavel size={16} className="text-coral" /> Tengo un embargo por cuota alimentaria o
-              cooperativa
+              Tengo un embargo por cuota alimentaria o cooperativa
             </label>
             {datos.embargoTipo && (
               <>
@@ -300,53 +313,22 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
       </PaycheckCard>
       )}
 
-      <PaycheckCard titulo="Periodo a revisar">
-        <div className="px-3 pb-3 pt-1 flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            <span>Periodicidad de pago</span>
-            <select
-              value={datos.periodicidad}
-              onChange={(e) => cambiarPeriodicidad(e.target.value as Periodicidad)}
-              className={inputCls}
-            >
-              {(Object.keys(PERIODICIDAD_LABEL) as Periodicidad[]).map((p) => (
-                <option key={p} value={p}>
-                  {PERIODICIDAD_LABEL[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            <span className="flex items-center gap-2">
-              <CalendarRange size={16} className="text-mint-dark" /> Período
-            </span>
-            <DateRangeField required desde={datos.desde} hasta={datos.hasta} onCambio={cambiarPeriodo} placeholder="Selecciona el período" />
-          </label>
-          {datos.periodicidad !== "personalizado" && (
-            <p className="text-xs text-muted">
-              Calculada automáticamente según la periodicidad — puedes editarla si tu periodo real
-              fue distinto.
-            </p>
-          )}
-        </div>
-      </PaycheckCard>
-
-      <PaycheckCard titulo="Para comparar (opcional)">
-        <div className="px-3 pb-3 pt-1">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            ¿Cuánto te consignaron?
-            <input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={datos.netoRecibido}
-              onChange={(e) => set("netoRecibido", e.target.value)}
-              className={inputCls}
-              placeholder="El neto de tu comprobante o cuenta"
-            />
-          </label>
-        </div>
-      </PaycheckCard>
+      {/* Comparar es terciario: una fila discreta, no una card que compita
+          con lo esencial. */}
+      <label className="flex flex-col gap-1.5 px-1 text-xs text-muted sm:flex-row sm:items-center sm:gap-3">
+        <span className="shrink-0 sm:w-64">
+          ¿Cuánto te consignaron? <span className="opacity-70">(opcional, para comparar)</span>
+        </span>
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          value={datos.netoRecibido}
+          onChange={(e) => set("netoRecibido", e.target.value)}
+          className={`${inputCls} flex-1 text-sm`}
+          placeholder="El neto de tu comprobante o cuenta"
+        />
+      </label>
 
       <button
         type="submit"
@@ -361,7 +343,6 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
 }
 
 function CheckMonto({
-  icono: Icono,
   etiqueta,
   ayuda,
   marcado,
@@ -369,7 +350,6 @@ function CheckMonto({
   onMarcar,
   onValor,
 }: {
-  icono: typeof Wallet;
   etiqueta: string;
   ayuda?: string;
   marcado: boolean;
@@ -379,14 +359,14 @@ function CheckMonto({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+      <label className="flex items-center gap-2.5 text-sm text-ink">
         <input
           type="checkbox"
           checked={marcado}
           onChange={(e) => onMarcar(e.target.checked)}
-          className="w-4 h-4 accent-coral"
+          className="w-4 h-4 accent-mint"
         />
-        <Icono size={16} className="text-coral" /> {etiqueta}
+        {etiqueta}
       </label>
       {marcado && (
         <>
