@@ -15,6 +15,7 @@ import {
   type ParametrosPublicos,
 } from "./api";
 import HeaderProfile from "./components/HeaderProfile.tsx";
+import HeroHome from "./components/HeroHome.tsx";
 import PasoSalario, { type DatosPaso1 } from "./components/PasoSalario.tsx";
 import PasoSemana from "./components/PasoSemana.tsx";
 import SubirComprobante from "./components/SubirComprobante.tsx";
@@ -193,21 +194,29 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <HeaderProfile
-        periodo={periodo}
-        paso={PASO_LABEL[paso]}
-        mostrarMisLiquidaciones={haySesion && paso !== "misLiquidaciones"}
-        onVerMisLiquidaciones={() => setPaso("misLiquidaciones")}
-      />
+      {/* La portada solo en la entrada: durante el flujo manda el header
+          compacto con el paso y el periodo, como siempre. */}
+      {paso === "salario" ? (
+        <HeroHome
+          onVerificar={() =>
+            document.getElementById("verificar")?.scrollIntoView({ behavior: "smooth" })
+          }
+        />
+      ) : (
+        <HeaderProfile
+          periodo={periodo}
+          paso={PASO_LABEL[paso]}
+          mostrarMisLiquidaciones={haySesion && paso !== "misLiquidaciones"}
+          onVerMisLiquidaciones={() => setPaso("misLiquidaciones")}
+        />
+      )}
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
         {paso === "salario" && (
-          <div className="flex flex-col gap-5">
+          <div id="verificar" className="flex flex-col gap-5 scroll-mt-4 pt-2">
             <div className="text-center px-4">
-              <h2 className="text-xl font-bold text-ink">¿Te pagaron bien?</h2>
-              <p className="text-sm text-muted mt-1">
-                Dinos tu salario y tus horarios — nosotros hacemos las cuentas con la ley
-                colombiana vigente.
+              <p className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">
+                Verifica tu pago
               </p>
             </div>
             {error && <p className="rounded-2xl bg-red-50 text-coral text-sm p-3.5">{error}</p>}
@@ -288,20 +297,13 @@ export default function App() {
         )}
       </main>
 
+      {/* Footer a dieta (2026-08-20): los enlaces de portales viven en las
+          tres puertas del hero — aquí queda lo que es de verdad del pie. */}
       <footer className="text-center text-xs text-muted py-4 px-6 flex flex-col gap-1.5">
         <span>
           NomiCheck — estimado informativo, no reemplaza la liquidación oficial ni asesoría legal
           certificada.
         </span>
-        <a href="/login" className="text-mint-dark hover:underline font-medium">
-          ¿Ya tienes cuenta? Ingresa aquí
-        </a>
-        <a href="/empresa" className="text-mint-dark hover:underline">
-          ¿Eres empresa? Liquida y administra tu nómina
-        </a>
-        <a href="/colaborador" className="text-mint-dark hover:underline">
-          ¿Tu empresa ya usa NomiCheck? Ingresa al portal del colaborador
-        </a>
         <span className="font-display text-[9px] font-medium uppercase tracking-[0.2em] text-base-content/25">© {new Date().getFullYear()} Ynt-labs</span>
       </footer>
 

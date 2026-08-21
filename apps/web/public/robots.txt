@@ -1,0 +1,11 @@
+# nomicheck.ynt.codes — el verificador y las puertas son públicos;
+# los portales autenticados no tienen nada que indexar.
+User-agent: *
+Allow: /
+Disallow: /empresa
+Disallow: /colaborador
+Disallow: /login
+Disallow: /admin
+
+# Para agentes de software: la guía de integración vive en /agents.md
+# (la API se descubre por su OpenAPI servido y sus 402 — no por scraping).
