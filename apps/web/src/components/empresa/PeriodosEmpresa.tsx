@@ -16,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { diaSemana, formatCOP, formatRangoFechas, HORARIO_BASE_DEFAULT, rangoFechas, type Festivo, type HorarioDia, type ResultadoNomina } from "@pv/reglas";
+import { calcularHasta, PERIODICIDAD_LABEL, type Periodicidad } from "../../lib/periodicidad.ts";
 import { listarFestivos } from "../../api";
 import {
   crearPeriodo,
@@ -270,7 +271,26 @@ function FilaPeriodo({
 function FormPeriodo({ onCreado }: { onCreado: (p: Periodo) => void }) {
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
+  const [periodicidad, setPeriodicidad] = useState<Periodicidad>("quincenal");
   const [error, setError] = useState<string | null>(null);
+
+  // La misma regla que el verificador de personas (lib/periodicidad): elegir
+  // "desde" sugiere "hasta" según la cadencia; un rango completo elegido a
+  // mano manda, y te pasa a "personalizado" en vez de pelearte con él.
+  function cambiarPeriodo(d: string, h: string) {
+    setFechaInicio(d);
+    if (!h) {
+      setFechaFin(periodicidad === "personalizado" ? fechaFin : calcularHasta(d, periodicidad));
+    } else {
+      setFechaFin(h);
+      setPeriodicidad("personalizado");
+    }
+  }
+
+  function cambiarPeriodicidad(p: Periodicidad) {
+    setPeriodicidad(p);
+    if (p !== "personalizado" && fechaInicio) setFechaFin(calcularHasta(fechaInicio, p));
+  }
 
   return (
     <PaycheckCard titulo="Nuevo periodo">
@@ -286,16 +306,30 @@ function FormPeriodo({ onCreado }: { onCreado: (p: Periodo) => void }) {
         }}
         className="px-3 pb-3 pt-1 flex flex-col gap-3"
       >
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Periodicidad de pago
+          <select
+            value={periodicidad}
+            onChange={(e) => cambiarPeriodicidad(e.target.value as Periodicidad)}
+            className={inputCls}
+          >
+            {(Object.keys(PERIODICIDAD_LABEL) as Periodicidad[]).map((p) => (
+              <option key={p} value={p}>
+                {PERIODICIDAD_LABEL[p]}
+              </option>
+            ))}
+          </select>
+        </label>
         <DateRangeField
           required
           desde={fechaInicio}
           hasta={fechaFin}
-          onCambio={(d, h) => {
-            setFechaInicio(d);
-            setFechaFin(h);
-          }}
+          onCambio={cambiarPeriodo}
           placeholder="Selecciona el período"
         />
+        <p className="text-[11px] text-muted -mt-1">
+          El fin se calcula solo según la periodicidad — edítalo si tu periodo real fue distinto.
+        </p>
         {error && <p className="text-coral text-sm">{error}</p>}
         <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200">
           <CalendarPlus size={16} /> Crear periodo

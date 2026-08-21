@@ -10,12 +10,14 @@ import {
   RefreshCw,
   Wallet,
 } from "lucide-react";
-import { finDePeriodoMensual, formatCOP } from "@pv/reglas";
+import { formatCOP } from "@pv/reglas";
 import type { ParametrosPublicos } from "../api.ts";
 import PaycheckCard from "./PaycheckCard.tsx";
 import DateRangeField from "./DateRangeField.tsx";
+import { calcularHasta, PERIODICIDAD_LABEL, type Periodicidad } from "../lib/periodicidad.ts";
 
-export type Periodicidad = "semanal" | "quincenal" | "mensual" | "personalizado";
+// Re-export por compatibilidad: el tipo nació aquí y otros lo importan de aquí.
+export type { Periodicidad };
 export type TipoEmbargo = "ordinario" | "alimentos_o_cooperativa";
 export type TipoContrato =
   | "indefinido"
@@ -52,12 +54,6 @@ interface Props {
 const inputCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
-const PERIODICIDAD_LABEL: Record<Periodicidad, string> = {
-  semanal: "Semanal (7 días)",
-  quincenal: "Quincenal (15 días)",
-  mensual: "Mensual",
-  personalizado: "Personalizado",
-};
 
 const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
   indefinido: "Término indefinido",
@@ -69,16 +65,8 @@ const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
   servicios: "Prestación de servicios (contratista independiente)",
 };
 
-// Fecha fin sugerida a partir de la fecha de inicio y la periodicidad — el
-// usuario puede editarla libremente después (eso la pasa a "personalizado").
-function calcularHasta(desde: string, periodicidad: Periodicidad): string {
-  if (!desde || periodicidad === "personalizado") return "";
-  if (periodicidad === "mensual") return finDePeriodoMensual(desde);
-  const d = new Date(`${desde}T00:00:00Z`);
-  if (periodicidad === "semanal") d.setUTCDate(d.getUTCDate() + 6);
-  else d.setUTCDate(d.getUTCDate() + 14); // quincenal
-  return d.toISOString().slice(0, 10);
-}
+// calcularHasta y las etiquetas de periodicidad viven en lib/periodicidad.ts
+// desde el 2026-08-20 — la empresa usa la misma regla en "nuevo periodo".
 
 // Estos cuatro tipos son contrato laboral ordinario con derecho pleno a
 // auxilio de transporte y deducciones de ley completas — solo cambia su
