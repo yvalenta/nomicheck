@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Check, FileSignature, ShieldAlert } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
-import { obtenerEstadoCuenta, type EstadoCuenta } from "../../apiEmpresa";
+import {
+  actualizarDatosEmpresa,
+  obtenerDatosEmpresa,
+  obtenerEstadoCuenta,
+  type DatosEmpresa,
+  type EstadoCuenta,
+} from "../../apiEmpresa";
 import PaycheckCard from "../PaycheckCard.tsx";
 import { useDatos } from "../../hooks/useDatos.ts";
 import { nombreMes, ultimosMeses } from "./mesesCuenta.ts";
@@ -51,6 +57,8 @@ export default function CuentaEmpresa() {
         </label>
       </div>
 
+      <DatosEmpresaCard />
+
       {error && <p className="rounded-xl bg-red-50 text-coral text-sm p-3">{error}</p>}
       {cargando && <p className="text-sm text-muted px-1">Calculando…</p>}
 
@@ -64,15 +72,15 @@ export default function CuentaEmpresa() {
                   <p className="text-sm text-muted">
                     {datos.cierresTotales === 0
                       ? "Todavía no cerraste ningún periodo este mes. Sin cierres no hay cobro."
-                      : "Ningún cierre de este mes quedó con evidencia cobrable — mirá el detalle."}
+                      : "Ningún cierre de este mes quedó con evidencia cobrable — mira el detalle."}
                   </p>
                 </>
               ) : datos.requiereConversacion ? (
                 <>
                   <p className="text-2xl font-bold text-ink">A convenir</p>
                   <p className="text-sm text-muted">
-                    Con {datos.empleadosFacturables} personas quedás fuera de las bandas de lista.
-                    El precio se acuerda: escribinos y lo cerramos.
+                    Con {datos.empleadosFacturables} personas quedas fuera de las bandas de lista.
+                    El precio se acuerda: escríbenos y lo cerramos.
                   </p>
                 </>
               ) : (
@@ -196,5 +204,91 @@ export default function CuentaEmpresa() {
         </>
       )}
     </div>
+  );
+}
+
+// Nombre, NIT y sector — editable aquí porque hasta el 2026-08-20 la empresa
+// era lo único del panel sin edición: un NIT provisional solo se corregía
+// con SQL. Guardar exige rol admin (el backend lo impone) y queda en la
+// auditoría con autor, como cualquier cambio de empleado.
+function DatosEmpresaCard() {
+  const { datos } = useDatos<DatosEmpresa>("empresa:datos", obtenerDatosEmpresa);
+  const [form, setForm] = useState<DatosEmpresa | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  const f = form ?? datos;
+  if (!f) return null;
+  const editado =
+    !!datos &&
+    (f.nombre !== datos.nombre || f.nit !== datos.nit || f.sector !== datos.sector);
+
+  function campo<K extends keyof DatosEmpresa>(k: K, v: string) {
+    setAviso(null);
+    setForm({ ...(f as DatosEmpresa), [k]: v });
+  }
+
+  async function guardar() {
+    setGuardando(true);
+    setAviso(null);
+    try {
+      const guardado = await actualizarDatosEmpresa(f as DatosEmpresa);
+      setForm(guardado);
+      setAviso({ ok: true, texto: "Datos guardados — el cambio queda en la auditoría." });
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo guardar" });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <PaycheckCard titulo="Datos de la empresa">
+      <div className="px-3 pb-4 pt-1 flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            Nombre
+            <input
+              value={f.nombre}
+              onChange={(e) => campo("nombre", e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            NIT
+            <input
+              value={f.nit}
+              onChange={(e) => campo("nit", e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            Sector
+            <input
+              value={f.sector}
+              onChange={(e) => campo("sector", e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+            />
+          </label>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={guardar}
+            disabled={!editado || guardando}
+            className="rounded-[10px] bg-mint px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-mint-dark disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {guardando ? "Guardando…" : "Guardar cambios"}
+          </button>
+          {aviso && (
+            <p className={`text-xs ${aviso.ok ? "text-teal-700" : "text-coral"}`}>{aviso.texto}</p>
+          )}
+          {f.nit.startsWith("PROV-") && !aviso && (
+            <p className="text-xs text-amber-600">
+              El NIT es provisional — reemplázalo por el real: sale impreso en la cuenta de cobro.
+            </p>
+          )}
+        </div>
+      </div>
+    </PaycheckCard>
   );
 }

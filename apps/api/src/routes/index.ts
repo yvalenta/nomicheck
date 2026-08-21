@@ -18,6 +18,10 @@ import { extraer } from "../controllers/comprobanteController.js";
 import { explicar } from "../controllers/chatController.js";
 import { registro, registroIndividual, invitar, perfilIndividual, whoami } from "../controllers/authController.js";
 import {
+  actualizarDatos as actualizarDatosEmpresa,
+  obtenerDatos as obtenerDatosEmpresa,
+} from "../controllers/empresaController.js";
+import {
   listar as listarEmpresasAdmin,
   crear as crearEmpresaAdmin,
   reasignarAdmin as reasignarAdminEmpresa,
@@ -202,6 +206,11 @@ router.get("/liquidations", requiereAuth, listarLiquidaciones);
 const empresaLectura = [requiereAuth, requiereEmpresaLectura];
 const empresaEdicion = [requiereAuth, requiereEmpresaEdicion];
 const soloAdminEmpresa = [requiereAuth, requiereRol("admin_empresa")];
+
+// Los datos de la empresa misma (nombre, NIT, sector). Editar es solo del
+// admin: el NIT sale impreso en las cuentas de cobro.
+router.get("/empresa/datos", ...empresaLectura, obtenerDatosEmpresa);
+router.put("/empresa/datos", ...soloAdminEmpresa, actualizarDatosEmpresa);
 
 router.get("/empresa/empleados", ...empresaLectura, listar);
 router.post("/empresa/empleados", ...empresaEdicion, crear);

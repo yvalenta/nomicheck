@@ -285,6 +285,22 @@ export function obtenerCumplimiento(): Promise<SemaforoCumplimiento> {
   return autenticado("/empresa/cumplimiento");
 }
 
+// Los datos de la empresa misma — editable solo por el admin; el NIT sale
+// impreso en las cuentas de cobro (y un seed puede dejarlo provisional).
+export interface DatosEmpresa {
+  nombre: string;
+  nit: string;
+  sector: string;
+}
+
+export function obtenerDatosEmpresa(): Promise<DatosEmpresa> {
+  return autenticado("/empresa/datos");
+}
+
+export function actualizarDatosEmpresa(datos: DatosEmpresa): Promise<DatosEmpresa> {
+  return autenticado("/empresa/datos", { method: "PUT", body: JSON.stringify(datos) });
+}
+
 // Máquina de estados (SDD §15, escalabilidad enterprise) — espejo del set
 // canónico del backend en apps/api/src/lib/estados.ts. `liquidando` es el
 // estado transitorio que activa el polling; `liquidado_con_rechazos` es
