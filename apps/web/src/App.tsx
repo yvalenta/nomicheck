@@ -14,6 +14,7 @@ import {
   type ComprobanteExtraido,
   type ParametrosPublicos,
 } from "./api";
+import BotonCerrarSesion from "./components/BotonCerrarSesion.tsx";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 import HeroHome from "./components/HeroHome.tsx";
 import PasoSalario, { type DatosPaso1 } from "./components/PasoSalario.tsx";
@@ -208,6 +209,7 @@ export default function App() {
           paso={PASO_LABEL[paso]}
           mostrarMisLiquidaciones={haySesion && paso !== "misLiquidaciones"}
           onVerMisLiquidaciones={() => setPaso("misLiquidaciones")}
+          accion={haySesion ? <BotonCerrarSesion /> : undefined}
         />
       )}
 

@@ -184,7 +184,7 @@ export default function CuentaEmpresa() {
               Cada cierre cobrado lleva una firma Ed25519 sobre el resultado completo, con el hash
               del catálogo legal que lo produjo.{" "}
               <strong className="text-ink font-medium">
-                Podés verificarlo por tu cuenta, sin nosotros
+                Puedes verificarlo por tu cuenta, sin nosotros
               </strong>{" "}
               — la llave pública está en{" "}
               <a href="/api/batch/publickey" className="underline hover:text-ink">

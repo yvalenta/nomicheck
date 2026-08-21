@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
+import BotonCerrarSesion from "./components/BotonCerrarSesion.tsx";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 import AuthColaborador from "./components/colaborador/AuthColaborador.tsx";
 import DashboardColaborador from "./components/colaborador/DashboardColaborador.tsx";
@@ -24,6 +25,8 @@ export default function PortalColaborador() {
 
   useEffect(() => {
     if (!session || recuperando) return;
+    // Cada sesión nueva re-verifica desde cero (mismo arreglo que EmpresaApp).
+    setRolOk(undefined);
     obtenerMiRol()
       .then(({ rol }) => {
         if (rol === "colaborador") setRolOk(true);
@@ -34,7 +37,10 @@ export default function PortalColaborador() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <HeaderProfile paso={session ? "Portal del colaborador" : "Acceso colaborador"} />
+      <HeaderProfile
+        paso={session ? "Portal del colaborador" : "Acceso colaborador"}
+        accion={!recuperando && session && rolOk ? <BotonCerrarSesion /> : undefined}
+      />
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6">
         {session === undefined && <p className="text-sm text-muted text-center">Cargando…</p>}
         {recuperando && <ResetPasswordForm onListo={() => setRecuperando(false)} />}

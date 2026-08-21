@@ -197,7 +197,7 @@ export default function HeatmapDias({ dias }: Props) {
           </div>
         ) : (
           <p className="text-xs text-muted text-center py-1">
-            Tocá un día para ver sus horas y cuánto aporta al pago.
+            Toca un día para ver sus horas y cuánto aporta al pago.
           </p>
         )}
       </div>

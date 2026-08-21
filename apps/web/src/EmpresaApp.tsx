@@ -3,6 +3,7 @@ import { lazyConReintento as lazy } from "./lib/lazyConReintento.ts";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
+import BotonCerrarSesion from "./components/BotonCerrarSesion.tsx";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 import SidebarEmpresa, { destinoDeSeccion, type Seccion } from "./components/empresa/SidebarEmpresa.tsx";
 import AuthEmpresa from "./components/empresa/AuthEmpresa.tsx";
@@ -50,6 +51,9 @@ export default function EmpresaApp() {
 
   useEffect(() => {
     if (!session || recuperando) return;
+    // Cada sesión nueva re-verifica desde cero: sin esto, un logout+login con
+    // otra cuenta mostraba el panel un instante con el rolOk viejo.
+    setRolOk(undefined);
     obtenerMiRol()
       .then(({ rol }) => {
         if (rol === "admin_empresa") setRolOk(true);
@@ -60,7 +64,10 @@ export default function EmpresaApp() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <HeaderProfile paso={session ? "Panel de empresa" : "Acceso empresa"} />
+      <HeaderProfile
+        paso={session ? "Panel de empresa" : "Acceso empresa"}
+        accion={!recuperando && session && rolOk ? <BotonCerrarSesion /> : undefined}
+      />
       {/* El panel con sidebar necesita más ancho que las pantallas de acceso;
           login y recuperación siguen centrados y angostos. */}
       <main

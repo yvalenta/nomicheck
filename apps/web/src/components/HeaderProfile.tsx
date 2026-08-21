@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { History } from "lucide-react";
 import Sello from "./Sello.tsx";
 
@@ -6,6 +7,8 @@ interface Props {
   paso?: string;
   mostrarMisLiquidaciones?: boolean;
   onVerMisLiquidaciones?: () => void;
+  /** Acción del lado derecho (ej. BotonCerrarSesion cuando hay sesión). */
+  accion?: ReactNode;
 }
 
 function formatFecha(iso: string): string {
@@ -14,7 +17,7 @@ function formatFecha(iso: string): string {
   return `${d} ${meses[m - 1]} ${y}`;
 }
 
-export default function HeaderProfile({ periodo, paso, mostrarMisLiquidaciones, onVerMisLiquidaciones }: Props) {
+export default function HeaderProfile({ periodo, paso, mostrarMisLiquidaciones, onVerMisLiquidaciones, accion }: Props) {
   return (
     <header className="bg-midnight bg-dots text-white">
       <div className="max-w-3xl mx-auto px-5 py-6 flex items-center justify-between">
@@ -46,6 +49,7 @@ export default function HeaderProfile({ periodo, paso, mostrarMisLiquidaciones, 
               paso && <p className="text-xs text-slate-400">{paso}</p>
             )}
           </div>
+          {accion}
         </div>
       </div>
     </header>

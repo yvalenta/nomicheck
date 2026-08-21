@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
-import { LogOut, Mail, Pencil, Plus, Trash2, UserRound } from "lucide-react";
+import { Mail, Pencil, Plus, Trash2, UserRound } from "lucide-react";
 import { formatCOP } from "@pv/reglas";
-import { supabase } from "../../lib/supabase";
 import {
   crearEmpleado,
   actualizarEmpleado,
@@ -194,12 +193,8 @@ export default function DashboardEmpresa() {
           >
             <Plus size={16} /> Agregar
           </button>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="flex items-center gap-1.5 text-sm text-muted hover:text-coral"
-          >
-            <LogOut size={15} /> Salir
-          </button>
+          {/* El "Salir" ad-hoc que vivía aquí se volvió BotonCerrarSesion en
+              el header del shell (2026-08-20) — un solo botón para todo. */}
         </div>
       </div>
 
