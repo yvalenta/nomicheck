@@ -143,10 +143,10 @@ function PanelConRutas() {
                   aria-selected={on}
                   onClick={() => navigate(`/${p.valor}`)}
                   onMouseEnter={() => !on && void PRECARGA[p.valor]?.()}
-                  className={`shrink-0 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
+                  className={`shrink-0 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-colors ${
                     on
-                      ? "bg-mint text-white shadow-realce"
-                      : "bg-white text-muted shadow-suave hover:text-ink"
+                      ? "border-mint bg-mint text-white"
+                      : "border-slate-200 bg-white text-muted hover:text-ink"
                   }`}
                 >
                   {p.etiqueta}

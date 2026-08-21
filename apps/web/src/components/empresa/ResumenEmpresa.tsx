@@ -126,7 +126,7 @@ export default function ResumenEmpresa() {
 
       {/* La acción del periodo + composición */}
       <div className="grid gap-3.5 lg:grid-cols-[1.6fr_1fr]">
-        <div className="flex items-center justify-between gap-4 rounded-[14px] bg-midnight bg-dots p-5 shadow-accion">
+        <div className="flex items-center justify-between gap-4 rounded-xl bg-midnight bg-dots p-5">
           <div className="min-w-0">
             <p className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-slate-400">
               Acción del periodo
@@ -141,13 +141,13 @@ export default function ResumenEmpresa() {
           </div>
           <button
             onClick={() => navigate("/periodos")}
-            className="flex shrink-0 items-center gap-2 rounded-[10px] bg-mint px-4 py-2.5 text-sm font-semibold text-white shadow-realce transition-colors hover:bg-mint-dark"
+            className="flex shrink-0 items-center gap-2 rounded-[10px] bg-mint px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-mint-dark"
           >
             Liquidar ahora <ArrowRight size={15} />
           </button>
         </div>
 
-        <div className="flex items-center gap-4 rounded-[14px] bg-white p-4 shadow-suave">
+        <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
           <div className="relative shrink-0">
             <Donut segmentos={composicion} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -177,7 +177,7 @@ export default function ResumenEmpresa() {
       {/* Costo por colaborador + semáforo */}
       <div className="grid gap-3.5 lg:grid-cols-[1.6fr_1fr] lg:items-start">
         {conCosto.length > 0 && (
-          <div className="overflow-hidden rounded-[14px] bg-white shadow-suave">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between px-5 pt-4 pb-3">
               <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
                 Costo por colaborador
@@ -252,8 +252,8 @@ export default function ResumenEmpresa() {
         )}
 
         <div
-          className={`rounded-[14px] bg-white p-5 ${
-            cumpl.nivel === "rojo" ? "shadow-alerta border border-rose-100" : "shadow-suave"
+          className={`rounded-xl bg-white p-5 ${
+            cumpl.nivel === "rojo" ? "border border-rose-200" : "border border-slate-200"
           }`}
         >
           <div className="mb-3 flex items-center justify-between">
@@ -300,7 +300,7 @@ export default function ResumenEmpresa() {
           <button
             key={a.ruta}
             onClick={() => navigate(a.ruta)}
-            className="rounded-full bg-white px-3.5 py-1.5 text-xs font-medium text-muted shadow-suave transition-colors hover:text-ink"
+            className="rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-ink"
           >
             {a.etiqueta}
           </button>
@@ -363,10 +363,10 @@ function Kpi({
 }) {
   const caja =
     tono === "destacado"
-      ? "border border-indigo/15 bg-gradient-to-br from-white to-indigo-soft/60 shadow-realce"
+      ? "border border-indigo/25 bg-gradient-to-br from-white to-indigo-soft/60"
       : tono === "alerta"
-        ? "border border-rose-100 bg-white shadow-alerta"
-        : "bg-white shadow-suave";
+        ? "border border-rose-200 bg-white"
+        : "border border-slate-200 bg-white";
   const color =
     tono === "destacado"
       ? "text-mint-dark"
@@ -376,7 +376,7 @@ function Kpi({
           ? "text-amber-600"
           : "text-ink";
   return (
-    <div className={`rounded-[14px] px-4 py-3.5 ${caja}`}>
+    <div className={`rounded-xl px-4 py-3.5 ${caja}`}>
       <p className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted">{etiqueta}</p>
       <p className={`font-display mt-1.5 text-xl font-semibold tabular-nums leading-tight ${color}`}>
         {valor}
