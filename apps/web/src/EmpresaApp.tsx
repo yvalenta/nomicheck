@@ -4,7 +4,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import HeaderProfile from "./components/HeaderProfile.tsx";
-import SidebarEmpresa, { type Seccion } from "./components/empresa/SidebarEmpresa.tsx";
+import SidebarEmpresa, { destinoDeSeccion, type Seccion } from "./components/empresa/SidebarEmpresa.tsx";
 import AuthEmpresa from "./components/empresa/AuthEmpresa.tsx";
 import Skeleton from "./components/Skeleton.tsx";
 import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
@@ -113,15 +113,41 @@ function PanelConRutas() {
   const location = useLocation();
   const navigate = useNavigate();
   const seccionActiva = (location.pathname.split("/")[1] || "resumen") as Seccion;
+  // Las pestañas del destino activo las pinta el shell, no cada página: así la
+  // sección no repite título y el menú lateral se queda en cinco destinos.
+  const destino = destinoDeSeccion(seccionActiva);
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:gap-6 lg:items-start">
+    <div className="flex flex-col gap-4 pb-20 lg:pb-0 lg:flex-row lg:gap-6 lg:items-start">
       <SidebarEmpresa
         activo={seccionActiva}
         onCambio={(v) => navigate(`/${v}`)}
         onPreparar={(v) => void PRECARGA[v]?.()}
       />
       <div className="min-w-0 flex-1">
+        {destino.pestanas.length > 1 && (
+          <div className="mb-4 flex gap-2 overflow-x-auto" role="tablist" aria-label={destino.etiqueta}>
+            {destino.pestanas.map((p) => {
+              const on = p.valor === seccionActiva;
+              return (
+                <button
+                  key={p.valor}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => navigate(`/${p.valor}`)}
+                  onMouseEnter={() => !on && void PRECARGA[p.valor]?.()}
+                  className={`shrink-0 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
+                    on
+                      ? "bg-mint text-white shadow-realce"
+                      : "bg-white text-muted shadow-suave hover:text-ink"
+                  }`}
+                >
+                  {p.etiqueta}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <Suspense fallback={<Skeleton />}>
       <Routes>
         <Route path="/" element={<Navigate to="/resumen" replace />} />

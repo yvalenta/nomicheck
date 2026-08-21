@@ -46,6 +46,15 @@
   --font-sans: "Inter", "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Dirección C (propuesta 2026-08-20): profundidad suave en capas. Una card
+   * flota con dos sombras — el contacto (1px) y la luz ambiental (24px) —
+   * y el tinte de la ambiental dice de qué habla la card: neutra, índigo
+   * (destacada) o rosé (alerta). La de acción es para bloques midnight. */
+  --shadow-suave: 0 1px 2px rgba(11, 17, 32, 0.04), 0 8px 24px rgba(11, 17, 32, 0.06);
+  --shadow-realce: 0 1px 2px rgba(11, 17, 32, 0.04), 0 8px 24px rgba(91, 80, 232, 0.12);
+  --shadow-alerta: 0 1px 2px rgba(11, 17, 32, 0.04), 0 8px 24px rgba(225, 29, 72, 0.1);
+  --shadow-accion: 0 12px 28px rgba(11, 17, 32, 0.22);
 }
 
 body {
