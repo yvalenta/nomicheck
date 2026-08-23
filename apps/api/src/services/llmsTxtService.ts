@@ -35,6 +35,28 @@ Empezá por acá si sos un agente: ${base}/api/batch/quickstart
 Ese único GET responde qué es, qué es gratis, cuánto cuesta lo pagado, cómo se
 paga, cómo verificar la salida sin confiar en nosotros, y qué NO hace.
 
+## Cuándo usar NomiCheck
+
+Usá este servicio cuando tu tarea sea alguna de estas, sobre nómina de
+**Colombia**:
+
+- Verificar si un comprobante de pago está bien liquidado, línea por línea y
+  con la norma que rige cada una (\`POST /api/batch/verificar\`).
+- Calcular retención en la fuente por salarios, art. 383/388 del Estatuto
+  Tributario, desde 2023 (\`POST /api/batch/retencion\`).
+- Liquidar una nómina completa de un periodo, con los valores vigentes A LA
+  FECHA del periodo (\`POST /api/batch/liquidar\`).
+- Liquidar un contrato terminado: cesantías, intereses, prima, vacaciones e
+  indemnización (\`POST /api/batch/liquidacion-final\`).
+- Resolver parámetros legales fechados —SMLMV, auxilio, UVT, recargos— a
+  cualquier fecha desde 2020, firmados (\`GET /api/batch/parametros?fecha=\`).
+- Armar un lote de pago en USDC sobre Base sin custodia
+  (\`POST /api/batch/pago-onchain\`).
+
+Cómo llamar: empezá por el quickstart de arriba; lo pagado responde 402 con
+los requisitos exactos de pago (x402) y se paga por llamada, sin cuenta. NO
+uses este servicio para nómina de otros países ni como asesoría legal.
+
 ## Gratis, sin registro
 
 - [Pre-chequeo](${base}/api/batch/verificar/prechequeo): POST con tus
@@ -89,5 +111,13 @@ documento entero. Se verifica offline, con la llave pública, sin este servidor.
 
 Agente ERC-8004 con identidad on-chain y agent card A2A en
 https://ynt.codes/.well-known/agent-card.json
+
+## Más superficie para agentes
+
+- Guía de integración: ${base}/agents.md
+- Mapa del sitio: ${base}/sitemap.xml
+- Sobre nosotros: ${base}/about · Contacto: ${base}/contact · Privacidad: ${base}/privacy
+- La portada ${base}/ también responde \`text/markdown\` por content
+  negotiation (\`Accept: text/markdown\`, con \`Vary: Accept\`).
 `;
 }

@@ -1,5 +1,8 @@
 node_modules
 dist
+# El build de la web copiado junto al API (lo crea el entrypoint en el
+# contenedor; localmente solo aparece al ensayar el servidor completo).
+web-dist
 *.tsbuildinfo
 .env
 .env.local

@@ -19,6 +19,7 @@ import { batchPagoOnchainSchema } from "../validation/batchPagoOnchain.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
 import { PRECIOS_USD, leerConfigX402 } from "../lib/x402Config.js";
+import { CONTACTO } from "../lib/contacto.js";
 
 const BASE_URL = "https://nomicheck.ynt.codes/api/batch";
 
@@ -253,6 +254,13 @@ export function construirOpenApi(): Record<string, unknown> {
     get: {
       operationId: "public-key",
       summary: "Llave pública Ed25519 con la que se verifican las respuestas",
+      description:
+        "Devuelve el PEM de la llave pública y su `publicKeyId` (los primeros 16 bytes del " +
+        "sha256 del DER, en hex). Con ella cualquier tercero verifica offline la firma de " +
+        "todo lo que este wrapper emite — sin volver a llamar al servidor y sin confiar en " +
+        "él. La misma llave está declarada en el agent card de " +
+        "`https://ynt.codes/.well-known/agent-card.json`, que es el cruce out-of-band: si " +
+        "esta ruta y el card no coinciden, no verifiques nada.",
       tags: ["catálogo"],
       responses: {
         "200": { description: "PEM y `publicKeyId`." },
@@ -265,6 +273,12 @@ export function construirOpenApi(): Record<string, unknown> {
     get: {
       operationId: "health",
       summary: "Estado del wrapper, ledger de reglas y guards activos",
+      description:
+        "Consulta el ledger de reglas de verdad —no un ping—: responde el `reglasHash` " +
+        "vigente, `reglasVerificadasAl` y qué guards están activos. Es el GET gratis que un " +
+        "comprador hace antes de pagar, porque le da el hash contra el que después va a " +
+        "auditar la respuesta; si esta ruta responde 503, el catálogo legal no se pudo leer " +
+        "y pagar una llamada no tiene sentido.",
       tags: ["catálogo"],
       responses: {
         "200": { description: "Estado." },
@@ -292,7 +306,9 @@ export function construirOpenApi(): Record<string, unknown> {
         `Catálogo legal verificado al ${REGLAS_VERIFICADAS_AL}. El spec humano de cada regla ` +
         "vive en `sdd/vault/` del repositorio, y el mapa de qué archivo respalda cada línea " +
         "está en `07_Trazabilidad_Codigo.md`.",
-      contact: { name: "Ynt-labs", url: "https://ynt.codes", email: "ynt.val@gmail.com" },
+      // De lib/contacto.ts, que es la fuente única: /contact cita el mismo
+      // correo, y dos copias a mano son dos lugares donde desincronizarse.
+      contact: { name: CONTACTO.nombre, url: CONTACTO.url, email: CONTACTO.email },
       license: { name: "Propietario — uso permitido bajo los términos del listing" },
     },
     servers: [{ url: BASE_URL }],

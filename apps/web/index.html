@@ -19,13 +19,22 @@
       content="Verifica tu nómina colombiana gratis, con la ley vigente y cada línea citada a su artículo. Para empresas: liquida y pruébalo con evidencia firmada."
     />
     <meta property="og:url" content="https://nomicheck.ynt.codes/" />
+    <meta property="og:image" content="https://nomicheck.ynt.codes/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="NomiCheck — ¿Te pagaron bien?" />
     <meta property="og:locale" content="es_CO" />
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="NomiCheck — ¿Te pagaron bien?" />
     <meta
       name="twitter:description"
       content="Verifica tu nómina colombiana gratis, con la ley vigente y cada línea citada a su artículo."
     />
+    <meta name="twitter:image" content="https://nomicheck.ynt.codes/og.png" />
+    <!-- El publisher es la Organization completa —contactPoint y address
+         incluidos— porque es lo que un agente cruza para decidir si el
+         negocio detrás del dominio existe. El correo es el MISMO de
+         apps/api/src/lib/contacto.ts; una prueba compara los dos. -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -36,12 +45,80 @@
         "applicationCategory": "FinanceApplication",
         "inLanguage": "es-CO",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "COP" },
-        "publisher": { "@type": "Organization", "name": "YNT-Labs", "url": "https://ynt.codes/" }
+        "publisher": {
+          "@type": "Organization",
+          "name": "Ynt-labs",
+          "url": "https://ynt.codes/",
+          "email": "ynt.val@gmail.com",
+          "logo": "https://nomicheck.ynt.codes/og.png",
+          "sameAs": ["https://github.com/yvalenta"],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "email": "ynt.val@gmail.com",
+            "availableLanguage": ["es", "en"]
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Medellín",
+            "addressRegion": "Antioquia",
+            "addressCountry": "CO"
+          }
+        }
       }
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- prerender:inicio -->
+      <!-- La portada que ve quien NO ejecuta JavaScript: crawlers de IA y
+           buscadores. React la reemplaza al montar (createRoot().render pisa
+           los hijos de #root), así que un navegador la ve milisegundos y con
+           los mismos colores del hero real. El servidor la RECORTA para las
+           rutas del cliente (/login, /empresa, …) — ver sinPrerender() en
+           apps/api/src/routes/paginasPublicas.ts — porque ahí este contenido
+           sería el de otra página. Los enlaces duplican a propósito los del
+           hero de React: en el HTML crudo no existe ninguno. -->
+      <div style="min-height: 100vh; background: #0b1120; color: #e2e8f0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 3rem 1.5rem; line-height: 1.65">
+        <div style="max-width: 44rem; margin: 0 auto">
+          <p style="text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.7rem; color: #94a3b8">
+            NomiCheck · Nómina colombiana · cálculo determinístico · salida firmada
+          </p>
+          <h1 style="font-size: 2.4rem; letter-spacing: -0.02em; margin: 0.5rem 0">¿Te pagaron bien?</h1>
+          <p>
+            Dinos tu salario y tus horarios — NomiCheck hace las cuentas con la ley colombiana
+            vigente y te dice qué debía llegar a tu bolsillo. Gratis, sin registro, y nadie más
+            que tú ve el resultado.
+          </p>
+          <p>
+            Verificamos salario base, recargos nocturnos y dominicales, horas extra, prima,
+            cesantías, vacaciones y retención en la fuente. Cada línea cita el artículo que la
+            rige, el cálculo es determinístico —sin IA: mismo input, mismo output— y cada
+            resultado sale dentro de un sobre firmado con Ed25519 que un tercero puede verificar
+            sin confiar en nosotros.
+          </p>
+          <p>
+            Para agentes de software hay una API pública con pago por llamada (x402 / HTTP 402,
+            USDC en Base o Avalanche, sin cuenta ni API key): el contrato OpenAPI vive en
+            <a href="/api/batch/openapi.json" style="color: #a5b4fc">/api/batch/openapi.json</a> y la puerta de una sola
+            llamada en <a href="/api/batch/quickstart" style="color: #a5b4fc">/api/batch/quickstart</a>. El pre-chequeo
+            de comprobantes es gratis y sin registro.
+          </p>
+          <nav style="display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin-top: 1.5rem">
+            <a href="/servicios" style="color: #a5b4fc">Servicios y precios</a>
+            <a href="/lanzamiento" style="color: #a5b4fc">Para ti</a>
+            <a href="/empresa" style="color: #a5b4fc">Para empresas</a>
+            <a href="/docs/" style="color: #a5b4fc">Documentación de la API</a>
+            <a href="/agents.md" style="color: #a5b4fc">Guía para agentes</a>
+            <a href="/llms.txt" style="color: #a5b4fc">llms.txt</a>
+            <a href="/about" style="color: #a5b4fc">Sobre NomiCheck</a>
+            <a href="/contact" style="color: #a5b4fc">Contacto</a>
+            <a href="/privacy" style="color: #a5b4fc">Privacidad</a>
+          </nav>
+        </div>
+      </div>
+      <!-- prerender:fin -->
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

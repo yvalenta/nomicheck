@@ -66,6 +66,24 @@ describe("documento OpenAPI", () => {
     expect(ids.length).toBe(new Set(ids).size);
   });
 
+  it("TODA operación se describe sola: operationId, summary y description real", () => {
+    // "85% descrito" fue el estado medido desde afuera el 2026-08-23: dos GET
+    // llevaban summary sin description. La vara es el 100% y por operación —
+    // un spec autodescriptivo es lo que un agente lee en vez de esta prosa. El
+    // piso de 40 caracteres separa una descripción de un título repetido.
+    for (const [ruta, metodos] of Object.entries(doc.paths)) {
+      for (const [metodo, op] of Object.entries(metodos)) {
+        const o = op as unknown as { operationId?: string; summary?: string; description?: string };
+        expect(o.operationId, `${metodo.toUpperCase()} ${ruta} sin operationId`).toBeTruthy();
+        expect(o.summary, `${metodo.toUpperCase()} ${ruta} sin summary`).toBeTruthy();
+        expect(
+          o.description?.length ?? 0,
+          `${metodo.toUpperCase()} ${ruta} sin description de verdad`,
+        ).toBeGreaterThanOrEqual(40);
+      }
+    }
+  });
+
   it("todo $ref resuelve dentro del documento", () => {
     // Diez `$ref` rotos pasaron desapercibidos a ojo la primera vez: zod
     // emitía `#/definitions/X` y el documento usa `#/components/schemas/X`.

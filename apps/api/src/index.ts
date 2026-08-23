@@ -1,10 +1,12 @@
 import "dotenv/config";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
 import router from "./routes/index.js";
+import { crearFallback, crearPaginasPublicas, sinPrerender } from "./routes/paginasPublicas.js";
+import { origenPublico } from "./lib/pagosConfig.js";
 import { detenerBoss, getBoss } from "./lib/boss.js";
 import { delegadoCors } from "./lib/corsPublico.js";
 import { construirLlmsTxt } from "./services/llmsTxtService.js";
@@ -46,6 +48,26 @@ montarMuroX402(app);
 
 app.use("/api", router);
 
+// El 404 de la API en JSON, después del router y antes de todo lo demás: un
+// endpoint que no existe le respondía a un agente con el HTML por defecto de
+// Express ("Cannot GET …"), que ningún cliente programático puede parsear.
+// Código, mensaje y pistas — el mismo contrato que los demás errores del API.
+app.use("/api", (req, res) => {
+  const base = origenPublico();
+  res.status(404).json({
+    error: "not_found",
+    // baseUrl + path: dentro de un `app.use("/api")` el path llega sin el
+    // prefijo montado, y un mensaje que dice "/no-existe" a secas desorienta.
+    mensaje: `No existe ${req.method} ${req.baseUrl}${req.path} en esta API.`,
+    pistas: {
+      openapi: `${base}/api/batch/openapi.json`,
+      quickstart: `${base}/api/batch/quickstart`,
+      docs: `${base}/docs/`,
+      llms: `${base}/llms.txt`,
+    },
+  });
+});
+
 // `/llms.txt` va ANTES del fallback del SPA, y esa posición es el arreglo.
 // Con el catch-all adelante, cualquier ruta fuera de `/api` devolvía el HTML
 // de React con 200: un agente pedía este archivo, recibía una página, y no
@@ -67,16 +89,28 @@ app.get("/llms.txt", (_req, res) => {
 // dejar pasar un 404 legible. Un directorio se puede mirar; la intención
 // declarada en una variable de entorno, no.
 const webDist = path.join(__dirname, "../web-dist");
-if (existsSync(path.join(webDist, "index.html"))) {
+// Se lee UNA vez al arrancar: el build no cambia en vida del proceso, y tener
+// el string permite servir dos variantes del mismo archivo — la portada con su
+// bloque prerenderizado en `/`, y el shell limpio para las rutas del cliente.
+const indexHtml = existsSync(path.join(webDist, "index.html"))
+  ? readFileSync(path.join(webDist, "index.html"), "utf8")
+  : null;
+
+// Las páginas con dueño (portada negociada HTML/markdown, /about, /contact,
+// /privacy, /sitemap.xml) van ANTES de los assets; el catch-all va DESPUÉS,
+// y ya no miente: shell del SPA solo para las rutas del cliente, 404 de
+// verdad —negociado, con adónde ir— para todo lo demás.
+app.use(crearPaginasPublicas(indexHtml));
+if (indexHtml !== null) {
+  // `/` no llega acá —lo atiende la negociación de arriba, montada antes—
+  // así que el index por defecto solo resuelve subdirectorios como /docs/.
   app.use(express.static(webDist));
-  // Fallback de SPA: todo lo que no sea `/api` lo resuelve el router del
-  // cliente. La negación importa — sin ella, un endpoint mal escrito
-  // devolvería el HTML de la web con 200 y el cliente vería una página en vez
-  // de un error.
-  app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(webDist, "index.html")));
 } else {
   registro.warn("web", `sin build en ${webDist}: solo se sirve /api`);
 }
+// La negación importa — sin ella, un endpoint mal escrito devolvería el HTML
+// de la web con 200 y el cliente vería una página en vez de un error.
+app.get(/^(?!\/api).*/, crearFallback(indexHtml === null ? null : sinPrerender(indexHtml)));
 
 // Último de la cadena, a propósito: es la red de seguridad de TODO lo de
 // arriba. Un error que escape de un controlador sale como 500 con id

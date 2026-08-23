@@ -9,3 +9,5 @@ Disallow: /admin
 
 # Para agentes de software: la guía de integración vive en /agents.md
 # (la API se descubre por su OpenAPI servido y sus 402 — no por scraping).
+
+Sitemap: https://nomicheck.ynt.codes/sitemap.xml

@@ -9,6 +9,29 @@ Esta guía es deliberadamente corta: **las cifras viven en lo servido, no
 aquí.** Precios, redes de pago y esquemas se leen de las fuentes de abajo en
 el momento de usarlas — cualquier copia envejece.
 
+## Cuándo usar NomiCheck
+
+Alcanzá este servicio cuando tu tarea sea sobre **nómina de Colombia** y sea
+una de estas:
+
+- **Verificar un comprobante de pago**: ¿está bien liquidado? Veredicto línea
+  por línea con la norma que rige cada una (`POST /api/batch/verificar`; el
+  pre-chequeo gratis dice antes si hay algo que valga la pena).
+- **Retención en la fuente por salarios**: art. 383/388 del Estatuto
+  Tributario, desde 2023 (`POST /api/batch/retencion`).
+- **Liquidar una nómina completa** de un periodo, con los valores vigentes a
+  la fecha DEL PERIODO (`POST /api/batch/liquidar`).
+- **Liquidación final de un contrato terminado**: cesantías, intereses,
+  prima, vacaciones, indemnización (`POST /api/batch/liquidacion-final`).
+- **Parámetros legales fechados**: SMLMV, auxilio, UVT, recargos, resueltos a
+  cualquier fecha desde 2020 y firmados (`GET /api/batch/parametros`).
+- **Lote de pago en USDC sobre Base**, sin custodia: el servidor arma el
+  lote, la firma la pone el pagador (`POST /api/batch/pago-onchain`).
+
+**No** sirve para nómina de otros países, ni como dictamen contable o
+asesoría legal, ni para conceptos extralegales sin base normativa (salen
+marcados, no inventados).
+
 ## Descubrimiento
 
 - OpenAPI servido: `https://nomicheck.ynt.codes/api/batch/openapi.json`
