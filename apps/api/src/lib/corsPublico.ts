@@ -69,6 +69,15 @@ export const RUTAS_PUBLICAS = new Set([
   // Salud: que un tercero pueda sondearnos es parte de estar en un directorio.
   "/api/health",
   "/api/batch/health",
+
+  // Descubrimiento para agentes (2026-08-23): puro GET de lectura pública, y
+  // el ARD EXIGE `Access-Control-Allow-Origin: *` — un registry lo lee desde
+  // el navegador de quien explora. Cumplen las tres condiciones de arriba.
+  "/.well-known/api-catalog",
+  "/.well-known/ai-catalog.json",
+  "/.well-known/agent-skills/index.json",
+  "/.well-known/agent-skills/nomicheck-payroll/SKILL.md",
+  "/auth.md",
 ]);
 
 /** Métodos que se permiten cross-origin. Nada que escriba. */

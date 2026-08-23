@@ -1,0 +1,239 @@
+// La capa de descubrimiento para agentes: el catálogo de APIs (RFC 9727), el
+// manifiesto ARD del origen, auth.md, y el índice de skills con su artefacto.
+//
+// ── El criterio que comparten las cuatro piezas ────────────────────────────
+//
+// Solo se publica lo que EXISTE. Por eso acá no hay `/.well-known/openid-
+// configuration` ni `oauth-protected-resource`: esta API no tiene OAuth — las
+// lecturas de integración son libres y lo pagado se paga por llamada con x402,
+// sin cuenta. Publicar metadata de un issuer inexistente sería exactamente el
+// 200 que miente, con firma. Lo mismo con el server card de MCP: el servidor
+// MCP de apps/mcp es stdio y su paquete es privado — un card apuntaría a una
+// puerta que nadie puede abrir (la lección de la puerta B2B sin picaporte).
+//
+// Todo se genera del código: los precios de PRECIOS_USD, las URLs de
+// origenPublico(), y el digest del skill se calcula sobre los MISMOS bytes que
+// se sirven — no puede desincronizarse porque no hay dos copias.
+import { createHash } from "node:crypto";
+import { origenPublico } from "../lib/pagosConfig.js";
+import { PRECIOS_USD } from "../lib/x402Config.js";
+import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
+
+// ── Link headers (RFC 8288) para la portada ────────────────────────────────
+// Relaciones REGISTRADAS en IANA, nada inventado: `api-catalog` (RFC 9727),
+// `service-desc` y `service-doc` (RFC 8631). Relativas a propósito: se
+// resuelven contra la URI pedida y no llevan el origen copiado.
+export function enlacesDescubrimiento(): string {
+  return [
+    '</.well-known/api-catalog>; rel="api-catalog"',
+    '</api/batch/openapi.json>; rel="service-desc"; type="application/json"',
+    '</docs/>; rel="service-doc"; type="text/html"',
+  ].join(", ");
+}
+
+// ── /.well-known/api-catalog (RFC 9727, formato linkset RFC 9264) ──────────
+export function construirApiCatalog(): Record<string, unknown> {
+  const base = origenPublico();
+  return {
+    linkset: [
+      {
+        anchor: `${base}/api/batch`,
+        "service-desc": [
+          { href: `${base}/api/batch/openapi.json`, type: "application/json" },
+        ],
+        "service-doc": [{ href: `${base}/docs/`, type: "text/html" }],
+        status: [{ href: `${base}/api/batch/health`, type: "application/json" }],
+      },
+    ],
+  };
+}
+
+// ── /.well-known/ai-catalog.json (ARD) para ESTE origen ────────────────────
+// El apex (ynt.codes) publica el suyo con la identidad del agente; este
+// describe las capacidades de nomicheck.ynt.codes. No se copian entradas del
+// otro: donde hace falta la identidad, la entrada APUNTA al agent card del
+// apex, que es su sitio de afirmación.
+export function construirArd(): Record<string, unknown> {
+  const base = origenPublico();
+  const dominio = base.replace(/^https?:\/\//, "");
+  const urn = (espacio: string, nombre: string) => `urn:air:${dominio}:${espacio}:${nombre}`;
+  return {
+    specVersion: "1.0",
+    host: { displayName: "NomiCheck", identifier: base },
+    entries: [
+      {
+        identifier: urn("api", "openapi"),
+        displayName: "NomiCheck batch API — Colombian payroll, dated and signed",
+        type: "application/vnd.oai.openapi+json",
+        url: `${base}/api/batch/openapi.json`,
+        representativeQueries: [
+          "verify a Colombian payslip line by line",
+          "calcular retención en la fuente por salarios en Colombia",
+          "liquidación final de contrato laboral colombiano",
+        ],
+      },
+      {
+        identifier: urn("guia", "quickstart"),
+        displayName: "Quickstart — one GET tells an agent everything",
+        type: "application/json",
+        url: `${base}/api/batch/quickstart`,
+        representativeQueries: [
+          "how do I pay NomiCheck per call with x402",
+          "qué es gratis en NomiCheck y qué se paga",
+        ],
+      },
+      {
+        identifier: urn("guia", "agents"),
+        displayName: "Guía de integración para agentes",
+        type: "text/markdown",
+        url: `${base}/agents.md`,
+        representativeQueries: [
+          "cuándo usar NomiCheck",
+          "when should an agent call NomiCheck",
+        ],
+      },
+      {
+        identifier: urn("skill", "nomicheck-payroll"),
+        displayName: "Agent skill — using NomiCheck end to end",
+        type: "text/markdown",
+        url: `${base}/.well-known/agent-skills/nomicheck-payroll/SKILL.md`,
+        representativeQueries: [
+          "skill for verifying Colombian payroll",
+          "cómo verifica un agente una nómina colombiana sin confiar en el emisor",
+        ],
+      },
+      {
+        identifier: urn("agent", "card"),
+        displayName: "ERC-8004 identity and A2A agent card (served by the apex)",
+        type: "application/json",
+        url: "https://ynt.codes/.well-known/agent-card.json",
+        representativeQueries: [
+          "on-chain identity of the NomiCheck agent",
+          "which wallet does NomiCheck charge to",
+        ],
+      },
+    ],
+  };
+}
+
+// ── /auth.md ───────────────────────────────────────────────────────────────
+// La respuesta honesta a "¿cómo me registro?": no hay registro, y eso se dice
+// de frente en vez de codificarse en metadata OAuth que no existe.
+export function construirAuthMd(): string {
+  const base = origenPublico();
+  const precio = PRECIOS_USD["/verificar"];
+  return `# auth.md
+
+Cómo se autentica un agente en NomiCheck — y por qué casi no hace falta.
+
+## Audiencia
+
+Agentes de software que consumen la API pública de ${base} (verificación de
+nómina colombiana, catálogo legal fechado al ${REGLAS_VERIFICADAS_AL}).
+
+## Registro: NO HAY
+
+No emitimos API keys, no hay cuentas de agente ni endpoint de registro. Es
+diseño, no una omisión: la API se usa sin identidad y lo pagado se paga **por
+llamada**.
+
+## Métodos soportados
+
+- **Lecturas de integración** (OpenAPI, esquemas, ejemplos firmados, llave
+  pública, parámetros legales, salud): **sin credencial ninguna.**
+- **Operaciones pagadas** (p. ej. el informe de verificación, ${precio} USD
+  por lote): **x402** — el servidor responde \`HTTP 402\` con los requisitos
+  exactos (\`accepts\`: red, token, monto, \`payTo\` y el dominio EIP-712);
+  el agente firma una autorización **EIP-3009** (USDC, el gas lo pone el
+  facilitador) y reintenta con el pago adjunto. Sin cuenta, sin API key.
+- Antes de firmar, cruzá el \`payTo\` contra el \`walletAddress\` de
+  https://ynt.codes/.well-known/agent-card.json — el pago x402 es final.
+
+## Uso de credenciales
+
+Ninguna credencial se emite ni se acepta en la API pública. Por eso este
+dominio **no publica** \`/.well-known/openid-configuration\` ni
+\`/.well-known/oauth-protected-resource\`: no hay OAuth detrás, y publicar la
+metadata de un issuer inexistente sería mentirle a quien la lea.
+
+Los portales con sesión (\`/empresa\`, \`/colaborador\`, \`/admin\`) son para
+personas, usan Supabase Auth, y **no son superficie para agentes** — están
+excluidos en robots.txt.
+
+## Empezar
+
+Un solo GET responde qué es, qué es gratis y cómo verificar la salida sin
+confiar en nosotros: ${base}/api/batch/quickstart
+`;
+}
+
+// ── El skill y su índice (/.well-known/agent-skills/…) ─────────────────────
+
+export const SKILL_NOMBRE = "nomicheck-payroll";
+
+export function construirSkillMd(): string {
+  const base = origenPublico();
+  const precio = PRECIOS_USD["/verificar"];
+  return `---
+name: ${SKILL_NOMBRE}
+description: Verify Colombian payslips, compute withholding, settle payroll and final settlements through NomiCheck's public API — free precheck, pay-per-call (x402) full report, every response signed and verifiable offline.
+---
+
+# NomiCheck payroll skill
+
+Use this skill when the task involves **Colombian payroll**: verifying a
+payslip, computing withholding (retención en la fuente), settling a payroll
+period or a terminated contract, or resolving dated legal parameters (minimum
+wage, transport allowance, UVT) for any date since 2020.
+
+Do NOT use it for other countries' payroll, or as legal/accounting advice.
+
+## How to call
+
+1. \`GET ${base}/api/batch/quickstart\` — one call answers what exists, what
+   is free, what the paid report costs and how to verify any output.
+2. Free, no signup: \`POST ${base}/api/batch/verificar/prechequeo\` with your
+   payslips (schema: \`${base}/api/batch/verificar/schema/v1.json\`). It
+   returns how many have discrepancies and their net effect — if your payslip
+   is clean you find out for free and never pay.
+3. Paid full report (${precio} USD per batch, flat): \`POST
+   ${base}/api/batch/verificar\`. Without payment it answers \`402\` with the
+   exact requirements (network, token, amount, \`payTo\`, EIP-712 domain).
+   Sign an EIP-3009 USDC authorization and retry with the payment attached —
+   no account, no API key. Before signing, cross-check \`payTo\` against
+   \`walletAddress\` in https://ynt.codes/.well-known/agent-card.json.
+4. Verify ANY response offline: each one travels inside a signed envelope
+   (Ed25519, public key at \`${base}/api/batch/publickey\`). One-click:
+   https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo
+
+## Guarantees worth knowing
+
+- Deterministic engine: same input, same output — no AI in the calculation.
+- Every line cites the legal norm that governs it; every response carries the
+  sha256 of the dated rule catalog that produced it.
+- Flat pricing, never by finding: charging per discrepancy is the incentive a
+  verifier must not have.
+- Nothing you POST is persisted (Colombian habeas data law 1581/2012).
+`;
+}
+
+/** El digest se calcula sobre los MISMOS bytes que sirve la ruta del skill:
+ * una sola fuente, así que no puede quedar viejo. */
+export function construirIndiceSkills(): Record<string, unknown> {
+  const base = origenPublico();
+  const digest = createHash("sha256").update(construirSkillMd(), "utf8").digest("hex");
+  return {
+    $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+    skills: [
+      {
+        name: SKILL_NOMBRE,
+        type: "skill-md",
+        description:
+          "Verify Colombian payslips and settle payroll through NomiCheck's public API: " +
+          "free precheck, pay-per-call (x402) full report, signed verifiable output.",
+        url: `${base}/.well-known/agent-skills/${SKILL_NOMBRE}/SKILL.md`,
+        digest: `sha256:${digest}`,
+      },
+    ],
+  };
+}

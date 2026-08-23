@@ -35,6 +35,7 @@ export function rutasIndexables(): string[] {
     "/docs/",
     "/agents.md",
     "/llms.txt",
+    "/auth.md",
   ];
 }
 

@@ -15,6 +15,15 @@
 import { Router, type Request, type RequestHandler, type Response } from "express";
 import { negociarFormato } from "../lib/negociarFormato.js";
 import {
+  SKILL_NOMBRE,
+  construirApiCatalog,
+  construirArd,
+  construirAuthMd,
+  construirIndiceSkills,
+  construirSkillMd,
+  enlacesDescubrimiento,
+} from "../services/descubrimientoService.js";
+import {
   construirAboutHtml,
   construirAboutMd,
   construirContactHtml,
@@ -79,7 +88,40 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
+    // Link (RFC 8288) en las DOS variantes: el header es la miga que un agente
+    // sigue sin parsear el cuerpo, y el markdown también la merece.
+    res.setHeader("Link", enlacesDescubrimiento());
     responderNegociado(req, res, { html: indexHtml, md: construirHomeMd(), cacheSegundos: 0 });
+  });
+
+  // ── Descubrimiento para agentes ──────────────────────────────────────────
+  // Lo que NO está acá también es decisión: sin `/.well-known/openid-
+  // configuration` ni `oauth-protected-resource` (no hay OAuth que declarar)
+  // y sin server card de MCP (el servidor es stdio y su paquete privado) —
+  // el porqué vive en descubrimientoService.ts, y auth.md lo dice servido.
+  router.get("/.well-known/api-catalog", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/linkset+json").send(JSON.stringify(construirApiCatalog(), null, 2));
+  });
+
+  router.get("/.well-known/ai-catalog.json", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/json").send(JSON.stringify(construirArd(), null, 2));
+  });
+
+  router.get("/.well-known/agent-skills/index.json", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/json").send(JSON.stringify(construirIndiceSkills(), null, 2));
+  });
+
+  router.get(`/.well-known/agent-skills/${SKILL_NOMBRE}/SKILL.md`, (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("text/markdown; charset=utf-8").send(construirSkillMd());
+  });
+
+  router.get("/auth.md", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("text/markdown; charset=utf-8").send(construirAuthMd());
   });
 
   router.get("/sitemap.xml", (_req, res) => {

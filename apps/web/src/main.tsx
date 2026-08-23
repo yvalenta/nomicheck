@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import { lazyConReintento as lazy } from './lib/lazyConReintento.ts'
+import { registrarWebMcp } from './lib/webmcp.ts'
+
+// WebMCP: si el navegador trae navigator.modelContext (experimental), las
+// acciones de lectura del sitio quedan disponibles para su agente. En el
+// resto de navegadores es un no-op y no cuesta nada. Va en la carga y no en
+// un efecto: el agente escanea la página al abrirla, no después de hidratar.
+registrarWebMcp()
 
 // Cada portal es un chunk aparte (rendimiento SPA). `Raiz` ya elegía UNO solo
 // por pathname, pero con imports estáticos el navegador descargaba los SEIS:
