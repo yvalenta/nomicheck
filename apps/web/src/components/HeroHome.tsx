@@ -21,7 +21,7 @@ export default function HeroHome({ onVerificar }: Props) {
         </div>
         <a
           href="/login"
-          className="rounded-[10px] border border-slate-700 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:border-slate-500"
+          className="rounded-full border border-slate-700 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:border-slate-500"
         >
           Ingresar
         </a>
@@ -41,7 +41,7 @@ export default function HeroHome({ onVerificar }: Props) {
         </p>
         <button
           onClick={onVerificar}
-          className="mt-1 flex items-center gap-2 rounded-[12px] bg-mint px-6 py-3.5 text-[15px] font-semibold text-white shadow-realce transition-colors hover:bg-mint-dark"
+          className="mt-1 flex items-center gap-2 rounded-full bg-mint px-6 py-3.5 text-[15px] font-medium text-white shadow-realce transition-colors hover:bg-mint-dark"
         >
           Verificar mi pago <ArrowRight size={16} />
         </button>

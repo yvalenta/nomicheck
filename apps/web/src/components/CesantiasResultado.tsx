@@ -106,7 +106,7 @@ function ComposicionBase({ base, auxilio }: { base: number; auxilio: number }) {
             <span className="text-xs font-semibold tabular-nums text-ink">{formatCOP(auxilio)}</span>
           </div>
         )}
-        <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-1.5">
+        <div className="flex items-baseline justify-between gap-3 border-t border-borde pt-1.5">
           <span className="text-xs font-semibold text-ink">Base de liquidación</span>
           <span className="text-xs font-bold tabular-nums text-ink">{formatCOP(base)}</span>
         </div>
@@ -232,7 +232,7 @@ function LoAcumulado({ cesantias, intereses, tasa }: { cesantias: number; intere
           </div>
         </Aparecer>
       ))}
-      <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-2">
+      <div className="flex items-baseline justify-between gap-3 border-t border-borde pt-2">
         <span className="text-xs font-semibold text-ink">Total acumulado al corte</span>
         <span className="text-sm font-bold tabular-nums text-ink">{formatCOP(total)}</span>
       </div>
@@ -286,7 +286,7 @@ export default function CesantiasResultado({ resultado }: { resultado: Resultado
       ))}
 
       <Seccion icono={<CalendarClock size={13} />} titulo="La letra chica">
-        <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+        <div className="rounded-xl bg-slate-50 border border-borde p-3">
           <p className="text-xs text-muted leading-relaxed">{resultado.explicacion}</p>
           <p className="text-[11px] text-muted mt-2 font-medium">{resultado.ley}</p>
         </div>

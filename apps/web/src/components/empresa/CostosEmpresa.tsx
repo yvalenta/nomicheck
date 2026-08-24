@@ -85,7 +85,7 @@ export default function CostosEmpresa() {
                   </div>
                   {e.costo ? (
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-ink tabular-nums">
+                      <p className="font-mono text-sm font-medium text-ink">
                         {formatCOP(e.costo.costoTotalMensual)}
                       </p>
                       <p className="text-xs text-muted tabular-nums">
@@ -159,7 +159,7 @@ function Stat({ etiqueta, valor, destacado }: { etiqueta: string; valor: string;
   return (
     <div
       className={`rounded-2xl shadow-sm border px-4 py-3 ${
-        destacado ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-100"
+        destacado ? "bg-emerald-50 border-emerald-100" : "bg-white border-borde"
       }`}
     >
       <p className="text-xs text-muted">{etiqueta}</p>

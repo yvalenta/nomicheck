@@ -95,7 +95,7 @@ function ComposicionBase({ base, auxilio }: { base: number; auxilio: number }) {
             <span className="text-xs font-semibold tabular-nums text-ink">{formatCOP(auxilio)}</span>
           </div>
         )}
-        <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-1.5">
+        <div className="flex items-baseline justify-between gap-3 border-t border-borde pt-1.5">
           <span className="text-xs font-semibold text-ink">Base de liquidación</span>
           <span className="text-xs font-bold tabular-nums text-ink">{formatCOP(base)}</span>
         </div>
@@ -168,7 +168,7 @@ function Cuotas({ semestres }: { semestres: SemestrePrima[] }) {
         <Aparecer key={c.nombre} retraso={i * 90}>
           <div
             className={`rounded-xl border p-2.5 h-full ${
-              c.activa ? "border-indigo-200 bg-indigo-soft" : "border-slate-100 bg-slate-50"
+              c.activa ? "border-indigo-200 bg-indigo-soft" : "border-borde bg-slate-50"
             }`}
           >
             <p className={`text-xs font-semibold ${c.activa ? "text-mint-dark" : "text-muted"}`}>{c.nombre}</p>
@@ -234,7 +234,7 @@ export default function PrimaResultado({ resultado }: { resultado: ResultadoPrim
       ))}
 
       <Seccion icono={<Gift size={13} />} titulo="La letra chica">
-        <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+        <div className="rounded-xl bg-slate-50 border border-borde p-3">
           <p className="text-xs text-muted leading-relaxed">{resultado.explicacion}</p>
           <p className="text-[11px] text-muted mt-2 font-medium">{resultado.ley}</p>
         </div>

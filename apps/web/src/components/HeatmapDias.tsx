@@ -52,7 +52,7 @@ export default function HeatmapDias({ dias }: Props) {
     <PaycheckCard>
       <div className="px-3.5 py-3.5 flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-ink">Días del periodo</h3>
+          <h3 className="text-xs font-medium uppercase tracking-[0.06em] text-quiet">Días del periodo</h3>
           <p className="text-xs text-muted">
             {totales.conTurno} con turno · {totales.horas} h
             {totales.extra > 0 ? ` · ${totales.extra} h extra` : ""}
@@ -88,7 +88,7 @@ export default function HeatmapDias({ dias }: Props) {
                 style={{ background: tono(d.horasTotales, maxHoras) }}
               >
                 <span
-                  className={`text-[11px] font-semibold leading-none ${claro ? "text-white" : "text-ink"}`}
+                  className={`text-[11px] font-medium leading-none ${claro ? "text-white" : "text-ink"}`}
                 >
                   {numero}
                 </span>
@@ -138,7 +138,7 @@ export default function HeatmapDias({ dias }: Props) {
         {detalle ? (
           <div className="rounded-xl bg-indigo-soft/60 border border-indigo/10 p-3 flex flex-col gap-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-sm font-semibold text-ink">
+              <p className="text-sm font-medium text-ink">
                 {formatFechaLegible(detalle.fecha)}
               </p>
               <div className="flex gap-1.5 flex-wrap">
@@ -182,7 +182,7 @@ export default function HeatmapDias({ dias }: Props) {
                 <Fila etiqueta="Recargos y extras" valor={detalle.recargosDia} />
               )}
               <Fila etiqueta="Salud y pensión" valor={-detalle.deduccionesDia} />
-              <div className="flex justify-between font-semibold text-ink pt-1 border-t border-indigo/10 mt-0.5">
+              <div className="flex justify-between font-medium text-ink pt-1 border-t border-indigo/10 mt-0.5">
                 <span>Neto del día</span>
                 <span className="font-mono tabular-nums">{formatCOP(detalle.netoDia)}</span>
               </div>
@@ -218,7 +218,7 @@ function Dato({ etiqueta, valor, destacado }: { etiqueta: string; valor: string;
   return (
     <div className="flex flex-col">
       <span className="text-[10px] text-muted">{etiqueta}</span>
-      <span className={`font-mono tabular-nums ${destacado ? "font-semibold text-ink" : "text-ink"}`}>
+      <span className={`font-mono ${destacado ? "font-medium text-ink" : "text-ink"}`}>
         {valor}
       </span>
     </div>

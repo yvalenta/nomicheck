@@ -126,9 +126,9 @@ export default function ResumenEmpresa() {
 
       {/* La acción del periodo + composición */}
       <div className="grid gap-3.5 lg:grid-cols-[1.6fr_1fr]">
-        <div className="flex items-center justify-between gap-4 rounded-xl bg-midnight bg-dots p-5">
+        <div className="flex items-center justify-between gap-4 rounded-2xl bg-midnight bg-dots p-5 shadow-accion">
           <div className="min-w-0">
-            <p className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-slate-400">
+            <p className="text-xs font-medium uppercase tracking-[0.06em] text-slate-400">
               Acción del periodo
             </p>
             <p className="font-display text-lg font-semibold text-white mt-0.5 capitalize">
@@ -141,31 +141,31 @@ export default function ResumenEmpresa() {
           </div>
           <button
             onClick={() => navigate("/periodos")}
-            className="flex shrink-0 items-center gap-2 rounded-[10px] bg-mint px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-mint-dark"
+            className="flex shrink-0 items-center gap-2 rounded-full bg-mint px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-mint-dark"
           >
             Liquidar ahora <ArrowRight size={15} />
           </button>
         </div>
 
-        <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-4 rounded-2xl border border-borde bg-white shadow-suave p-4">
           <div className="relative shrink-0">
             <Donut segmentos={composicion} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="font-display text-sm font-bold tabular-nums text-ink">
+              <span className="font-mono text-sm font-medium text-ink">
                 +{sobrecosto}%
               </span>
-              <span className="text-[8px] uppercase tracking-wide text-muted">sobrecosto</span>
+              <span className="text-[8px] uppercase tracking-wide text-quiet">sobrecosto</span>
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-2 text-sm">
-            <p className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted">
+            <p className="text-xs font-medium uppercase tracking-[0.06em] text-quiet">
               Costo empleador
             </p>
             {composicion.map((d) => (
               <div key={d.name} className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-[3px] shrink-0" style={{ background: d.color }} />
                 <span className="truncate text-xs text-muted">{d.name}</span>
-                <b className="ml-auto font-display text-[13px] tabular-nums text-ink">
+                <b className="ml-auto font-mono text-[13px] font-medium text-ink">
                   {formatCOP(d.value)}
                 </b>
               </div>
@@ -177,9 +177,9 @@ export default function ResumenEmpresa() {
       {/* Costo por colaborador + semáforo */}
       <div className="grid gap-3.5 lg:grid-cols-[1.6fr_1fr] lg:items-start">
         {conCosto.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-2xl border border-borde bg-white shadow-suave">
             <div className="flex items-center justify-between px-5 pt-4 pb-3">
-              <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
+              <h3 className="text-xs font-medium uppercase tracking-[0.06em] text-quiet">
                 Costo por colaborador
               </h3>
               <div className="hidden sm:flex gap-4 text-[11px] text-muted">
@@ -203,7 +203,7 @@ export default function ResumenEmpresa() {
                   <li key={e.empleadoId}>
                     <button
                       onClick={() => setSeleccionado(e)}
-                      className="group flex w-full items-center gap-3 border-t border-slate-100 px-5 py-3 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:bg-indigo-soft/40"
+                      className="group flex w-full items-center gap-3 border-t border-borde px-5 py-3 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:bg-indigo-soft/40"
                     >
                       <span
                         className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold ${AVATARES[i % AVATARES.length]}`}
@@ -229,10 +229,10 @@ export default function ResumenEmpresa() {
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="font-display text-sm font-semibold tabular-nums text-ink">
+                        <div className="font-mono text-sm font-medium text-ink">
                           {formatCOP(total)}
                         </div>
-                        <div className="text-[10px] tabular-nums text-muted">
+                        <div className="font-mono text-[10px] text-quiet">
                           base {formatCOP(base)} · patr. {formatCOP(patronal)}
                         </div>
                       </div>
@@ -245,19 +245,19 @@ export default function ResumenEmpresa() {
                 );
               })}
             </ul>
-            <p className="border-t border-slate-100 bg-slate-50 px-5 py-2.5 text-[11px] text-muted">
+            <p className="border-t border-borde bg-slate-50 px-5 py-2.5 text-[11px] text-muted">
               Toca un colaborador para ver el desglose línea por línea con su fundamento legal.
             </p>
           </div>
         )}
 
         <div
-          className={`rounded-xl bg-white p-5 ${
-            cumpl.nivel === "rojo" ? "border border-rose-200" : "border border-slate-200"
+          className={`rounded-2xl bg-white p-5 ${
+            cumpl.nivel === "rojo" ? "border border-rose-200 shadow-alerta" : "border border-borde shadow-suave"
           }`}
         >
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <h3 className="text-xs font-medium uppercase tracking-[0.06em] text-quiet">
               Semáforo de cumplimiento
             </h3>
             <button
@@ -293,7 +293,7 @@ export default function ResumenEmpresa() {
 
       {/* Atajos a lo que no tiene destino propio en el menú */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted">
+        <span className="mr-1 text-xs font-medium uppercase tracking-[0.06em] text-quiet">
           Atajos
         </span>
         {ATAJOS.map((a) => (
@@ -363,10 +363,10 @@ function Kpi({
 }) {
   const caja =
     tono === "destacado"
-      ? "border border-indigo/25 bg-gradient-to-br from-white to-indigo-soft/60"
+      ? "border border-indigo/25 bg-gradient-to-br from-white to-indigo-soft/60 shadow-realce"
       : tono === "alerta"
-        ? "border border-rose-200 bg-white"
-        : "border border-slate-200 bg-white";
+        ? "border border-rose-200 bg-white shadow-alerta"
+        : "border border-borde bg-white shadow-suave";
   const color =
     tono === "destacado"
       ? "text-mint-dark"
@@ -376,12 +376,12 @@ function Kpi({
           ? "text-amber-600"
           : "text-ink";
   return (
-    <div className={`rounded-xl px-4 py-3.5 ${caja}`}>
-      <p className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted">{etiqueta}</p>
-      <p className={`font-display mt-1.5 text-xl font-semibold tabular-nums leading-tight ${color}`}>
+    <div className={`rounded-2xl px-4 py-3.5 ${caja}`}>
+      <p className="text-xs font-medium uppercase tracking-[0.06em] text-quiet">{etiqueta}</p>
+      <p className={`mt-1.5 text-xl font-medium leading-tight ${/^[+$\d]/.test(valor) ? "font-mono" : "font-display"} ${color}`}>
         {valor}
       </p>
-      <p className="mt-0.5 text-[11px] text-muted">{sub}</p>
+      <p className="mt-0.5 text-xs text-quiet">{sub}</p>
     </div>
   );
 }
@@ -390,13 +390,13 @@ function AlertaLinea({ etiqueta, n }: { etiqueta: string; n: number }) {
   const alerta = n > 0;
   return (
     <div
-      className={`flex items-center justify-between rounded-[10px] px-3 py-2 text-sm ${
+      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
         alerta ? "bg-rose-50" : "bg-slate-50"
       }`}
     >
       <span className={alerta ? "font-medium text-ink" : "text-muted"}>{etiqueta}</span>
       <span
-        className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${
+        className={`rounded-full px-2 py-0.5 font-mono text-xs font-medium ${
           alerta ? "bg-rose-600 text-white" : "text-teal-700"
         }`}
       >

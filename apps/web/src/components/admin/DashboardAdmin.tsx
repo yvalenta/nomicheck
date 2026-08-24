@@ -21,7 +21,7 @@ import EmptyState from "../EmptyState.tsx";
 import Skeleton from "../Skeleton.tsx";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 export default function DashboardAdmin() {
   return (
@@ -145,7 +145,7 @@ function FilaEmpresa({
   }
 
   return (
-    <div className="border-b border-slate-100 last:border-0">
+    <div className="border-b border-borde last:border-0">
       <div className="flex items-center gap-3 px-3 py-3">
         <div className="w-9 h-9 rounded-lg bg-emerald-50 text-mint-dark flex items-center justify-center shrink-0">
           <Building2 size={18} />
@@ -275,14 +275,14 @@ function FormReasignarAdmin({
         <button
           type="button"
           onClick={onCancelar}
-          className="flex-1 rounded-xl border border-slate-200 bg-white text-ink text-sm py-2"
+          className="flex-1 rounded-full border border-ink/15 bg-white text-ink text-sm py-2"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={enviando}
-          className="flex-1 rounded-xl bg-mint text-white font-semibold text-sm py-2 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+          className="flex-1 rounded-full bg-mint text-white font-medium text-sm py-2 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
         >
           {enviando ? "Enviando…" : "Invitar"}
         </button>
@@ -344,14 +344,14 @@ function FormNuevaEmpresa({
           <button
             type="button"
             onClick={onCancelar}
-            className="flex-1 rounded-xl border border-slate-200 bg-white text-ink text-sm py-2.5"
+            className="flex-1 rounded-full border border-ink/15 bg-white text-ink text-sm py-2.5"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={enviando}
-            className="flex-1 rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+            className="flex-1 rounded-full bg-mint text-white font-medium py-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
           >
             {enviando ? "Creando…" : "Crear e invitar"}
           </button>
@@ -508,7 +508,7 @@ function Festivos() {
         <form onSubmit={agregar} className="px-3 pt-3 flex gap-2">
           <DateField required value={fecha} onChange={setFecha} className="w-full" />
           <input required placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className={`${inputCls} flex-1`} />
-          <button type="submit" className="rounded-xl bg-mint text-white px-3 hover:bg-mint-dark transition-colors duration-200">
+          <button type="submit" className="rounded-full bg-mint text-white px-3 hover:bg-mint-dark transition-colors duration-200">
             <CalendarPlus size={16} />
           </button>
         </form>

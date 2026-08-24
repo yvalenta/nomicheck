@@ -19,7 +19,7 @@ import Paginador from "../filtros/Paginador.tsx";
 import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 type FiltroEstado = "activos" | "inactivos" | "todos";
 type Filtros = { q: string; estado: FiltroEstado; page: number };
@@ -153,7 +153,7 @@ export default function ContratistasEmpresa() {
                   <p className="text-sm font-medium text-ink truncate">{c.nombre}</p>
                   <p className="text-xs text-muted">{c.documento}</p>
                 </div>
-                <p className="text-sm font-semibold text-ink tabular-nums shrink-0">
+                <p className="font-mono text-sm font-medium text-ink shrink-0">
                   {formatCOP(c.honorariosMensuales)}
                 </p>
                 <button
@@ -186,7 +186,7 @@ export default function ContratistasEmpresa() {
                     </button>
                     <button
                       onClick={() => setConfirmandoId(null)}
-                      className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+                      className="rounded-full border border-ink/15 bg-white text-ink text-xs px-3 py-1.5"
                     >
                       No
                     </button>
@@ -285,7 +285,7 @@ function FormContratista({
         </div>
         <button
           type="submit"
-          className="rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200"
+          className="rounded-full bg-mint text-white font-medium py-2.5 hover:bg-mint-dark transition-colors duration-200"
         >
           {inicial ? "Guardar cambios" : "Guardar contratista"}
         </button>

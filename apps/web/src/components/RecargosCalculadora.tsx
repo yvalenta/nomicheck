@@ -7,7 +7,7 @@ import DateField from "./DateField.tsx";
 import RecargosResultado from "./RecargosResultado.tsx";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 // Orden y agrupación de captura: primero los recargos sobre horas ordinarias
 // (solo pagan el porcentaje), luego las extras (hora completa + recargo).
@@ -157,7 +157,7 @@ export default function RecargosCalculadora({ parametros, onAtras }: Props) {
         <button
           type="submit"
           disabled={!listo || calculando}
-          className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {calculando ? "Calculando…" : "Calcular recargos"}
         </button>

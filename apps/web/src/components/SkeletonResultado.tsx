@@ -3,7 +3,7 @@ export default function SkeletonResultado() {
     <div className="flex flex-col gap-4" aria-busy="true" aria-label="Calculando tu nómina">
       <div className="skeleton h-24 rounded-2xl" />
       <div className="skeleton h-3 rounded-full" />
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-borde p-4 flex flex-col gap-3">
         {[...Array(5)].map((_, i) => (
           <div key={i} className="flex items-center gap-3">
             <div className="skeleton w-9 h-9 rounded-lg shrink-0" />

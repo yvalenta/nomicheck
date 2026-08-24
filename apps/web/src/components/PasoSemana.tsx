@@ -179,13 +179,13 @@ export default function PasoSemana({
       <div className="flex gap-3">
         <button
           onClick={onAtras}
-          className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-ink font-medium px-5 py-3.5 hover:bg-slate-50 transition-colors duration-200"
+          className="flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white text-ink font-medium px-5 py-3.5 hover:bg-slate-50 transition-colors duration-200"
         >
           <ArrowLeft size={18} /> Atrás
         </button>
         <button
           onClick={calcular}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out"
+          className="flex-1 flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out"
         >
           Calcular mi nómina <ArrowRight size={18} />
         </button>

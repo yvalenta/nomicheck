@@ -205,7 +205,7 @@ function DetalleLineas({ lineas }: { lineas: LineaRecargo[] }) {
         const extra = esHoraExtra(l.codigo);
         return (
           <Aparecer key={l.codigo} retraso={i * 70}>
-            <div className="flex items-start gap-2.5 py-2 border-b border-slate-100 last:border-0">
+            <div className="flex items-start gap-2.5 py-2 border-b border-borde last:border-0">
               <span
                 className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                   extra ? "bg-teal-50 text-teal-700" : "bg-indigo-soft text-mint-dark"
@@ -286,7 +286,7 @@ export default function RecargosResultado({
         </div>
       )}
 
-      <div className="mx-3 mt-3 mb-2 rounded-xl bg-slate-50 border border-slate-100 p-3">
+      <div className="mx-3 mt-3 mb-2 rounded-xl bg-slate-50 border border-borde p-3">
         <p className="text-xs text-muted leading-relaxed">
           Los recargos sobre horas ordinarias suman <strong className="text-ink">solo el porcentaje</strong> (la hora
           base ya está en tu salario); las horas extra se pagan{" "}

@@ -26,7 +26,7 @@ const TIPOS: { valor: ConceptoNomina["tipo"]; etiqueta: string }[] = [
 ];
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 export default function PasoRevision({ extraido, parametros, onAtras, onConfirmar }: Props) {
   const [salario, setSalario] = useState(String(extraido.salarioBasicoMensual ?? ""));
@@ -154,14 +154,14 @@ export default function PasoRevision({ extraido, parametros, onAtras, onConfirma
       <div className="flex gap-3">
         <button
           onClick={onAtras}
-          className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-ink font-medium px-5 py-3.5 hover:bg-slate-50 transition-colors duration-200"
+          className="flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white text-ink font-medium px-5 py-3.5 hover:bg-slate-50 transition-colors duration-200"
         >
           <ArrowLeft size={18} /> Atrás
         </button>
         <button
           disabled={!listo}
           onClick={() => onConfirmar({ salario, desde, hasta, auxilio, conceptos })}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Calcular <ArrowRight size={18} />
         </button>

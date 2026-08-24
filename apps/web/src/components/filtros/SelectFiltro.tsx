@@ -18,7 +18,7 @@ export default function SelectFiltro<T extends string>({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T | "")}
-      className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint ${className}`}
+      className={`rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint ${className}`}
     >
       <option value="">{todasLabel}</option>
       {opciones.map((o) => (

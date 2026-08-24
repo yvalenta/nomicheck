@@ -15,7 +15,7 @@ function GoogleIcon() {
 }
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 interface Props {
   open: boolean;
@@ -100,7 +100,7 @@ export default function AuthModal({ open, onClose, onAuthSuccess }: Props) {
         <button
           type="button"
           onClick={conGoogle}
-          className="flex items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-ink hover:bg-slate-50 transition-colors duration-200"
+          className="flex items-center justify-center gap-2.5 rounded-full border border-ink/15 bg-white py-3 text-sm font-medium text-ink hover:bg-slate-50 transition-colors duration-200"
         >
           <GoogleIcon />
           Continuar con Google
@@ -149,7 +149,7 @@ export default function AuthModal({ open, onClose, onAuthSuccess }: Props) {
           <button
             type="submit"
             disabled={cargando}
-            className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+            className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
           >
             {cargando ? (
               <Loader2 size={18} className="animate-spin" />

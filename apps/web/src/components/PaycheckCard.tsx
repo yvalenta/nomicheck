@@ -6,14 +6,15 @@ interface Props {
   className?: string;
 }
 
-// Rediseño 2026-08-20 ("limpio"): filete fino visible en vez de sombra, radio
-// contenido, título más quieto. El color dejó de ser decoración en toda la
-// app — una card no compite por atención, la información adentro sí.
+// Rediseño 2026-08-20 ("limpio") + blueprint 2026-08: filete AÚN más fino
+// (borde derivado de midnight) con la sombra suave de la dirección C — el
+// contacto de 1px y la luz ambiental de 24px. Radio de card fijo en 16px.
+// El título es la tinta terciaria en 12px: etiqueta, no titular.
 export default function PaycheckCard({ titulo, children, className = "" }: Props) {
   return (
-    <section className={`bg-white rounded-xl border border-slate-200 ${className}`}>
+    <section className={`bg-white rounded-2xl border border-borde shadow-suave ${className}`}>
       {titulo && (
-        <h3 className="px-5 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <h3 className="px-5 pt-4 pb-1 text-xs font-medium uppercase tracking-[0.06em] text-quiet">
           {titulo}
         </h3>
       )}

@@ -29,9 +29,9 @@ function vacio(valor: number | string | undefined | null, formato?: (v: number) 
   return typeof valor === "number" && formato ? formato(valor) : String(valor);
 }
 
-const th = "text-left text-xs font-semibold uppercase tracking-wide text-muted pb-2 border-b border-slate-200";
-const td = "py-2 text-sm text-ink border-b border-slate-100";
-const tdNum = `${td} text-right tabular-nums`;
+const th = "text-left text-xs font-medium uppercase tracking-[0.06em] text-quiet pb-2 border-b border-papel-2";
+const td = "py-2 text-sm text-ink border-b border-papel-2";
+const tdNum = `${td} text-right font-mono`;
 
 export default function ComprobanteNomina({ resultado, numero, empresa, empleado, fechaElaboracion }: Props) {
   const devengos = resultado.lineas.filter((l) => l.tipo === "devengo");
@@ -40,7 +40,7 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
   const deducciones = resultado.lineas.filter((l) => l.tipo === "deduccion");
 
   return (
-    <div id="comprobante-nomina" className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 print:shadow-none print:border-0 print:p-0">
+    <div id="comprobante-nomina" className="bg-papel rounded-2xl shadow-suave border border-papel-2 p-6 print:shadow-none print:border-0 print:p-0">
       {/* Estilos de impresión: solo el comprobante, en tinta negra sobre blanco. */}
       <style>{`
         @media print {
@@ -53,7 +53,7 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-ink">Comprobante de nómina</h3>
+          <h3 className="text-base font-medium text-ink">Comprobante de nómina</h3>
           <p className="text-xs text-muted mt-0.5">
             N° {numero ?? "Borrador (estimado del verificador, sin valor contable)"}
           </p>
@@ -80,7 +80,7 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
       </dl>
 
       {/* Ingresos salariales */}
-      <h4 className="text-sm font-bold text-ink mt-6 mb-2">Ingresos salariales</h4>
+      <h4 className="text-sm font-medium text-ink mt-6 mb-2">Ingresos salariales</h4>
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -110,7 +110,7 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
       {/* Ingresos no salariales */}
       {noSalariales.length > 0 && (
         <>
-          <h4 className="text-sm font-bold text-ink mt-6 mb-2">Ingresos no salariales</h4>
+          <h4 className="text-sm font-medium text-ink mt-6 mb-2">Ingresos no salariales</h4>
           <table className="w-full border-collapse">
             <tbody>
               {noSalariales.map((l, i) => (
@@ -124,13 +124,13 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
         </>
       )}
 
-      <div className="flex justify-between text-sm font-semibold text-ink mt-3 pt-2 border-t border-slate-200">
+      <div className="flex justify-between text-sm font-medium text-ink mt-3 pt-2 border-t border-papel-2">
         <span>TOTAL INGRESOS</span>
         <span className="tabular-nums">{formatCOP(resultado.totalDevengos)}</span>
       </div>
 
       {/* Deducciones */}
-      <h4 className="text-sm font-bold text-ink mt-6 mb-2">Deducciones</h4>
+      <h4 className="text-sm font-medium text-ink mt-6 mb-2">Deducciones</h4>
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -162,17 +162,17 @@ export default function ComprobanteNomina({ resultado, numero, empresa, empleado
         </tbody>
       </table>
 
-      <div className="flex justify-between text-sm font-semibold text-coral mt-3 pt-2 border-t border-slate-200">
+      <div className="flex justify-between text-sm font-medium text-coral mt-3 pt-2 border-t border-papel-2">
         <span>TOTAL DEDUCCIONES</span>
         <span className="tabular-nums">−{formatCOP(resultado.totalDeducciones)}</span>
       </div>
 
-      <div className="flex justify-between text-base font-bold text-ink mt-4 pt-3 border-t-2 border-ink">
-        <span>NETO A PAGAR</span>
-        <span className="tabular-nums">{formatCOP(resultado.netoEsperado)}</span>
+      <div className="flex items-baseline justify-between mt-4 pt-3 border-t-2 border-ink">
+        <span className="text-sm font-medium text-ink">NETO A PAGAR</span>
+        <span className="font-mono text-2xl font-medium text-ink">{formatCOP(resultado.netoEsperado)}</span>
       </div>
 
-      <p className="text-[11px] text-muted mt-4">
+      <p className="text-xs text-quiet mt-4">
         Generado por NomiCheck — estimado informativo según la ley colombiana vigente; no reemplaza
         la liquidación oficial ni asesoría legal certificada.
       </p>

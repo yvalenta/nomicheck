@@ -3,7 +3,7 @@ import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 export interface OpcionCombobox {
   value: string;
@@ -44,7 +44,7 @@ export default function Combobox({ value, onChange, opciones, placeholder = "Sel
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[16rem] p-0" align="start">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-borde">
           <Search size={14} className="text-muted shrink-0" />
           <input
             autoFocus

@@ -19,7 +19,7 @@ function esErrorCatastrofico(x: unknown): x is ErrorCatastrofico {
 export default function PanelLiquidacion({ estado }: { estado: EstadoLiquidacion }) {
   if (estado.estado === "liquidando") {
     return (
-      <div className="rounded-xl bg-mint-light/40 border border-mint/40 p-3 flex flex-col gap-2">
+      <div className="rounded-full bg-mint-light/40 border border-mint/40 p-3 flex flex-col gap-2">
         <div className="flex items-center gap-2 text-sm text-ink">
           <Loader2 size={16} className="text-mint-dark animate-spin shrink-0" />
           <span className="font-medium">Liquidando…</span>

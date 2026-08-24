@@ -103,7 +103,7 @@ export default function DashboardColaborador() {
                   <button
                     onClick={() => responderInvitacion(inv.id, true)}
                     disabled={procesando === inv.id}
-                    className="flex items-center gap-1 rounded-lg bg-mint text-white text-xs font-semibold px-2.5 py-1.5 hover:bg-mint-dark transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1 rounded-lg bg-mint text-white text-xs font-medium px-2.5 py-1.5 hover:bg-mint-dark transition-colors disabled:opacity-40"
                   >
                     <Check size={14} /> Aceptar
                   </button>
@@ -135,7 +135,7 @@ export default function DashboardColaborador() {
               <ValidationRow key={i} linea={l} />
             ))}
           </div>
-          <div className="border-t border-slate-100 mx-3 py-2.5 px-3 flex items-center justify-between gap-3">
+          <div className="border-t border-borde mx-3 py-2.5 px-3 flex items-center justify-between gap-3">
             <button
               onClick={() => setComprobanteAbierto(comprobanteAbierto === r.id ? null : r.id)}
               className="flex items-center gap-1.5 text-xs text-mint-dark hover:underline shrink-0"

@@ -42,7 +42,7 @@ export default function LegalRef({ ley, children }: Props) {
         createPortal(
           <div
             role="tooltip"
-            className="fixed z-[90] w-64 max-w-[80vw] rounded-xl border border-slate-200 bg-white p-3 text-xs leading-relaxed text-ink shadow-2xl animate-in fade-in-0 zoom-in-95 duration-100"
+            className="fixed z-[90] w-64 max-w-[80vw] rounded-2xl border border-borde bg-white p-3 text-xs leading-relaxed text-ink shadow-2xl animate-in fade-in-0 zoom-in-95 duration-100"
             style={{ left: pos.x, top: pos.y }}
           >
             <p className="font-mono text-[11px] font-semibold text-mint mb-1">{ley}</p>

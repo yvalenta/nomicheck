@@ -117,18 +117,18 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
             <ValidationRow key={i} linea={l} />
           ))}
         </div>
-        <div className="border-t border-slate-100 mx-3 py-3 px-3 flex flex-col gap-1.5 text-sm">
+        <div className="border-t border-borde mx-3 py-3 px-3 flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between text-muted">
             <span>Total devengado</span>
-            <span className="tabular-nums">{formatCOP(resultado.totalDevengos)}</span>
+            <span className="font-mono">{formatCOP(resultado.totalDevengos)}</span>
           </div>
           <div className="flex justify-between text-muted">
             <span>Total deducciones</span>
-            <span className="tabular-nums text-coral">−{formatCOP(resultado.totalDeducciones)}</span>
+            <span className="font-mono text-coral">−{formatCOP(resultado.totalDeducciones)}</span>
           </div>
-          <div className="flex justify-between font-bold text-ink text-base pt-1">
-            <span>Neto esperado</span>
-            <span className="tabular-nums">{formatCOP(resultado.netoEsperado)}</span>
+          <div className="flex items-baseline justify-between pt-1">
+            <span className="font-medium text-ink">Neto esperado</span>
+            <span className="font-mono text-2xl font-medium text-ink">{formatCOP(resultado.netoEsperado)}</span>
           </div>
         </div>
       </PaycheckCard>
@@ -136,7 +136,7 @@ export default function Resultado({ resultado, netoRecibido, onVolver }: Props) 
       <button
         onClick={() => guardar(resultado, netoRecibido)}
         disabled={guardando}
-        className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+        className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
       >
         {guardando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
         {guardando ? "Guardando…" : "Guardar liquidación"}

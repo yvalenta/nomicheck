@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Chrome, UserRound } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 // Sin auto-registro: la cuenta la crea la invitación de la empresa
 // (Supabase Auth inviteUserByEmail, ver authService.ts). El colaborador
@@ -88,7 +88,7 @@ export default function AuthColaborador() {
             <button
               type="submit"
               disabled={cargando}
-              className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+              className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
             >
               Enviar enlace <ArrowRight size={18} />
             </button>
@@ -116,7 +116,7 @@ export default function AuthColaborador() {
 
       <button
         onClick={conGoogle}
-        className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200"
+        className="flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200"
       >
         <Chrome size={18} /> Continuar con Google
       </button>
@@ -153,7 +153,7 @@ export default function AuthColaborador() {
         <button
           type="submit"
           disabled={cargando}
-          className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+          className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
         >
           Ingresar <ArrowRight size={18} />
         </button>

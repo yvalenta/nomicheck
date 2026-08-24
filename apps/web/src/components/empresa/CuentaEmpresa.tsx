@@ -114,7 +114,7 @@ export default function CuentaEmpresa() {
                 {datos.detalle.map((c) => (
                   <div
                     key={`${c.periodoId}-${c.cerradoEn}`}
-                    className="flex items-center gap-3 px-3 py-3 border-b border-slate-100 last:border-0"
+                    className="flex items-center gap-3 px-3 py-3 border-b border-borde last:border-0"
                   >
                     {c.firmaValida ? (
                       <Check size={16} className="text-emerald-600 shrink-0" aria-hidden />
@@ -251,7 +251,7 @@ function DatosEmpresaCard() {
             <input
               value={f.nombre}
               onChange={(e) => campo("nombre", e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+              className="rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
@@ -259,7 +259,7 @@ function DatosEmpresaCard() {
             <input
               value={f.nit}
               onChange={(e) => campo("nit", e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+              className="rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
@@ -267,7 +267,7 @@ function DatosEmpresaCard() {
             <input
               value={f.sector}
               onChange={(e) => campo("sector", e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+              className="rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
             />
           </label>
         </div>
@@ -275,7 +275,7 @@ function DatosEmpresaCard() {
           <button
             onClick={guardar}
             disabled={!editado || guardando}
-            className="rounded-[10px] bg-mint px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-mint-dark disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-mint px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-mint-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             {guardando ? "Guardando…" : "Guardar cambios"}
           </button>

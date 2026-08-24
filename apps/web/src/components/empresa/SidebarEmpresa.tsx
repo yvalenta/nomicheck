@@ -119,13 +119,13 @@ export default function SidebarEmpresa({ activo, onCambio, onPreparar }: Props) 
               onMouseEnter={() => !on && onPreparar?.(d.pestanas[0].valor)}
               onFocus={() => !on && onPreparar?.(d.pestanas[0].valor)}
               aria-current={on ? "page" : undefined}
-              className={`flex items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                 on
-                  ? "border-slate-200 bg-white text-mint-dark"
+                  ? "border-transparent bg-indigo-soft text-mint-dark"
                   : "border-transparent text-muted hover:bg-white/60 hover:text-ink"
               }`}
             >
-              <d.Icon size={16} className="shrink-0" />
+              <d.Icon size={14} className="shrink-0" />
               <span className="truncate">{d.etiqueta}</span>
             </button>
           );

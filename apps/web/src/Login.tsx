@@ -5,7 +5,7 @@ import { irAPortalSegunRol } from "./lib/irAPortal.ts";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 // Punto de entrada único: cualquier cuenta (empresa, colaborador, admin de
 // plataforma) inicia sesión aquí y se le manda a su portal automáticamente
@@ -65,7 +65,7 @@ export default function Login() {
 
           <button
             onClick={conGoogle}
-            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200"
+            className="flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200"
           >
             <Chrome size={18} /> Continuar con Google
           </button>
@@ -102,7 +102,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={cargando}
-              className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+              className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
             >
               Ingresar <ArrowRight size={18} />
             </button>

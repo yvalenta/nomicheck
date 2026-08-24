@@ -217,7 +217,7 @@ export default function App() {
         {paso === "salario" && (
           <div id="verificar" className="flex flex-col gap-5 scroll-mt-4 pt-2">
             <div className="text-center px-4">
-              <p className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">
+              <p className="text-xs font-medium uppercase tracking-[0.06em] text-quiet">
                 Verifica tu pago
               </p>
             </div>

@@ -117,7 +117,7 @@ export default function PanelPagoOnChain({
             <button
               onClick={generar}
               disabled={generando}
-              className="self-start flex items-center gap-2 rounded-xl bg-mint text-white text-sm font-semibold px-4 py-2.5 hover:bg-mint-dark transition-colors disabled:opacity-50"
+              className="self-start flex items-center gap-2 rounded-full bg-mint text-white text-sm font-medium px-4 py-2.5 hover:bg-mint-dark transition-colors disabled:opacity-50"
             >
               {generando ? <Loader2 size={15} className="animate-spin" /> : <Wallet size={15} />}
               {generando ? "Generando lote…" : "Generar lote de pago USDC"}
@@ -219,7 +219,7 @@ export default function PanelPagoOnChain({
                   placeholder="txHash de la transacción firmada (0x…)"
                   value={txHash}
                   onChange={(e) => setTxHash(e.target.value)}
-                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-mint/40"
+                  className="flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-mint/40"
                 />
                 <button
                   onClick={verificar}
@@ -235,7 +235,7 @@ export default function PanelPagoOnChain({
               <button
                 onClick={generar}
                 disabled={generando}
-                className="self-start flex items-center gap-2 rounded-xl bg-mint text-white text-xs font-semibold px-4 py-2 hover:bg-mint-dark disabled:opacity-50"
+                className="self-start flex items-center gap-2 rounded-full bg-mint text-white text-xs font-medium px-4 py-2 hover:bg-mint-dark disabled:opacity-50"
               >
                 {generando ? <Loader2 size={13} className="animate-spin" /> : <Wallet size={13} />}
                 Regenerar lote con tasa fresca
@@ -252,7 +252,7 @@ export default function PanelPagoOnChain({
               </div>
             )}
 
-            <p className="text-[10px] text-muted leading-relaxed border-t border-slate-100 pt-2">
+            <p className="text-[10px] text-muted leading-relaxed border-t border-borde pt-2">
               {batch.disclaimer}
             </p>
           </>

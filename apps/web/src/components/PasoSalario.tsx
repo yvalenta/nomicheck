@@ -42,7 +42,7 @@ interface Props {
 }
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 
 const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
@@ -206,7 +206,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
 
           {/* El periodo vive con el salario: son la misma pregunta (¿cuánto y
               cuándo?), y el par periodicidad/período aprovecha una sola fila. */}
-          <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+          <div className="grid gap-4 border-t border-borde pt-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
               <span>Periodicidad de pago</span>
               <select
@@ -271,7 +271,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
             />
           </div>
 
-          <div className="border-t border-slate-100 pt-3.5 flex flex-col gap-2">
+          <div className="border-t border-borde pt-3.5 flex flex-col gap-2">
             <label className="flex items-center gap-2.5 text-sm text-ink">
               <input
                 type="checkbox"
@@ -333,7 +333,7 @@ export default function PasoSalario({ datos, onCambio, onSiguiente, parametros }
       <button
         type="submit"
         disabled={!listo}
-        className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+        className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {datos.tipoContrato === "servicios" ? "Calcular" : "Siguiente: tu semana"}{" "}
         <ArrowRight size={18} />

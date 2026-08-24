@@ -53,7 +53,7 @@ import EmptyState from "../EmptyState.tsx";
 import HorarioSemanalEditor from "../HorarioSemanalEditor.tsx";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 
 // El comprobante imprimible (ComprobanteNomina) trabaja sobre la forma
@@ -320,7 +320,7 @@ function FormPeriodo({ onCreado }: { onCreado: (p: Periodo) => void }) {
           El fin se calcula solo según la periodicidad — edítalo si tu periodo real fue distinto.
         </p>
         {error && <p className="text-coral text-sm">{error}</p>}
-        <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200">
+        <button type="submit" className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-2.5 hover:bg-mint-dark transition-colors duration-200">
           <CalendarPlus size={16} /> Crear periodo
         </button>
       </form>
@@ -389,14 +389,14 @@ function FormEditarPeriodo({
           <button
             type="button"
             onClick={onCancelar}
-            className="flex-1 rounded-xl border border-slate-200 bg-white text-ink font-medium py-2.5 hover:bg-slate-50 transition-colors duration-200"
+            className="flex-1 rounded-full border border-ink/15 bg-white text-ink font-medium py-2.5 hover:bg-slate-50 transition-colors duration-200"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={guardando}
-            className="flex-1 rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+            className="flex-1 rounded-full bg-mint text-white font-medium py-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
           >
             {guardando ? "Guardando…" : "Guardar cambios"}
           </button>
@@ -850,14 +850,14 @@ function DetallePeriodo({
             <button
               onClick={guardar}
               disabled={guardando}
-              className="flex-1 rounded-xl border border-slate-200 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200 disabled:opacity-40"
+              className="flex-1 rounded-full border border-ink/15 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200 disabled:opacity-40"
             >
               {guardando ? "Guardando…" : "Guardar borrador"}
             </button>
             <button
               onClick={liquidar}
               disabled={liquidando}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+              className="flex-1 flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
             >
               <CheckCircle2 size={18} /> {liquidando ? "Liquidando…" : "Liquidar periodo"}
             </button>
@@ -873,7 +873,7 @@ function DetallePeriodo({
                     <ValidationRow key={i} linea={l} />
                   ))}
                 </div>
-                <div className="border-t border-slate-100 mx-3 py-2.5 px-3 flex items-center justify-between gap-3">
+                <div className="border-t border-borde mx-3 py-2.5 px-3 flex items-center justify-between gap-3">
                   <button
                     onClick={() => setComprobanteAbierto(comprobanteAbierto === r.id ? null : r.id)}
                     className="flex items-center gap-1.5 text-xs text-mint-dark hover:underline shrink-0"

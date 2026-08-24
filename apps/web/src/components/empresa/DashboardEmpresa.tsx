@@ -28,7 +28,7 @@ import Paginador from "../filtros/Paginador.tsx";
 import { useFiltrosUrl } from "../filtros/useFiltrosUrl.ts";
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 const TIPO_CONTRATO_OPCIONES: { value: Empleado["tipoContrato"]; label: string }[] = [
   { value: "indefinido", label: "Término indefinido" },
@@ -265,7 +265,7 @@ export default function DashboardEmpresa() {
                     <EstadoCuenta empleado={e} />
                   </p>
                 </div>
-                <p className="text-sm font-semibold text-ink tabular-nums shrink-0">
+                <p className="font-mono text-sm font-medium text-ink shrink-0">
                   {formatCOP(e.salarioBase)}
                 </p>
                 <button
@@ -336,7 +336,7 @@ export default function DashboardEmpresa() {
                     </button>
                     <button
                       onClick={() => setAccion(null)}
-                      className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+                      className="rounded-full border border-ink/15 bg-white text-ink text-xs px-3 py-1.5"
                     >
                       No
                     </button>
@@ -380,9 +380,9 @@ function EstadoCuenta({ empleado }: { empleado: Empleado }) {
 
 function Stat({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3">
+    <div className="bg-white rounded-2xl shadow-sm border border-borde px-4 py-3">
       <p className="text-xs text-muted">{etiqueta}</p>
-      <p className="text-base font-bold text-ink tabular-nums mt-0.5">{valor}</p>
+      <p className="font-mono text-base font-medium text-ink mt-0.5">{valor}</p>
     </div>
   );
 }
@@ -413,7 +413,7 @@ function FormInvitar({ onEnviar, onCancelar }: { onEnviar: (email: string) => vo
         <button
           type="button"
           onClick={onCancelar}
-          className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+          className="rounded-full border border-ink/15 bg-white text-ink text-xs px-3 py-1.5"
         >
           Cancelar
         </button>
@@ -451,7 +451,7 @@ function FormRetirar({
         <button
           type="button"
           onClick={onCancelar}
-          className="rounded-lg border border-slate-200 bg-white text-ink text-xs px-3 py-1.5"
+          className="rounded-full border border-ink/15 bg-white text-ink text-xs px-3 py-1.5"
         >
           Cancelar
         </button>
@@ -576,7 +576,7 @@ function FormEmpleado({
         </label>
         <button
           type="submit"
-          className="rounded-xl bg-mint text-white font-semibold py-2.5 hover:bg-mint-dark transition-colors duration-200"
+          className="rounded-full bg-mint text-white font-medium py-2.5 hover:bg-mint-dark transition-colors duration-200"
         >
           {inicial ? "Guardar cambios" : "Guardar colaborador"}
         </button>

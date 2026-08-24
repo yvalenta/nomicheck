@@ -41,7 +41,7 @@ export default function HeaderProfile({ periodo, paso, mostrarMisLiquidaciones, 
             {periodo ? (
               <>
                 <p className="text-xs text-slate-400">Periodo</p>
-                <p className="text-sm font-semibold">
+                <p className="font-mono text-[13px] font-medium">
                   {formatFecha(periodo.desde)} — {formatFecha(periodo.hasta)}
                 </p>
               </>

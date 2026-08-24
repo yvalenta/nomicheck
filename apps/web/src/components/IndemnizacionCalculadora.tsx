@@ -16,7 +16,7 @@ const TIPO_LABEL: Record<TipoContrato, string> = {
 };
 
 const inputCls =
-  "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
+  "rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200";
 
 interface Props {
   parametros: ParametrosPublicos | null;
@@ -202,7 +202,7 @@ export default function IndemnizacionCalculadora({ parametros, onAtras }: Props)
         <button
           type="submit"
           disabled={!listo || calculando || vencimientoInvalido}
-          className="flex items-center justify-center gap-2 rounded-xl bg-mint text-white font-semibold py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 rounded-full bg-mint text-white font-medium py-3.5 hover:bg-mint-dark transition-colors duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {calculando ? "Calculando…" : "Calcular indemnización"}
         </button>
@@ -271,7 +271,7 @@ function Aparecer({ children }: { children: React.ReactNode }) {
  */
 function AlcanceNota({ onVerOtras }: { onVerOtras: () => void }) {
   return (
-    <div className="mx-3 mb-3 rounded-xl bg-slate-50 border border-slate-100 p-3">
+    <div className="mx-3 mb-3 rounded-xl bg-slate-50 border border-borde p-3">
       <p className="text-xs text-muted leading-relaxed">
         Esto es <strong className="text-ink">solo la indemnización</strong> — lo que se debe por terminar el contrato
         antes de tiempo y sin justa causa. <strong className="text-ink">No incluye</strong> prima, cesantías, intereses

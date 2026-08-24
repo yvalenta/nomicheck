@@ -66,17 +66,17 @@ export default function ValidationRow({ linea }: { linea: LineaResultado }) {
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-ink truncate">{linea.concepto}</p>
-        {linea.ley && <p className="text-xs text-muted truncate">{linea.ley}</p>}
+        {linea.ley && <p className="text-xs text-quiet truncate">{linea.ley}</p>}
       </div>
 
       {linea.horas !== undefined && (
-        <span className="text-xs font-semibold bg-slate-100 text-muted rounded-full px-2 py-0.5 shrink-0">
+        <span className="font-mono text-xs bg-slate-100 text-muted rounded-full px-2 py-0.5 shrink-0">
           {linea.horas} h
         </span>
       )}
 
       <p
-        className={`text-sm font-semibold tabular-nums shrink-0 ${
+        className={`font-mono text-sm font-medium shrink-0 ${
           esDeduccion ? "text-coral" : "text-ink"
         }`}
       >

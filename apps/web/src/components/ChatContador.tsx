@@ -78,12 +78,12 @@ export default function ChatContador({ resultado }: Props) {
             value={pregunta}
             onChange={(e) => setPregunta(e.target.value)}
             placeholder="Escribe tu pregunta…"
-            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200"
+            className="flex-1 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint transition-shadow duration-200"
           />
           <button
             type="submit"
             disabled={enviando || !pregunta.trim()}
-            className="rounded-xl bg-mint text-white p-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
+            className="rounded-full bg-mint text-white p-2.5 hover:bg-mint-dark transition-colors duration-200 disabled:opacity-40"
           >
             <Send size={16} />
           </button>

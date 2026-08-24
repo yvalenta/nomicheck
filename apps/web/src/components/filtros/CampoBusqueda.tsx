@@ -36,7 +36,7 @@ export default function CampoBusqueda({
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
+        className="w-full rounded-full border border-ink/15 bg-white pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/40 focus:border-mint"
       />
       {local && (
         <button

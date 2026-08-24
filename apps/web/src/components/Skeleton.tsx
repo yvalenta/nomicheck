@@ -9,7 +9,7 @@ function Barra({ className = "" }: { className?: string }) {
 // derecha. Cubre el caso más común: colaboradores, contratistas, periodos.
 export function SkeletonFila() {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-3.5 border-b border-slate-100 last:border-0">
+    <div className="flex items-center justify-between gap-3 px-3 py-3.5 border-b border-borde last:border-0">
       <div className="flex flex-col gap-1.5 flex-1">
         <Barra className="h-4 w-1/3" />
         <Barra className="h-3 w-1/5" />

@@ -57,7 +57,7 @@ export default function DetalleColaboradorModal({ empleado, onClose }: Props) {
       {empleado && c && (
         <>
           {/* Cabecera */}
-          <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4 rounded-t-2xl">
+          <div className="flex items-start justify-between gap-3 border-b border-borde bg-slate-50 px-5 py-4 rounded-t-2xl">
             <div className="flex gap-3">
               <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo-soft text-indigo font-bold">
                 {iniciales}
@@ -78,9 +78,9 @@ export default function DetalleColaboradorModal({ empleado, onClose }: Props) {
           </div>
 
           {/* Hero: costo total */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-indigo-soft/50 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-borde bg-indigo-soft/50 px-5 py-4">
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-muted">
+              <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-quiet">
                 Costo total mensual para la empresa
               </p>
               <p className="mt-1 font-mono text-2xl font-extrabold tabular-nums text-indigo">
@@ -105,7 +105,7 @@ export default function DetalleColaboradorModal({ empleado, onClose }: Props) {
               {c.lineas.map((l, i) => (
                 <div
                   key={i}
-                  className="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0"
+                  className="flex items-start justify-between gap-3 border-b border-borde py-2.5 last:border-0"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm text-ink">
@@ -138,7 +138,7 @@ export default function DetalleColaboradorModal({ empleado, onClose }: Props) {
           </div>
 
           {/* Pie */}
-          <div className="rounded-b-2xl border-t border-slate-100 bg-slate-50 px-5 py-3 text-[11px] leading-relaxed text-muted">
+          <div className="rounded-b-2xl border-t border-borde bg-slate-50 px-5 py-3 text-[11px] leading-relaxed text-muted">
             Estimación informativa · cada línea cita su fuente legal · no reemplaza la
             liquidación oficial ni la revisión de un Contador Público (JCC).
           </div>

@@ -161,7 +161,7 @@ export default function ComparadorCostos({
             </ResponsiveContainer>
           </div>
 
-          <dl className="mt-4 grid sm:grid-cols-3 gap-3 border-t border-slate-100 pt-4">
+          <dl className="mt-4 grid sm:grid-cols-3 gap-3 border-t border-borde pt-4">
             {datos.map((d) => (
               <div key={d.nombre}>
                 <dt className="flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--color-ink)]">

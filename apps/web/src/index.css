@@ -23,6 +23,13 @@
   --color-coral: #ef4444; /* deducciones / alertas                        */
   --color-ink: #16203a; /* texto principal                              */
   --color-muted: #64748b; /* texto secundario slate-500                   */
+  --color-quiet: #9aa3b2; /* texto terciario — etiquetas y ayudas. Tercer
+   * paso de la jerarquia de tinta (blueprint 2026-08: la jerarquia se
+   * construye con tres tintas, no con negritas), templado al navy de la
+   * marca como ink y muted. */
+  --color-borde: rgb(11 17 32 / 0.07); /* filete de cards y divisores — mas
+   * fino que slate-100/200, derivado de midnight para que el borde y la
+   * sombra hablen el mismo color. */
 
   /* Marca índigo explícita — para el overview y superficies nuevas que
    * quieran el acento sin pasar por el alias `mint`. */
@@ -62,7 +69,21 @@ body {
   font-family: var(--font-sans);
   background: var(--color-surface);
   color: var(--color-ink);
+  /* Blueprint 2026-08: tracking apenas negativo en todo el texto de
+   * interfaz — es el detalle que hace ver "dibujada" a la tipografia.
+   * Las cifras mono quedan exentas abajo: un mono con tracking negativo
+   * pierde justo la retícula que lo hace mono. */
+  letter-spacing: -0.15px;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Toda cifra en mono es tabular y sin tracking: los numeros alinean en
+ * columna sin pedirle tabular-nums a cada uso. */
+.font-mono,
+code,
+pre {
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Patrón de dots sutil para el header midnight */

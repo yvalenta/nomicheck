@@ -93,12 +93,12 @@ function PanelSedes({ sedes, onCambio }: { sedes: Sede[] | null; onCambio: () =>
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Ej. Sede Medellín, Bogotá centro…"
-            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
           />
           <button
             type="submit"
             disabled={creando}
-            className="flex items-center gap-1.5 rounded-xl bg-mint text-white text-sm font-semibold px-3 py-2 hover:bg-mint-dark disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-mint text-white text-sm font-medium px-3 py-2 hover:bg-mint-dark disabled:opacity-50"
           >
             <Plus size={14} /> Crear
           </button>
@@ -188,12 +188,12 @@ function PanelStaff({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="correo@empresa.com"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
           />
           <select
             value={rol}
             onChange={(e) => setRol(e.target.value as "analista_rrhh" | "auditor")}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
           >
             <option value="analista_rrhh">Analista de RR.HH. (opera sobre su(s) sede(s))</option>
             <option value="auditor">Auditor (solo lectura de toda la empresa)</option>
@@ -225,7 +225,7 @@ function PanelStaff({
           <button
             type="submit"
             disabled={asignando}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-mint text-white text-sm font-semibold px-3 py-2 hover:bg-mint-dark disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-full bg-mint text-white text-sm font-medium px-3 py-2 hover:bg-mint-dark disabled:opacity-50"
           >
             <UserPlus size={14} /> Asignar acceso
           </button>

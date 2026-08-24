@@ -314,7 +314,7 @@ function Fila({ etiqueta, valor, fuerte = false }: { etiqueta: string; valor: st
 
 function DetalleNumerico({ resultado, d }: { resultado: ResultadoIndemnizacion; d: DesgloseIndemnizacion }) {
   return (
-    <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
+    <div className="rounded-xl bg-slate-50 border border-borde px-3 py-2">
       {d.base === "indefinido" && (
         <>
           <Fila etiqueta="Salario diario (mes de 30)" valor={formatCOP(d.salarioDiario)} />

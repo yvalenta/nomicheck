@@ -62,7 +62,7 @@ export default function PilaEmpresa() {
             <select
               value={periodoId ?? ""}
               onChange={(e) => setPeriodoId(Number(e.target.value))}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
             >
               {periodos.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -126,7 +126,7 @@ export default function PilaEmpresa() {
                     </div>
                     {e.pila ? (
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-semibold text-ink tabular-nums">
+                        <p className="font-mono text-sm font-medium text-ink">
                           {formatCOP(e.pila.costoTotalPeriodo)}
                         </p>
                         <p className="text-xs text-muted tabular-nums">IBC {formatCOP(e.pila.ibcPeriodo)}</p>
@@ -192,7 +192,7 @@ function Stat({ etiqueta, valor, destacado }: { etiqueta: string; valor: string;
   return (
     <div
       className={`rounded-2xl shadow-sm border px-4 py-3 ${
-        destacado ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-100"
+        destacado ? "bg-emerald-50 border-emerald-100" : "bg-white border-borde"
       }`}
     >
       <p className="text-xs text-muted">{etiqueta}</p>
