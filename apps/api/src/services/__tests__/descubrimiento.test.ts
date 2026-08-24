@@ -4,10 +4,12 @@ import { INFO_SERVIDOR } from "@pv/mcp";
 import { PRECIOS_USD } from "../../lib/x402Config.js";
 import {
   SKILL_NOMBRE,
+  construirAgentCardA2a,
   construirApiCatalog,
   construirArd,
   construirAuthMd,
   construirIndiceSkills,
+  construirPrm,
   construirServerCardMcp,
   construirSkillMd,
   enlacesDescubrimiento,
@@ -94,10 +96,11 @@ describe("auth.md", () => {
     expect(doc).toContain("EIP-3009");
   });
 
-  it("explica por qué no publica metadata OAuth, en vez de callarlo", () => {
+  it("explica la postura OAuth: PRM con issuers vacíos, sin issuer inventado", () => {
     expect(doc).toContain("openid-configuration");
     expect(doc).toContain("oauth-protected-resource");
-    expect(doc).toMatch(/no hay OAuth/i);
+    expect(doc).toContain("authorization_servers");
+    expect(doc).toMatch(/issuer inexistente/i);
   });
 
   it("el precio es el que cobra el muro, no un número escrito", () => {
@@ -174,5 +177,65 @@ describe("los Link headers de la portada (RFC 8288)", () => {
     expect(link).toContain('rel="service-desc"');
     expect(link).toContain('rel="service-doc"');
     expect(link).toContain("/.well-known/api-catalog");
+  });
+});
+
+describe("oauth-protected-resource (RFC 9728), versión honesta", () => {
+  const prm = construirPrm() as Record<string, unknown>;
+
+  it("declara el resource y apunta la documentación a auth.md", () => {
+    expect(String(prm.resource)).toMatch(/^https:\/\//);
+    expect(String(prm.resource_documentation)).toContain("/auth.md");
+  });
+
+  it("las tres listas van VACÍAS: es la verdad, no un placeholder", () => {
+    // El día que alguna deje de ser verdad —un issuer real, scopes reales—
+    // esta prueba obliga a cambiar el documento junto con el mundo.
+    expect(prm.authorization_servers).toEqual([]);
+    expect(prm.scopes_supported).toEqual([]);
+    expect(prm.bearer_methods_supported).toEqual([]);
+  });
+});
+
+describe("agent card A2A del origen", () => {
+  const card = construirAgentCardA2a() as {
+    protocolVersion: string;
+    name: string;
+    version: string;
+    description: string;
+    supportedInterfaces: Array<{ transport: string; url: string }>;
+    capabilities: Record<string, unknown>;
+    skills: Array<{ id?: string; name?: string; description?: string }>;
+    provider: { organization: string; url: string };
+  };
+
+  it("trae lo que el validador A2A exige: nombre, versión, descripción, interfaces", () => {
+    expect(card.name).toBe("NomiCheck");
+    expect(card.version.length).toBeGreaterThan(0);
+    expect(card.description.length).toBeGreaterThan(0);
+    expect(card.supportedInterfaces.length).toBeGreaterThanOrEqual(1);
+    for (const i of card.supportedInterfaces) {
+      expect(i.url).toMatch(/^https:\/\//);
+      expect(i.transport.length).toBeGreaterThan(0);
+    }
+    expect(card.capabilities).toBeDefined();
+  });
+
+  it("cada skill lleva id, name y description", () => {
+    expect(card.skills.length).toBeGreaterThanOrEqual(3);
+    for (const s of card.skills) {
+      expect(s.id?.length).toBeGreaterThan(0);
+      expect(s.name?.length).toBeGreaterThan(0);
+      expect(s.description?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("no copia la identidad on-chain: ni una wallet en el card, provider apunta al apex", () => {
+    expect(card.provider.url).toBe("https://ynt.codes");
+    expect(JSON.stringify(card)).not.toMatch(/0x[0-9a-fA-F]{40}/);
+  });
+
+  it("el precio del informe sale del muro, no de un número escrito", () => {
+    expect(JSON.stringify(card)).toContain(`${PRECIOS_USD["/verificar"]} USD`);
   });
 });

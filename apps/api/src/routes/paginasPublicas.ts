@@ -16,10 +16,12 @@ import { Router, type Request, type RequestHandler, type Response } from "expres
 import { negociarFormato } from "../lib/negociarFormato.js";
 import {
   SKILL_NOMBRE,
+  construirAgentCardA2a,
   construirApiCatalog,
   construirArd,
   construirAuthMd,
   construirIndiceSkills,
+  construirPrm,
   construirServerCardMcp,
   construirSkillMd,
   enlacesDescubrimiento,
@@ -97,8 +99,10 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
 
   // ── Descubrimiento para agentes ──────────────────────────────────────────
   // Lo que NO está acá también es decisión: sin `/.well-known/openid-
-  // configuration` ni `oauth-protected-resource` (no hay OAuth que declarar) —
-  // el porqué vive en descubrimientoService.ts, y auth.md lo dice servido.
+  // configuration` ni `oauth-authorization-server` (declararían un issuer que
+  // no existe) — el porqué vive en descubrimientoService.ts, y auth.md lo dice
+  // servido. `oauth-protected-resource` sí está, con la lista de issuers
+  // VACÍA, que es la verdad completa.
   router.get("/.well-known/api-catalog", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.type("application/linkset+json").send(JSON.stringify(construirApiCatalog(), null, 2));
@@ -112,6 +116,16 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
   router.get("/.well-known/mcp/server-card.json", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.type("application/json").send(JSON.stringify(construirServerCardMcp(), null, 2));
+  });
+
+  router.get("/.well-known/agent-card.json", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/json").send(JSON.stringify(construirAgentCardA2a(), null, 2));
+  });
+
+  router.get("/.well-known/oauth-protected-resource", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/json").send(JSON.stringify(construirPrm(), null, 2));
   });
 
   router.get("/.well-known/agent-skills/index.json", (_req, res) => {

@@ -4,10 +4,15 @@
 // ── El criterio que comparten las cuatro piezas ────────────────────────────
 //
 // Solo se publica lo que EXISTE. Por eso acá no hay `/.well-known/openid-
-// configuration` ni `oauth-protected-resource`: esta API no tiene OAuth — las
+// configuration` ni `oauth-authorization-server`: esta API no tiene OAuth — las
 // lecturas de integración son libres y lo pagado se paga por llamada con x402,
 // sin cuenta. Publicar metadata de un issuer inexistente sería exactamente el
-// 200 que miente, con firma. El server card de MCP siguió esa misma regla en
+// 200 que miente, con firma. `oauth-protected-resource` (RFC 9728) SÍ se
+// publica desde el 2026-08-23, y no contradice la regla: su único campo
+// obligatorio es `resource`, y declararlo con `authorization_servers` VACÍO es
+// un enunciado verdadero — "este recurso existe y ningún issuer emite tokens
+// para él" — que además le ahorra al agente el barrido de issuers que no va a
+// encontrar. El server card de MCP siguió esa misma regla en
 // las dos direcciones: no existió mientras el servidor era solo stdio con
 // paquete privado (habría apuntado a una puerta que nadie puede abrir — la
 // lección de la puerta B2B sin picaporte), y existe desde que `/api/mcp`
@@ -151,6 +156,88 @@ export function construirServerCardMcp(): Record<string, unknown> {
   };
 }
 
+// ── /.well-known/oauth-protected-resource (RFC 9728), versión honesta ──────
+// El único campo obligatorio del RFC es `resource`. `authorization_servers`
+// vacío es la verdad completa: no hay issuer que emita tokens para esta API.
+// Lo que seguiría siendo mentira —y no se publica— es la metadata de un
+// AUTHORIZATION SERVER (`openid-configuration`, `oauth-authorization-server`):
+// esa declara un issuer, y acá no existe ninguno.
+export function construirPrm(): Record<string, unknown> {
+  const base = origenPublico();
+  return {
+    resource: base,
+    authorization_servers: [],
+    scopes_supported: [],
+    bearer_methods_supported: [],
+    resource_documentation: `${base}/auth.md`,
+  };
+}
+
+// ── /.well-known/agent-card.json (A2A) para ESTE origen ───────────────────
+// La identidad on-chain (wallet, agentId ERC-8004) vive en el card del apex y
+// NO se copia acá — `provider.url` apunta allá, igual que hace el ARD. Este
+// card declara lo que ESTE origen sirve: la interfaz HTTP+JSON del batch y
+// las habilidades reales de la API, con el precio saliendo de PRECIOS_USD
+// para que no pueda desincronizarse del muro.
+export function construirAgentCardA2a(): Record<string, unknown> {
+  const base = origenPublico();
+  const precio = PRECIOS_USD["/verificar"];
+  const interfaz = { transport: "HTTP+JSON", url: `${base}/api/batch` };
+  return {
+    protocolVersion: "0.3.0",
+    name: "NomiCheck",
+    description:
+      "Nómina colombiana verificable: motor determinístico con catálogo legal fechado, " +
+      "pre-chequeo gratis, informe pago por llamada (x402, USDC) y salida firmada Ed25519 " +
+      "verificable offline.",
+    url: `${base}/api/batch`,
+    version: "1.0.0",
+    preferredTransport: "HTTP+JSON",
+    supportedInterfaces: [interfaz],
+    additionalInterfaces: [interfaz],
+    documentationUrl: `${base}/docs/`,
+    provider: { organization: "ynt-labs", url: "https://ynt.codes" },
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      stateTransitionHistory: false,
+    },
+    defaultInputModes: ["application/json"],
+    defaultOutputModes: ["application/json"],
+    skills: [
+      {
+        id: "legal-parameters",
+        name: "Parámetros legales colombianos",
+        description:
+          "Lee el catálogo legal fechado (salario mínimo, auxilio, topes, UVT) que usa el motor. Gratis, sin credencial.",
+        tags: ["free", "colombia", "payroll"],
+      },
+      {
+        id: "payslip-precheck",
+        name: "Pre-chequeo de comprobante",
+        description:
+          "Si el comprobante está limpio te enterás gratis y no pagás nunca; jamás cobramos según lo que encontremos.",
+        tags: ["free", "no-signup", "triage"],
+      },
+      {
+        id: "payslip-verification",
+        name: "Verificación completa de nómina",
+        description: `Informe línea por línea con ley citada y sobre firmado, ${precio} USD por lote vía x402.`,
+        tags: ["x402", "paid", "signed-output"],
+      },
+      {
+        id: "payroll-settlement",
+        name: "Liquidación de nómina",
+        description:
+          "Liquida un periodo completo con el mismo motor y la misma firma; el 402 publica el precio exacto.",
+        tags: ["x402", "paid", "signed-output"],
+      },
+    ],
+    securitySchemes: {},
+    security: [],
+  };
+}
+
 // ── /auth.md ───────────────────────────────────────────────────────────────
 // La respuesta honesta a "¿cómo me registro?": no hay registro, y eso se dice
 // de frente en vez de codificarse en metadata OAuth que no existe.
@@ -186,10 +273,12 @@ llamada**.
 
 ## Uso de credenciales
 
-Ninguna credencial se emite ni se acepta en la API pública. Por eso este
-dominio **no publica** \`/.well-known/openid-configuration\` ni
-\`/.well-known/oauth-protected-resource\`: no hay OAuth detrás, y publicar la
-metadata de un issuer inexistente sería mentirle a quien la lea.
+Ninguna credencial se emite ni se acepta en la API pública (no API keys, no
+tokens, no client registration). \`/.well-known/oauth-protected-resource\`
+existe con \`authorization_servers\` **vacío** — que es la verdad: ningún
+issuer emite tokens para este recurso. Lo que este dominio **no publica** es
+\`/.well-known/openid-configuration\` ni \`oauth-authorization-server\`: eso
+declararía un issuer inexistente, y sería mentirle a quien lo lea.
 
 Los portales con sesión (\`/empresa\`, \`/colaborador\`, \`/admin\`) son para
 personas, usan Supabase Auth, y **no son superficie para agentes** — están
