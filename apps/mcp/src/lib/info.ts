@@ -63,22 +63,25 @@ const ADVERTENCIA =
   "El pago es directo y final: si el payTo fue sustituido, nada más se ve roto.";
 
 /**
- * La sonda: un POST sin pago a `/retencion`, que con el muro encendido
- * contesta 402 ANTES de validar el body — por eso `{}` alcanza y no cuesta
- * nada. Es la única forma de leer el `payTo` que producción anuncia HOY: el
- * OpenAPI publica precios y redes en `x-x402`, pero no la wallet (medido el
- * 2026-08-11), y un payTo copiado a un documento estático sería justo la
+ * La sonda: un GET a `/retencion`, que con el muro encendido contesta 402 con
+ * el `accepts` completo (d95cd19, 2026-08-15 — el GET a una ruta paga anuncia
+ * el muro). Es la única forma de leer el `payTo` que producción anuncia HOY:
+ * el OpenAPI publica precios y redes en `x-x402`, pero no la wallet (medido
+ * el 2026-08-11), y un payTo copiado a un documento estático sería justo la
  * clase de constante a mano que se desincroniza sin que nadie la relea.
+ *
+ * Fue un `POST {}` hasta el 2026-08-23, y esa sonda quedó CIEGA el mismo día
+ * que nació el rechazo previo (2026-08-15): un cuerpo inválido pasó a recibir
+ * 400 sin tocar el muro, así que esta herramienta leía «hoy no se cobra» con
+ * el muro cobrando perfecto — el mismo desfase que tumbó ocho días la
+ * vigilancia externa del repo de operación. El mock de la suite contestaba
+ * 402 al POST sin mirar el método, o sea que probaba el servidor falso.
  */
 async function sondearPayTo(): Promise<{ payTo: string | null; fuente: string | null }> {
   const url = `${baseUrl()}/api/batch/retencion`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: "{}",
-  });
+  const r = await fetch(url);
   if (r.status !== 402) {
-    // Muro apagado: el POST llega al validador y contesta 400 por el `{}`.
+    // Muro apagado: sin muro no existe el GET de la ruta paga y sale 404.
     // No es un error de la sonda — es el dato "hoy no se cobra".
     return { payTo: null, fuente: null };
   }
@@ -92,7 +95,7 @@ async function sondearPayTo(): Promise<{ payTo: string | null; fuente: string | 
   const payTos = [...new Set(accepts.map((a) => String(campo(a, "payTo") ?? "")).filter(Boolean))];
   return {
     payTo: payTos.length > 0 ? payTos.join(", ") : null,
-    fuente: `402 de POST ${url} (sonda sin pago)`,
+    fuente: `402 de GET ${url} (sonda sin pago)`,
   };
 }
 

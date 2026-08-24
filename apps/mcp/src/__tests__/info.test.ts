@@ -75,14 +75,17 @@ const CUERPO_402 = {
 
 const AGENT_CARD = { name: "NomiCheck", "x-executor": { walletAddress: WALLET } };
 
-type Ruta = Record<string, () => Response | Promise<Response>>;
+type Ruta = Record<string, (init?: RequestInit) => Response | Promise<Response>>;
 
-/** fetch de mentira ruteado por URL; lo no declarado revienta con la URL. */
+/** fetch de mentira ruteado por URL; lo no declarado revienta con la URL. El
+ * `init` se le pasa al handler para que un test pueda mirar el MÉTODO: la
+ * sonda del payTo estuvo ciega en producción con esta suite verde porque el
+ * mock contestaba 402 a un POST que el mundo real ya respondía con 400. */
 function simularRed(rutas: Ruta) {
-  vi.stubGlobal("fetch", async (url: string | URL) => {
+  vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
     const clave = Object.keys(rutas).find((k) => String(url).includes(k));
     if (!clave) throw new Error(`el test no declaró respuesta para ${url}`);
-    return rutas[clave]();
+    return rutas[clave](init);
   });
 }
 
@@ -172,8 +175,9 @@ describe("armarInfo", () => {
   it("con el muro apagado no hay payTo que cruzar, y el resumen lo dice en vez de fingir un fallo", async () => {
     simularRed({
       "/api/batch/openapi.json": () => json(OPENAPI),
-      // Muro apagado: el `{}` de la sonda llega al validador y sale 400.
-      "/api/batch/retencion": () => json({ error: "invalid_input" }, 400),
+      // Muro apagado: el GET de una ruta paga lo sirve EL MURO (d95cd19), así
+      // que sin muro esa ruta GET no existe y el catch-all del API sale 404.
+      "/api/batch/retencion": () => json({ error: "not_found" }, 404),
       "ynt.codes/.well-known/agent-card.json": () => json(AGENT_CARD),
     });
 
@@ -181,6 +185,27 @@ describe("armarInfo", () => {
     expect(r.cruce.payToOferta).toBeNull();
     expect(r.cruce.coinciden).toBeNull();
     expect(r.cruce.veredicto).toContain("apagado");
+  });
+
+  it("la sonda pregunta con GET: un POST {} recibe el 400 del rechazo previo y leería «apagado» con el muro cobrando", async () => {
+    // El bug real del 2026-08-15→23, fijado para que no vuelva: el rechazo
+    // previo hizo que POST {} → 400 sin tocar el muro, y esta herramienta
+    // reportó cruce null en producción mientras el 402 salía perfecto al GET.
+    let metodo: string | undefined = "nunca-llamado";
+    simularRed({
+      "/api/batch/openapi.json": () => json(OPENAPI),
+      "/api/batch/retencion": (init) => {
+        metodo = init?.method;
+        return json(CUERPO_402, 402);
+      },
+      "ynt.codes/.well-known/agent-card.json": () => json(AGENT_CARD),
+    });
+
+    const r = await armarInfo();
+    // `fetch(url)` sin init: el método es GET por omisión, no un POST.
+    expect(metodo).toBeUndefined();
+    expect(r.cruce.coinciden).toBe(true);
+    expect(r.cruce.fuentePayTo).toContain("GET");
   });
 
   it("el apex caído deja el cruce SIN HACER — que no es lo mismo que coincidir", async () => {
