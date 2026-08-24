@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/servidor.js",
+  "types": "./dist/servidor.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/servidor.d.ts",
+      "default": "./dist/servidor.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",

@@ -18,6 +18,15 @@ import { pedirEjemplo, pedirSchema } from "./lib/consultas.js";
 import { calcular } from "./lib/calcular.js";
 import { verificarSobre } from "./lib/sobreLocal.js";
 
+export { crearTransporteHttp } from "./http.js";
+
+/**
+ * La identidad del servidor, exportada porque la lee más de uno: acá el
+ * McpServer, y en @pv/api el server card de `/.well-known/mcp/server-card.json`.
+ * Un card con nombre o versión copiados a mano es el que miente al primer bump.
+ */
+export const INFO_SERVIDOR = { name: "nomicheck", version: "0.1.0" } as const;
+
 /** Un resultado MCP de texto con el JSON tal cual, indentado para humanos. */
 function comoTexto(v: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] };
@@ -39,7 +48,7 @@ async function protegido(fn: () => Promise<{ content: { type: "text"; text: stri
 }
 
 export function construirServidor(): McpServer {
-  const servidor = new McpServer({ name: "nomicheck", version: "0.1.0" });
+  const servidor = new McpServer(INFO_SERVIDOR);
 
   servidor.registerTool(
     "nomicheck_info",

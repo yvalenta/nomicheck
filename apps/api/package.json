@@ -19,6 +19,7 @@
     "@anthropic-ai/sdk": "^0.111.0",
     "@faremeter/middleware": "^0.22.0",
     "@prisma/client": "^5.19.1",
+    "@pv/mcp": "workspace:*",
     "@pv/reglas": "workspace:*",
     "@supabase/supabase-js": "^2.110.6",
     "cors": "^2.8.5",

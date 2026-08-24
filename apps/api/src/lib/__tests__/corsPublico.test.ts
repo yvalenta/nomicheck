@@ -132,7 +132,7 @@ describe("corsPublico", () => {
     it("abrir una ruta nueva es deliberado: la lista es explícita", () => {
       // Guarda de intención. Si alguien agrega una ruta, este test lo obliga a
       // pasar por acá y a mirar la lista completa.
-      expect(RUTAS_PUBLICAS.size).toBe(20);
+      expect(RUTAS_PUBLICAS.size).toBe(21);
       expect(RUTAS_PUBLICAS.has("/api/batch/publickey")).toBe(true);
       // Las cinco de descubrimiento (2026-08-23): GET puro, sin credenciales,
       // y el ARD exige `*` — revisadas contra las tres condiciones de la lista.

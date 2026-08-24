@@ -5,7 +5,9 @@
     "rootDir": "./src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "declaration": false,
+    // `declaration` pasó a true el 2026-08-23: @pv/api importa este paquete
+    // (INFO_SERVIDOR + el transporte HTTP) y sin .d.ts su typecheck no ve nada.
+    "declaration": true,
     "declarationMap": false,
     // `allowJs` existe por un solo archivo: `src/vendor/sobre.mjs`, la copia
     // vendorizada del verificador. Es JavaScript plano a propósito (el original

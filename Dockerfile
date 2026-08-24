@@ -32,6 +32,7 @@ RUN apt-get update -qq && \
 COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/reglas/package.json packages/reglas/package.json
 COPY apps/api/package.json apps/api/package.json
+COPY apps/mcp/package.json apps/mcp/package.json
 COPY apps/web/package.json apps/web/package.json
 
 # El store de pnpm va en un cache mount de BuildKit, no dentro de la capa.
@@ -50,6 +51,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 COPY tsconfig.base.json ./
 COPY packages/reglas packages/reglas
 COPY apps/api apps/api
+COPY apps/mcp apps/mcp
 COPY apps/web apps/web
 
 RUN pnpm --filter @pv/api exec prisma generate
@@ -63,7 +65,10 @@ ARG VITE_SUPABASE_ANON_KEY
 ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL} \
     VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
 
+# `@pv/mcp` va antes que la API por la misma razón que `@pv/reglas`: la API lo
+# importa por `main: ./dist/servidor.js` (el MCP sobre HTTP en /api/mcp).
 RUN pnpm --filter @pv/reglas build && \
+    pnpm --filter @pv/mcp build && \
     pnpm --filter @pv/api build && \
     pnpm --filter @pv/web build
 

@@ -7,14 +7,17 @@
 // configuration` ni `oauth-protected-resource`: esta API no tiene OAuth — las
 // lecturas de integración son libres y lo pagado se paga por llamada con x402,
 // sin cuenta. Publicar metadata de un issuer inexistente sería exactamente el
-// 200 que miente, con firma. Lo mismo con el server card de MCP: el servidor
-// MCP de apps/mcp es stdio y su paquete es privado — un card apuntaría a una
-// puerta que nadie puede abrir (la lección de la puerta B2B sin picaporte).
+// 200 que miente, con firma. El server card de MCP siguió esa misma regla en
+// las dos direcciones: no existió mientras el servidor era solo stdio con
+// paquete privado (habría apuntado a una puerta que nadie puede abrir — la
+// lección de la puerta B2B sin picaporte), y existe desde que `/api/mcp`
+// sirve el transporte HTTP de verdad (2026-08-23).
 //
 // Todo se genera del código: los precios de PRECIOS_USD, las URLs de
 // origenPublico(), y el digest del skill se calcula sobre los MISMOS bytes que
 // se sirven — no puede desincronizarse porque no hay dos copias.
 import { createHash } from "node:crypto";
+import { INFO_SERVIDOR } from "@pv/mcp";
 import { origenPublico } from "../lib/pagosConfig.js";
 import { PRECIOS_USD } from "../lib/x402Config.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
@@ -103,6 +106,16 @@ export function construirArd(): Record<string, unknown> {
         ],
       },
       {
+        identifier: urn("mcp", "server-card"),
+        displayName: "MCP server — five tools over the batch API (streamable HTTP)",
+        type: "application/mcp-server-card+json",
+        url: `${base}/.well-known/mcp/server-card.json`,
+        representativeQueries: [
+          "MCP server for Colombian payroll verification",
+          "conectar un cliente MCP a NomiCheck",
+        ],
+      },
+      {
         identifier: urn("agent", "card"),
         displayName: "ERC-8004 identity and A2A agent card (served by the apex)",
         type: "application/json",
@@ -113,6 +126,28 @@ export function construirArd(): Record<string, unknown> {
         ],
       },
     ],
+  };
+}
+
+// ── /.well-known/mcp/server-card.json (SEP-1649) ───────────────────────────
+// Existe desde que el MCP tiene transporte HTTP en `/api/mcp` — antes era
+// stdio con paquete privado y un card habría apuntado a una puerta que nadie
+// podía abrir. La identidad sale de INFO_SERVIDOR de @pv/mcp: la MISMA que el
+// servidor declara en el handshake, así que no pueden contarse distinto.
+export function construirServerCardMcp(): Record<string, unknown> {
+  const base = origenPublico();
+  return {
+    serverInfo: {
+      name: INFO_SERVIDOR.name,
+      version: INFO_SERVIDOR.version,
+      title: "NomiCheck — nómina colombiana verificable",
+      description:
+        "Cinco herramientas sobre el wrapper batch: catálogo y cruce de identidad de pago, " +
+        "ejemplos firmados, schema del contrato, ejecución con muro x402 (el 402 se expone, " +
+        "no se evita), y verificación offline del sobre firmado.",
+    },
+    transport: { type: "streamable-http", url: `${base}/api/mcp` },
+    capabilities: { tools: { listChanged: false } },
   };
 }
 

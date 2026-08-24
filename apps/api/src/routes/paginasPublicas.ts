@@ -20,6 +20,7 @@ import {
   construirArd,
   construirAuthMd,
   construirIndiceSkills,
+  construirServerCardMcp,
   construirSkillMd,
   enlacesDescubrimiento,
 } from "../services/descubrimientoService.js";
@@ -96,8 +97,7 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
 
   // ── Descubrimiento para agentes ──────────────────────────────────────────
   // Lo que NO está acá también es decisión: sin `/.well-known/openid-
-  // configuration` ni `oauth-protected-resource` (no hay OAuth que declarar)
-  // y sin server card de MCP (el servidor es stdio y su paquete privado) —
+  // configuration` ni `oauth-protected-resource` (no hay OAuth que declarar) —
   // el porqué vive en descubrimientoService.ts, y auth.md lo dice servido.
   router.get("/.well-known/api-catalog", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
@@ -107,6 +107,11 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
   router.get("/.well-known/ai-catalog.json", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.type("application/json").send(JSON.stringify(construirArd(), null, 2));
+  });
+
+  router.get("/.well-known/mcp/server-card.json", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/json").send(JSON.stringify(construirServerCardMcp(), null, 2));
   });
 
   router.get("/.well-known/agent-skills/index.json", (_req, res) => {

@@ -53,6 +53,12 @@ jobs:
       - name: compilar reglas (los demás lo importan por dist/)
         run: pnpm --filter '@pv/reglas' build
 
+      # Misma trampa, segundo paquete: `@pv/api` importa `@pv/mcp` por su
+      # `main: ./dist/servidor.js` (el MCP sobre HTTP). Sin el dist, el
+      # typecheck de la API no ve los tipos y sale rojo solo en un clon limpio.
+      - name: compilar mcp (la API lo importa por dist/)
+        run: pnpm --filter '@pv/mcp' build
+
       # Los tipos del cliente de Prisma se GENERAN del schema; no están en el
       # repo. Sin esto, `apps/api` no compila: `Prisma.PrismaClientKnownRequestError`
       # y `Prisma.InputJsonValue` no existen, y los callbacks de `$transaction`

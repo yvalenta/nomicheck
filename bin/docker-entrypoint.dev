@@ -11,6 +11,12 @@ pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR:-/pnpm-store}"
 # directorio acaba de reinstalarse, hay que regenerarlo en cada arranque.
 pnpm --filter @pv/api exec prisma generate
 
+# `@pv/mcp` se resuelve por `main: ./dist/servidor.js` y la API lo importa
+# (el MCP sobre HTTP en /api/mcp). Fatal a propósito, a diferencia de la web:
+# sin este dist la API no puede ni arrancar, así que fallar acá con nombre es
+# mejor que fallar en el primer import con un "cannot find module".
+pnpm --filter @pv/mcp build
+
 # ── La web ───────────────────────────────────────────────────────────────────
 #
 # `apps/api/src/index.ts` sirve `apps/api/web-dist` cuando existe: un contenedor,

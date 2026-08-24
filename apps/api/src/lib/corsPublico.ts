@@ -77,6 +77,7 @@ export const RUTAS_PUBLICAS = new Set([
   "/.well-known/ai-catalog.json",
   "/.well-known/agent-skills/index.json",
   "/.well-known/agent-skills/nomicheck-payroll/SKILL.md",
+  "/.well-known/mcp/server-card.json",
   "/auth.md",
 ]);
 

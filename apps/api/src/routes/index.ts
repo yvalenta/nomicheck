@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import { construirServidor, crearTransporteHttp } from "@pv/mcp";
 import { llavePorIpReal } from "../lib/llaveRateLimit.js";
 import { calcular } from "../controllers/nominaController.js";
 import { batchPublicoRouter } from "./batchPublico.js";
@@ -167,6 +168,47 @@ router.post("/retencion/calcular", limitadorCalculo, calcularRetencion);
 // (60/min) — el buyer pagó un order y espera ejecución inmediata + puede
 // pedir schema/ejemplo antes del POST.
 router.use("/batch", limitadorBatch, batchPublicoRouter);
+
+// MCP sobre HTTP (transporte streamable, SIN sesión): las cinco herramientas
+// de @pv/mcp, servidas por el mismo contenedor. Servidor y transporte se crean
+// POR PETICIÓN a propósito — stateless como el wrapper que envuelven, así que
+// no hay sesiones que administrar ni estado que se pudra entre llamadas. El
+// muro x402 no toca esta ruta: las herramientas pegan a los endpoints reales,
+// que cobran o no según su propia regla — el MCP expone el 402, no lo evita.
+// Anunciado en /.well-known/mcp/server-card.json, que lee la MISMA identidad
+// (INFO_SERVIDOR) que este servidor declara.
+router.post("/mcp", limitadorBatch, async (req, res) => {
+  const transporte = crearTransporteHttp();
+  const servidor = construirServidor();
+  res.on("close", () => {
+    void transporte.close();
+    void servidor.close();
+  });
+  try {
+    await servidor.connect(transporte);
+    await transporte.handleRequest(req, res, req.body);
+  } catch {
+    // JSON-RPC hasta en el fallo: un cliente MCP no sabe leer otra cosa.
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "internal_error" },
+        id: null,
+      });
+    }
+  }
+});
+// Sin sesión no hay stream que retomar (GET) ni que cerrar (DELETE): 405 con
+// la pista, para que un cliente con transporte viejo entienda qué cambiar.
+for (const metodo of ["get", "delete"] as const) {
+  router[metodo]("/mcp", (_req, res) => {
+    res.status(405).json({
+      error: "method_not_allowed",
+      mensaje: "El transporte es streamable HTTP sin sesión: POST con JSON-RPC 2.0.",
+      card: "/.well-known/mcp/server-card.json",
+    });
+  });
+}
 router.get("/festivos", listarFestivos);
 router.get("/reglas/parametros", parametrosPublicos);
 // Ledger de reglas verificadas (RUMBO §2.4): fecha + hash sha256 canónico

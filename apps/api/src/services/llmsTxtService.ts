@@ -119,6 +119,7 @@ https://ynt.codes/.well-known/agent-card.json
 - Catálogo de APIs (RFC 9727): ${base}/.well-known/api-catalog
 - Manifiesto ARD: ${base}/.well-known/ai-catalog.json
 - Skills para agentes: ${base}/.well-known/agent-skills/index.json
+- Servidor MCP por HTTP: ${base}/api/mcp (card: ${base}/.well-known/mcp/server-card.json)
 - Mapa del sitio: ${base}/sitemap.xml
 - Sobre nosotros: ${base}/about · Contacto: ${base}/contact · Privacidad: ${base}/privacy
 - La portada ${base}/ también responde \`text/markdown\` por content

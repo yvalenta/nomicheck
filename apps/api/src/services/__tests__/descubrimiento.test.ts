@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { INFO_SERVIDOR } from "@pv/mcp";
 import { PRECIOS_USD } from "../../lib/x402Config.js";
 import {
   SKILL_NOMBRE,
@@ -7,6 +8,7 @@ import {
   construirArd,
   construirAuthMd,
   construirIndiceSkills,
+  construirServerCardMcp,
   construirSkillMd,
   enlacesDescubrimiento,
 } from "../descubrimientoService.js";
@@ -133,6 +135,32 @@ describe("el skill y su índice", () => {
     expect(s.url.endsWith(`/agent-skills/${SKILL_NOMBRE}/SKILL.md`)).toBe(true);
     const esperado = createHash("sha256").update(construirSkillMd(), "utf8").digest("hex");
     expect(s.digest).toBe(`sha256:${esperado}`);
+  });
+});
+
+describe("el server card de MCP (SEP-1649)", () => {
+  const card = construirServerCardMcp() as {
+    serverInfo: { name: string; version: string; description: string };
+    transport: { type: string; url: string };
+    capabilities: Record<string, unknown>;
+  };
+
+  it("la identidad es la MISMA que el servidor declara en el handshake", () => {
+    expect(card.serverInfo.name).toBe(INFO_SERVIDOR.name);
+    expect(card.serverInfo.version).toBe(INFO_SERVIDOR.version);
+  });
+
+  it("el transporte apunta al endpoint real, streamable HTTP", () => {
+    expect(card.transport.type).toBe("streamable-http");
+    expect(card.transport.url).toBe("https://nomicheck.ynt.codes/api/mcp");
+    expect(card.capabilities).toHaveProperty("tools");
+  });
+
+  it("y el ARD lo anuncia con su media type propio", () => {
+    const ard = construirArd() as { entries: Array<{ identifier: string; type: string; url?: string }> };
+    const entrada = ard.entries.find((e) => e.identifier.endsWith(":mcp:server-card"));
+    expect(entrada?.type).toBe("application/mcp-server-card+json");
+    expect(entrada?.url).toContain("/.well-known/mcp/server-card.json");
   });
 });
 
