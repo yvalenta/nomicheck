@@ -23,6 +23,12 @@ jobs:
       - name: dependencias
         run: pnpm install --frozen-lockfile
 
+      # En una máquina fresca el cliente de Prisma no existe (y pnpm no corre
+      # postinstalls ajenos): sin esto, sus clases de error no son constructores
+      # y media suite de la API revienta en cascada.
+      - name: prisma generate
+        run: pnpm --filter '@pv/api' exec prisma generate
+
       - name: suites
         run: pnpm test
 
