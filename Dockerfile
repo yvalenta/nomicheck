@@ -9,7 +9,11 @@
 #   --build-arg VITE_SUPABASE_ANON_KEY=<publishable-key> .
 # docker run -d -p 80:80 --env-file apps/api/.env --name nomicheck nomicheck
 
-ARG NODE_VERSION=24.20.0
+# 24.19.0 y no 24.20.0: nodejs.org ya publicó 24.20.0 pero Docker Hub va
+# detrás y su tag -slim no existe todavía (medido 2026-08-26; el build del CI
+# muere en "not found" con un tag inexistente). Al subir esto, verificar que
+# el tag exista: curl -s https://hub.docker.com/v2/repositories/library/node/tags/<v>-slim
+ARG NODE_VERSION=24.19.0
 FROM docker.io/library/node:${NODE_VERSION}-slim AS base
 
 WORKDIR /app

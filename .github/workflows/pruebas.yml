@@ -29,6 +29,14 @@ jobs:
       - name: prisma generate
         run: pnpm --filter '@pv/api' exec prisma generate
 
+      # Mismo motivo, otro paquete: @pv/api importa @pv/mcp por sus exports
+      # (./dist), y en una máquina fresca ese dist no existe — los dos archivos
+      # de la suite que lo importan mueren al resolver. En el Mac pasaba en
+      # verde por el dist de builds viejos, y por eso este workflow nació rojo
+      # y nadie lo vio en local.
+      - name: build @pv/mcp
+        run: pnpm --filter '@pv/mcp' build
+
       - name: suites
         run: pnpm test
 
