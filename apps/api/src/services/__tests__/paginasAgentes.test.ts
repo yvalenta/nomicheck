@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { CONTACTO } from "../../lib/contacto.js";
+import { PRECIOS_USD, RUTAS_CON_MURO } from "../../lib/x402Config.js";
 import {
   construirAboutHtml,
   construirAboutMd,
   construirContactHtml,
   construirContactMd,
   construirHomeMd,
+  construirLanzamientoMd,
   construirNoEncontradoHtml,
   construirNoEncontradoMd,
+  construirPricingHtml,
+  construirPricingMd,
   construirPrivacyHtml,
   construirPrivacyMd,
+  construirServiciosMd,
   construirSitemapXml,
   mdACuerpoHtml,
   rutasIndexables,
@@ -26,6 +31,7 @@ describe("las páginas de confianza", () => {
     ["about", construirAboutMd, construirAboutHtml],
     ["contact", construirContactMd, construirContactHtml],
     ["privacy", construirPrivacyMd, construirPrivacyHtml],
+    ["pricing", construirPricingMd, construirPricingHtml],
   ];
 
   for (const [nombre, md, html] of casos) {
@@ -77,6 +83,54 @@ describe("la portada en markdown", () => {
 
   it("también dice qué NO hace — leerse como más de lo que se es, no", () => {
     expect(construirHomeMd()).toContain("No sirve para");
+  });
+});
+
+describe("la página de precios", () => {
+  it("cada ruta paga aparece con SU precio — el de la constante que cobra", () => {
+    const md = construirPricingMd();
+    for (const ruta of RUTAS_CON_MURO) {
+      expect(md).toContain(`/api/batch${ruta}`);
+      expect(md).toContain(`**${PRECIOS_USD[ruta]} USDC**`);
+    }
+  });
+
+  it("lo gratis se lista con su porqué y apunta al JSON canónico", () => {
+    const md = construirPricingMd();
+    expect(md).toContain("/api/batch/verificar/prechequeo");
+    expect(md).toContain("/api/batch/pricing");
+    expect(md).toContain("gratis");
+  });
+
+  it("ningún precio vive en esta página como texto propio: si la constante cambia, la página cambia", () => {
+    // La aserción es indirecta pero suficiente: el markdown menciona exactamente
+    // tantas rutas pagas como RUTAS_CON_MURO — ni una tabla vieja de más.
+    const md = construirPricingMd();
+    const seccionPagado = md.slice(md.indexOf("## Lo pagado"));
+    expect(seccionPagado.match(/por llamada/g)?.length).toBe(RUTAS_CON_MURO.length);
+  });
+});
+
+describe("las rutas SPA públicas en markdown", () => {
+  const casos: Array<[string, () => string]> = [
+    ["servicios", construirServiciosMd],
+    ["lanzamiento", construirLanzamientoMd],
+  ];
+
+  for (const [nombre, md] of casos) {
+    it(`/${nombre} trae contenido de verdad y la puerta para agentes`, () => {
+      expect(md().length).toBeGreaterThanOrEqual(MINIMO_CONFIANZA);
+      expect(md()).toMatch(/^# /);
+      // La puerta de la API: sin ella, el agente leyó marketing y quedó igual.
+      expect(md()).toContain("/api/batch/quickstart");
+    });
+  }
+
+  it("los números no viven acá: se enlaza /pricing, no se copia un precio", () => {
+    for (const [, md] of casos) {
+      expect(md()).toContain("/pricing");
+      expect(md()).not.toMatch(/\d+[.,]\d+\s*USDC/i);
+    }
   });
 });
 

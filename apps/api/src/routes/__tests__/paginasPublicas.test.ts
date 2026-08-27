@@ -2,7 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Request, Response } from "express";
-import { crearFallback, esRutaSpa, sinPrerender } from "../paginasPublicas.js";
+import { rutasIndexables } from "../../services/paginasAgentesService.js";
+import {
+  crearFallback,
+  crearPaginaSpa,
+  esRutaSpa,
+  PAGINAS_SPA_PUBLICAS,
+  sinPrerender,
+} from "../paginasPublicas.js";
 
 // El catch-all es donde vivía el soft-404: cualquier ruta respondía el shell
 // del SPA con 200 y un agente concluía que todo existe. Lo que se prueba acá
@@ -179,5 +186,61 @@ describe("crearFallback", () => {
     const { req, res, registro } = simular("/login", "text/html");
     sinBuild(req, res, () => {});
     expect(registro.status).toBe(404);
+  });
+});
+
+// Las rutas SPA públicas eran las únicas indexables opacas sin JavaScript
+// (evaluador de is-agentic, 2026-08-26): el navegador debe seguir viendo el
+// shell EXACTO de siempre, y el agente que pide markdown, la página servida.
+describe("crearPaginaSpa", () => {
+  const shell = '<div id="root"></div>';
+  const handler = crearPaginaSpa(shell, () => "# Servicios\n\ncontenido");
+
+  it("el navegador (sin Accept, o con text/html) recibe el shell intacto", () => {
+    for (const accept of [undefined, "text/html", "text/html,*/*;q=0.8"]) {
+      const { req, res, registro } = simular("/servicios", accept);
+      handler(req, res, () => {});
+      expect(registro.cuerpo, String(accept)).toBe(shell);
+      expect(registro.tipo).toContain("text/html");
+    }
+  });
+
+  it("el agente que pide markdown con más ganas recibe la página, no el shell", () => {
+    const { req, res, registro } = simular("/servicios", "text/markdown");
+    handler(req, res, () => {});
+    expect(registro.tipo).toContain("text/markdown");
+    expect(String(registro.cuerpo)).toContain("# Servicios");
+    expect(String(registro.cuerpo)).not.toContain('id="root"');
+  });
+
+  it("las dos variantes marcan Vary: Accept — sin él, el caché sirve la equivocada", () => {
+    for (const accept of [undefined, "text/markdown"]) {
+      const { req, res, registro } = simular("/servicios", accept);
+      handler(req, res, () => {});
+      expect(registro.varies).toContain("Accept");
+    }
+  });
+
+  it("sin build de la web responde el markdown, que es mejor que un 404", () => {
+    const sinBuild = crearPaginaSpa(null, () => "# Servicios");
+    const { req, res, registro } = simular("/servicios", "text/html");
+    sinBuild(req, res, () => {});
+    expect(registro.tipo).toContain("text/markdown");
+  });
+});
+
+describe("PAGINAS_SPA_PUBLICAS", () => {
+  it("cada una es a la vez ruta del SPA e indexable — si no, o el shell no llega o el sitemap miente", () => {
+    for (const [ruta] of PAGINAS_SPA_PUBLICAS) {
+      expect(esRutaSpa(ruta), `${ruta} no es ruta del SPA`).toBe(true);
+      expect(rutasIndexables(), `${ruta} no está en el sitemap`).toContain(ruta);
+    }
+  });
+
+  it("ningún portal con login negocia markdown", () => {
+    const rutas = PAGINAS_SPA_PUBLICAS.map(([r]) => r);
+    for (const portal of ["/login", "/empresa", "/colaborador", "/admin"]) {
+      expect(rutas).not.toContain(portal);
+    }
   });
 });

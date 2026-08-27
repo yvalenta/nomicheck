@@ -121,8 +121,10 @@ https://ynt.codes/.well-known/agent-card.json
 - Skills para agentes: ${base}/.well-known/agent-skills/index.json
 - Servidor MCP por HTTP: ${base}/api/mcp (card: ${base}/.well-known/mcp/server-card.json)
 - Mapa del sitio: ${base}/sitemap.xml
+- Precios, con el porqué de cada uno: ${base}/pricing
 - Sobre nosotros: ${base}/about · Contacto: ${base}/contact · Privacidad: ${base}/privacy
-- La portada ${base}/ también responde \`text/markdown\` por content
-  negotiation (\`Accept: text/markdown\`, con \`Vary: Accept\`).
+- La portada ${base}/, ${base}/servicios y ${base}/lanzamiento también
+  responden \`text/markdown\` por content negotiation (\`Accept:
+  text/markdown\`, con \`Vary: Accept\`).
 `;
 }

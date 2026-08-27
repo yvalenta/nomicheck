@@ -32,10 +32,14 @@ import {
   construirContactHtml,
   construirContactMd,
   construirHomeMd,
+  construirLanzamientoMd,
   construirNoEncontradoHtml,
   construirNoEncontradoMd,
+  construirPricingHtml,
+  construirPricingMd,
   construirPrivacyHtml,
   construirPrivacyMd,
+  construirServiciosMd,
   construirSitemapXml,
 } from "../services/paginasAgentesService.js";
 
@@ -152,6 +156,7 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
     ["/about", construirAboutHtml, construirAboutMd],
     ["/contact", construirContactHtml, construirContactMd],
     ["/privacy", construirPrivacyHtml, construirPrivacyMd],
+    ["/pricing", construirPricingHtml, construirPricingMd],
   ];
   for (const [ruta, html, md] of paginas) {
     router.get(ruta, (req, res) => {
@@ -165,6 +170,7 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
     ["/acerca", "/about"],
     ["/contacto", "/contact"],
     ["/privacidad", "/privacy"],
+    ["/precios", "/pricing"],
   ];
   for (const [de, a] of alias) {
     router.get(de, (_req, res) => res.redirect(308, a));
@@ -174,7 +180,35 @@ export function crearPaginasPublicas(indexHtml: string | null): Router {
   // en vez de servirlo dos veces: un documento, una URL que citar.
   router.get("/openapi.json", (_req, res) => res.redirect(308, "/api/batch/openapi.json"));
 
+  // Las rutas SPA públicas: el navegador sigue recibiendo el shell, y el
+  // agente que pide markdown recibe la página servida. Sub-rutas
+  // (/lanzamiento/campana) siguen cayendo al fallback → shell, como siempre.
+  const shellSpa = indexHtml === null ? null : sinPrerender(indexHtml);
+  for (const [ruta, md] of PAGINAS_SPA_PUBLICAS) {
+    router.get(ruta, crearPaginaSpa(shellSpa, md));
+  }
+
   return router;
+}
+
+/** Las rutas del SPA que además son PÚBLICAS (están en `rutasIndexables`) y
+ * por eso negocian markdown — eran las únicas indexables opacas sin
+ * JavaScript (lo midió el evaluador de is-agentic, 2026-08-26). Los portales
+ * (/login, /empresa, /colaborador, /admin) no negocian: no son para agentes,
+ * y robots.txt ya los excluye. */
+export const PAGINAS_SPA_PUBLICAS: Array<[string, () => string]> = [
+  ["/servicios", construirServiciosMd],
+  ["/lanzamiento", construirLanzamientoMd],
+];
+
+/** El handler de una ruta SPA pública: shell para el navegador, markdown para
+ * quien lo pide con más ganas — misma negociación y mismo `Vary: Accept` que
+ * la portada. Sin build de la web (`shellSpa === null`) responde el markdown,
+ * que es mejor que un 404. */
+export function crearPaginaSpa(shellSpa: string | null, md: () => string): RequestHandler {
+  return (req, res) => {
+    responderNegociado(req, res, { html: shellSpa, md: md(), cacheSegundos: 0 });
+  };
 }
 
 /** El catch-all que reemplaza al viejo `sendFile(index.html)` incondicional.

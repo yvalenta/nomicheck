@@ -14,6 +14,7 @@
 // origenPublico()— para que no puedan desincronizarse de lo que sirven.
 import { CONTACTO } from "../lib/contacto.js";
 import { origenPublico } from "../lib/pagosConfig.js";
+import { construirPricing } from "./pricingService.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
 
 // El día del arranque del proceso, que en producción es el día del deploy: el
@@ -29,6 +30,7 @@ export function rutasIndexables(): string[] {
     "/",
     "/lanzamiento",
     "/servicios",
+    "/pricing",
     "/about",
     "/contact",
     "/privacy",
@@ -137,7 +139,7 @@ enterás gratis y no pagás nunca.
 - Guía para agentes: ${base}/agents.md · ${base}/llms.txt
 - Documentación navegable: ${base}/docs/
 - OpenAPI: ${base}/api/batch/openapi.json
-- Servicios y precios: ${base}/servicios
+- Servicios: ${base}/servicios · Precios, con su porqué: ${base}/pricing
 - Sobre nosotros: ${base}/about · Contacto: ${base}/contact · Privacidad: ${base}/privacy
 - Mapa del sitio: ${base}/sitemap.xml
 - Identidad on-chain (ERC-8004) y agent card: https://ynt.codes/.well-known/agent-card.json
@@ -265,6 +267,122 @@ export function construirPrivacyHtml(): string {
     ruta: "/privacy",
     cuerpo: mdACuerpoHtml(construirPrivacyMd()),
   });
+}
+
+// ── Precios (/pricing), en dos formas ──────────────────────────────────────
+// Un RENDERIZADOR de construirPricing(), no una segunda redacción: cada
+// número y cada porqué es el mismo objeto que sirve /api/batch/pricing, que
+// a su vez sale de PRECIOS_USD — la constante con la que el muro cobra. El
+// evaluador de is-agentic (2026-08-26) recorrió el sitio sin JavaScript y la
+// matriz de precios le quedó opaca: existía para un cliente de API y no para
+// un lector. Esta página es esa lectura.
+
+export function construirPricingMd(): string {
+  const p = construirPricing();
+  const gratis = p.gratis
+    .map((g) => `- \`${g.ruta}\` — **gratis** — ${g.porque}`)
+    .join("\n");
+  const pagado = p.pagado
+    .map(
+      (r) =>
+        `- \`${r.ruta}\` (${r.metodo}) — **${r.precioUsd} ${p.moneda}** por llamada — ${r.porque}`,
+    )
+    .join("\n");
+  return `# Precios de NomiCheck
+
+Cada tarifa con su porqué. Esta página se genera de la misma constante con la
+que el muro cobra: no puede decir un precio y cobrar otro. La versión para
+máquinas es ${p.canonical} (JSON, \`${p.pricingVersion}\`).
+
+**La regla que ordena toda la tabla:** ${p.reglaDeIncentivos}
+
+**Validar no se cobra:** ${p.validarNoSeCobra}
+
+## Cómo se paga
+
+${p.comoSePaga} Moneda: ${p.moneda}. Redes: ${p.redes.join(" y ")}.
+
+## Lo gratis, y por qué lo es
+
+${gratis}
+
+## Lo pagado, y por qué cuesta lo que cuesta
+
+${pagado}
+`;
+}
+
+export function construirPricingHtml(): string {
+  return envolverHtml({
+    titulo: "Precios — NomiCheck",
+    descripcion:
+      "Qué cuesta cada llamada de NomiCheck y por qué: precios en USDC vía x402, generados de la misma constante con la que cobra el muro.",
+    ruta: "/pricing",
+    cuerpo: mdACuerpoHtml(construirPricingMd()),
+  });
+}
+
+// ── Las dos rutas SPA públicas, en markdown ────────────────────────────────
+// /servicios y /lanzamiento son páginas React: el navegador recibe el shell y
+// el contenido aparece con JavaScript. Para un agente eso es una página en
+// blanco — las únicas indexables opacas del sitio (lo midió el evaluador de
+// is-agentic, 2026-08-26). Estas variantes dicen lo que cada página comunica;
+// los NÚMEROS no viven acá — se enlazan a sus fuentes derivadas, que es donde
+// no pueden mentir. La prosa sigue el mismo posicionamiento que la copia de
+// la web (sdd/marketing/posicionamiento.md).
+
+export function construirServiciosMd(): string {
+  const base = origenPublico();
+  return `# Servicios de NomiCheck
+
+El mismo motor determinístico de nómina colombiana, visto desde las tres
+formas de usarlo:
+
+- **Para una persona** — la calculadora gratuita de liquidación (interactiva,
+  en esta página con navegador) y el verificador de comprobantes de la
+  portada (${base}/): sin registro, y el resultado no se persiste.
+- **Para una empresa** — el portal de nómina en ${base}/empresa (registro con
+  NIT): liquidación completa, retención en la fuente y evidencia firmada de
+  cada cierre.
+- **Para un agente de software** — la API con pagos por llamada vía x402.
+  Empezá por ${base}/api/batch/quickstart: un solo GET dice qué es, qué es
+  gratis, cuánto cuesta lo pagado y cómo se verifica la salida.
+
+La página muestra una franja de datos vivos (operaciones, parámetros legales,
+fecha de verificación del catálogo, llave pública) leídos del servidor al
+cargar. Las mismas fuentes están servidas para vos:
+
+- Precios, con el porqué de cada uno: ${base}/pricing (JSON: ${base}/api/batch/pricing)
+- Catálogo completo (OpenAPI): ${base}/api/batch/openapi.json · navegable: ${base}/docs/
+- Parámetros legales vigentes, firmados: ${base}/api/batch/parametros
+- La llave con la que se comprueba todo: ${base}/api/batch/publickey
+- Verificá una salida de ejemplo sin confiar en nosotros:
+  https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo
+`;
+}
+
+export function construirLanzamientoMd(): string {
+  const base = origenPublico();
+  return `# NomiCheck — ¿Te pagaron bien?
+
+Landing de la verificación gratuita de comprobantes de pago colombianos. Lo
+que promete, en tres pilares:
+
+- **Gratis y sin registro** — subís tu comprobante o contás tu horario y ves
+  el resultado en minutos; sin correo, sin tarjeta, sin nombre.
+- **Cada cifra cita la ley** — cada peso trae el artículo del CST o el
+  decreto que lo respalda, y el catálogo legal está fechado por vigencia: un
+  periodo de julio se liquida con las normas que regían en julio.
+- **El motor que usan las empresas** — el mismo cálculo determinístico y
+  versionado con el que las pymes liquidan su nómina completa.
+
+La verificación interactiva corre en ${base}/ (requiere navegador). Si sos un
+agente, tu puerta es la API: ${base}/api/batch/quickstart — el pre-chequeo es
+gratis y, si el comprobante está limpio, te enterás gratis y no pagás nunca.
+
+Más: precios en ${base}/pricing · guía para agentes en ${base}/agents.md ·
+privacidad en ${base}/privacy (el cálculo no se persiste).
+`;
 }
 
 // ── El 404 de verdad ───────────────────────────────────────────────────────
