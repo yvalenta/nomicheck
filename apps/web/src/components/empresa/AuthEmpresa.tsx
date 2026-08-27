@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Building2, Chrome } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, LogIn } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { registrarEmpresa } from "../../apiEmpresa";
 import { leerOrigen } from "../../lanzamiento/origenCampana.ts";
@@ -141,7 +141,7 @@ export default function AuthEmpresa() {
         onClick={conGoogle}
         className="flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200"
       >
-        <Chrome size={18} /> Continuar con Google
+        <LogIn size={18} /> Continuar con Google
       </button>
 
       <div className="flex items-center gap-3 text-xs text-muted">

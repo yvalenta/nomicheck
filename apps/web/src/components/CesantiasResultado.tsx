@@ -161,8 +161,8 @@ function Acumulacion({
             />
             <Tooltip
               cursor={{ stroke: SLATE, strokeDasharray: "3 3" }}
-              formatter={(v: number, n) => [formatCOP(v), n === "cesantias" ? "Cesantías" : "Intereses"]}
-              labelFormatter={(d: number) => `${d} días trabajados`}
+              formatter={(v, n) => [formatCOP(Number(v)), n === "cesantias" ? "Cesantías" : "Intereses"]}
+              labelFormatter={(d) => `${String(d)} días trabajados`}
               contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
             />
             <Area

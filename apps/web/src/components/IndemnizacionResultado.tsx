@@ -247,8 +247,8 @@ function CurvaAntiguedad({
             />
             <Tooltip
               cursor={{ stroke: SLATE, strokeDasharray: "3 3" }}
-              formatter={(v: number) => [formatCOP(v), "Indemnización"]}
-              labelFormatter={(a: number) => `${a} años de antigüedad`}
+              formatter={(v) => [formatCOP(Number(v)), "Indemnización"]}
+              labelFormatter={(a) => `${String(a)} años de antigüedad`}
               contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
             />
             <Area

@@ -297,7 +297,7 @@ export default function CalculadoraLiquidacion({ t }: { t: Textos }) {
                     />
                     <Tooltip
                       cursor={{ fill: "rgba(91,80,232,0.06)" }}
-                      formatter={(v: number) => [pesos(v), "Valor"]}
+                      formatter={(v) => [pesos(Number(v)), "Valor"]}
                       contentStyle={{
                         borderRadius: 8,
                         border: "1px solid #e2e8f0",

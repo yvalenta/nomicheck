@@ -126,7 +126,7 @@ function PesoPorConcepto({ lineas }: { lineas: LineaRecargo[] }) {
           />
           <Tooltip
             cursor={{ fill: "rgba(91,80,232,0.06)" }}
-            formatter={(v: number, _n, p) => [`${formatCOP(v)} · ${p.payload.horas} h`, "Valor"]}
+            formatter={(v, _n, p) => [`${formatCOP(Number(v))} · ${p.payload.horas} h`, "Valor"]}
             contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12 }}
           />
           <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={14} animationDuration={700}>
@@ -136,7 +136,7 @@ function PesoPorConcepto({ lineas }: { lineas: LineaRecargo[] }) {
             <LabelList
               dataKey="valor"
               position="right"
-              formatter={(v: number) => formatCOP(v)}
+              formatter={(v: unknown) => formatCOP(Number(v))}
               style={{ fontSize: 10, fill: "#16203a", fontWeight: 600 }}
             />
           </Bar>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Chrome, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, LogIn, UserRound } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 const inputCls =
@@ -118,7 +118,7 @@ export default function AuthColaborador() {
         onClick={conGoogle}
         className="flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white text-ink font-medium py-3 hover:bg-slate-50 transition-colors duration-200"
       >
-        <Chrome size={18} /> Continuar con Google
+        <LogIn size={18} /> Continuar con Google
       </button>
 
       <div className="flex items-center gap-3 text-xs text-muted">

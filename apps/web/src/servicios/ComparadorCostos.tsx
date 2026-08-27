@@ -150,7 +150,7 @@ export default function ComparadorCostos({
                   <LabelList
                     dataKey="valor"
                     position="top"
-                    formatter={(v: number) => pesos(v)}
+                    formatter={(v: unknown) => pesos(Number(v))}
                     style={{ fontSize: 11, fill: "#16203a", fontFamily: "var(--font-mono)" }}
                   />
                   {datos.map((d, i) => (

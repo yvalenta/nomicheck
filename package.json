@@ -1,7 +1,7 @@
 {
   "name": "payment-validation",
   "private": true,
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=22"
   },
@@ -12,6 +12,6 @@
     "test": "pnpm --filter '@pv/reglas' build && pnpm --recursive test"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
+    "typescript": "^7.0.2"
   }
 }

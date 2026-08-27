@@ -5,6 +5,9 @@
     "rootDir": "./src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    // Explícito desde TypeScript 7 (tsgo): acá la auto-inclusión de @types
+    // dejó de ver `process` y `Buffer` — el compilador mismo sugiere esto.
+    "types": ["node"],
     // `declaration` pasó a true el 2026-08-23: @pv/api importa este paquete
     // (INFO_SERVIDOR + el transporte HTTP) y sin .d.ts su typecheck no ve nada.
     "declaration": true,
