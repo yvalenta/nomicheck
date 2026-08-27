@@ -9,12 +9,12 @@
 #   --build-arg VITE_SUPABASE_ANON_KEY=<publishable-key> .
 # docker run -d -p 80:80 --env-file apps/api/.env --name nomicheck nomicheck
 
-ARG NODE_VERSION=22.18.0
+ARG NODE_VERSION=24.20.0
 FROM docker.io/library/node:${NODE_VERSION}-slim AS base
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 ENV NODE_ENV="production" \
     PORT="80"
