@@ -27,6 +27,18 @@ y recién después conectarlo al portal. La vitrina importa los componentes
 reales — si al cambiar uno la vitrina queda vieja, se actualiza en el mismo
 cambio.
 
+## UI: variantes antes del repo
+
+La primera versión construida dentro del repo genera gravedad: refinarla se
+siente más barato que explorar otra, y termina mandando por default. Para UI
+nueva con peso visual — una pantalla, un rediseño, una superficie de marca —
+primero 3–4 variantes en HTML suelto FUERA del repo (scratchpad o artifact),
+con los tokens reales copiados de `apps/web/src/index.css` en ese momento
+(no de una plantilla que pueda quedar vieja) para que las variantes hablen
+el idioma de la casa. Se elige una y recién ahí se implementa. Un componente
+chico no necesita esto: nace en `/showcase`. Un spot-fix tampoco — ver
+[FRICCIONES.md](FRICCIONES.md).
+
 ## UI: feedback ≠ fix inmediato
 
 Ante una queja o molestia de interfaz, evaluar primero si cambia las
