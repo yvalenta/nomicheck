@@ -41,6 +41,7 @@ describe("esRutaSpa", () => {
       "/lanzamientoX", // startsWith daría true; el límite de segmento, no
       "/loginfalso",
       "/ruta-inventada",
+      "/showcase", // la vitrina es solo dev (guard import.meta.env.DEV): en prod su 404 es correcto
     ]) {
       expect(esRutaSpa(ruta), ruta).toBe(false);
     }
@@ -57,12 +58,28 @@ describe("esRutaSpa", () => {
       throw new Error(`no existe ${rutaMain} — ¿se movió el arranque de la web?`);
     }
     const fuente = readFileSync(rutaMain, "utf8");
-    const prefijos = [...fuente.matchAll(/pathname\.startsWith\('\/([a-z]+)'\)/g)].map((m) => m[1]);
+    // Una ruta guardada con `import.meta.env.DEV` (la vitrina /showcase) es
+    // dev-only a propósito: en producción el branch se elimina del bundle y el
+    // 404 del servidor es la respuesta correcta, no un olvido. Se separa por
+    // línea — guard y startsWith conviven en la misma línea en main.tsx; si
+    // alguien los separa, el prefijo vuelve a la lista exigida y este test
+    // grita, que es el lado seguro.
+    const lineas = fuente.split("\n");
+    const prefijoDe = (l: string) =>
+      [...l.matchAll(/pathname\.startsWith\('\/([a-z]+)'\)/g)].map((m) => m[1]);
+    const prefijos = lineas.filter((l) => !l.includes("import.meta.env.DEV")).flatMap(prefijoDe);
+    const prefijosDev = lineas.filter((l) => l.includes("import.meta.env.DEV")).flatMap(prefijoDe);
     expect(prefijos.length).toBeGreaterThanOrEqual(6);
     for (const prefijo of prefijos) {
       expect(esRutaSpa(`/${prefijo}`), `/${prefijo} está en main.tsx y el servidor lo 404ea`).toBe(
         true,
       );
+    }
+    // La otra dirección: mientras el guard exista, el servidor NO debe servir
+    // la ruta — si se publica (se quita el guard), cae en la lista de arriba y
+    // se exige agregarla a PAGINAS_SPA_PUBLICAS en el mismo cambio.
+    for (const prefijo of prefijosDev) {
+      expect(esRutaSpa(`/${prefijo}`), `/${prefijo} es dev-only y el servidor lo sirve`).toBe(false);
     }
   });
 });
