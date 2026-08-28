@@ -23,6 +23,7 @@ const AdminPlataforma = lazy(() => import('./AdminPlataforma.tsx'))
 const Login = lazy(() => import('./Login.tsx'))
 const Lanzamiento = lazy(() => import('./lanzamiento/Lanzamiento.tsx'))
 const Servicios = lazy(() => import('./servicios/Servicios.tsx'))
+const Showcase = lazy(() => import('./showcase/Showcase.tsx'))
 
 // Fallback mientras baja el chunk del portal. Deliberadamente mínimo y sin
 // layout propio: aparece por milisegundos en red normal y no debe provocar
@@ -53,6 +54,10 @@ function Raiz() {
   // B2C escrita contra `sdd/marketing/`: esta habla de capacidades y precios, y
   // lee el catálogo del OpenAPI vivo en vez de declararlo.
   if (window.location.pathname.startsWith('/servicios')) return <Servicios />
+  // `/showcase` — la vitrina de componentes (CLAUDE.md: un componente nuevo
+  // nace ahí antes de conectarse al portal). Solo en dev: la superficie
+  // pública no crece sin decisión explícita — publicarla es quitar el guard.
+  if (import.meta.env.DEV && window.location.pathname.startsWith('/showcase')) return <Showcase />
   if (window.location.pathname.startsWith('/login')) return <Login />
   if (window.location.pathname.startsWith('/empresa')) {
     return (

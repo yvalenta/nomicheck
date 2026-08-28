@@ -20,6 +20,13 @@ Antes de crear un botón, badge, modal o popover: mirar
 `apps/web/src/components/ui/`. Si existe, se reusa; si necesita una
 variante, se extiende el componente — nunca una copia local.
 
+Un componente nuevo nace en la vitrina: montarlo primero en `/showcase`
+(`apps/web/src/showcase/Showcase.tsx`, servida solo en dev — `pnpm --filter
+@pv/web dev` y abrir <http://localhost:5173/showcase>), jugar con él aislado
+y recién después conectarlo al portal. La vitrina importa los componentes
+reales — si al cambiar uno la vitrina queda vieja, se actualiza en el mismo
+cambio.
+
 ## UI: feedback ≠ fix inmediato
 
 Ante una queja o molestia de interfaz, evaluar primero si cambia las
