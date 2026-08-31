@@ -1,5 +1,5 @@
 ---
-estado: propuesta
+estado: en-curso
 dueño: ambos
 fecha: 2026-08-31
 tema: matriz de permisos como código y admin multi-empresa sin re-login
@@ -35,3 +35,9 @@ non-null assertions de `empresaId` en controllers.
 
 ## Bitácora
 - 2026-08-31: tarea creada tras el análisis de auth/tenancy (informe completo en la sesión); mockup de la página de Roles entregado a Yonatan.
+- 2026-08-31: EN CURSO — implementación arrancada con GO de Yonatan (pasos 1–6). Línea base medida antes de tocar nada: `pnpm test` en apps/api → 55 archivos, 795 pruebas, todas verdes (1,41s).
+- 2026-08-31: **código COMPLETO y en verde** (commit `e2fb212`, sin push: repo público). Los 6 pasos escritos: matriz `lib/permisos.ts` (28 permisos × 6 roles) con `requierePermiso` en todas las rutas y `guardas.test.ts` que pone rojo una ruta sin guarda; `MembresiaEmpresa` + 3 migraciones; `requiereAuth` valida el puntero contra la membresía y saca de ahí el rol efectivo; `POST /auth/empresa-activa` auditado; `whoami` devuelve las membresías; selector y página de Roles en la web.
+  Medido por esta sesión, no por los agentes: **119 archivos, 1669 pruebas verdes** (apps/api 795 → 952), typecheck limpio en los 4 paquetes.
+  **La revisión adversarial fue la que pagó la noche**: encontró que la membresía se LEÍA y nunca se ESCRIBÍA — revocar no revocaba (la persona volvía con un POST) y ninguna alta creaba membresía (el registro habría nacido en 403 al aplicar la migración). 7 hallazgos (2 críticos, 3 altos, 2 medios); re-revisados uno por uno: los 7 cerrados. Las escrituras quedaron en un solo embudo (`lib/membresias.ts`) y la auditoría siguió a la tabla que decide — con el hallazgo de que la función genérica habría **abortado toda alta** por PK compuesta sin columna `id`, así que va una función hermana.
+  **NO SE CIERRA la tarea**: su criterio dice "MembresiaEmpresa *migrada* con backfill" y las 3 migraciones están escritas pero **no aplicadas a ninguna BD** — aplicarlas es de Yonatan (lista 2). Orden: `20260830120000_membresia_empresa` → `20260830140000_auditoria_usuario` → `20260830160000_auditoria_membresia`. Hasta entonces el middleware degrada al comportamiento viejo con ventana de 15 min y ruido, no en silencio.
+  Riesgos que quedan declarados, no cerrados: el consentimiento de `asignarStaff` (absorber por correo sin aceptación) y `Liquidacion`/`ReporteDiscrepancia` fuera del embudo de `alcance.ts`.
