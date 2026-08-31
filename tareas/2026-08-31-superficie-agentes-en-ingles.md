@@ -64,3 +64,4 @@ final es con GO de Yonatan, como siempre.
   agents.md tras el bloque del borde. Y lo que no debía cambiar no cambió:
   el GET a ruta paga da 402 y el prechequeo rechaza con 400 sin cobrar.
   Cumple el criterio de cierre completo.
+- 2026-08-31: **HECHA — desbloqueada por el deploy con GO de Yonatan** ("dale con el deploy"): `deploy.sh` en Lightsail con las cuatro comprobaciones verdes, sha `7219717` publicado por `/api/health`, y lo servido MEDIDO desde afuera por la sesión principal: llms.txt, quickstart v2, /pricing, agents.md, robots.txt y el MCP server card — todos en inglés; el muro x402 sigue en 402. Criterio completo.
