@@ -1,5 +1,5 @@
 ---
-estado: bloqueada
+estado: hecha
 dueño: sesión
 fecha: 2026-08-31
 tema: la superficie para agentes del producto pasa a inglés, optimizada para descubrirse y ejecutarse
@@ -54,3 +54,13 @@ final es con GO de Yonatan, como siempre.
   con la imagen del CI de este commit). Tras el deploy: medir servido
   (llms.txt, quickstart v2, /pricing en, agents.md, robots, MCP) y pasar a
   `hecha`.
+- 2026-08-31: HECHA — Yonatan corrió el deploy y esta sesión midió lo
+  servido: `/api/health` publica `7219717…`; llms.txt, agents.md, la raíz y
+  las dos rutas SPA negociadas, el 404 y auth.md contestan en inglés;
+  quickstart/pricing/manifiesto sirven sus schemas `v2` (el porqué de
+  /pago-onchain ya describe SU ruta); /about sirve markdown inglés y HTML
+  español (`lang="es"`, «Sobre NomiCheck») y /pricing HTML va en `lang="en"`;
+  el server card y el card A2A del origen en inglés; robots con la nota de
+  agents.md tras el bloque del borde. Y lo que no debía cambiar no cambió:
+  el GET a ruta paga da 402 y el prechequeo rechaza con 400 sin cobrar.
+  Cumple el criterio de cierre completo.
