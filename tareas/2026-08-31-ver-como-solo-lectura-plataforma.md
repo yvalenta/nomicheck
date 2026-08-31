@@ -71,3 +71,14 @@ Lo que falta construir (esta tarea):
   limpio en los 4 workspaces. Sin pasada de navegador: la verificación es de
   suite y tipos; la visual queda para cuando el deploy de la API (gobernado
   en nomicheck_ops) sirva este código.
+- 2026-08-31: **DESPLEGADO con GO directo de Yonatan** («dale» al push +
+  deploy). Push `a3af6dd..84f2b7b`; CI verde (pruebas + publicar-imagen);
+  `deploy.sh` en Lightsail con sus cuatro comprobaciones en verde; medido
+  desde afuera: `/api/health` publica `84f2b7b` (el sha exacto), `POST
+  /auth/vista-plataforma/salir` y `POST /admin/empresas/:id/entrar` responden
+  **401, no 404** (las rutas existen y piden sesión), el muro sigue en 402.
+  Auditores del vault de ops tras el deploy: coherencia OK y 47 afirmaciones
+  del mundo en verde (la fila `desplegado` compara lo servido en vivo). El
+  standby se trae solo (timer de paridad cada 30 min). El botón ya existe en
+  nomicheck.ynt.codes/admin; el visto visual del flujo entrar→ver→salir
+  logueado es de Yonatan.
