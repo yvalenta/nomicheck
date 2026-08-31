@@ -47,6 +47,14 @@ export const cambiarEstadoEmpresaSchema = z.object({
   activa: z.boolean(),
 });
 
+// Cambiar de empresa activa sin re-login (POST /auth/empresa-activa). El
+// schema solo dice que es un id de empresa bien formado — NO que el usuario
+// pueda entrar ahí. Eso lo decide la membresía en `authService`, y el id nunca
+// llega a `Usuario.empresaId` sin pasar por esa consulta.
+export const empresaActivaSchema = z.object({
+  empresaId: z.number().int().positive(),
+});
+
 export const empleadoSchema = z.object({
   nombre: z.string().min(1),
   documento: z.string().min(1),

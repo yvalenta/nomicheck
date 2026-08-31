@@ -91,6 +91,24 @@ async function cuenta(email, nombre) {
   return { id: data.user.id, pass };
 }
 
+// La PERTENENCIA. `Usuario.empresaId` de acá abajo es solo el puntero a la
+// empresa activa: quien manda es esta fila, y `requiereAuth` saca de ella el rol
+// con el que resuelve cada request. Sin membresía, un puntero es 403 en TODOS
+// los endpoints —`whoami` incluido, y el propio `POST /auth/empresa-activa` que
+// sería la salida—, así que una semilla sin esto no deja un entorno a medias:
+// deja uno donde ninguna de las cuentas que acaba de imprimir puede entrar.
+//
+// Upsert por la PK del par, como todo lo demás en este archivo: correrlo dos
+// veces es inocuo y sobre una base que ya tenía la membresía (la creó el
+// backfill de `20260830120000_membresia_empresa`) solo confirma el rol.
+async function membresia(usuarioId, empresaId, rol) {
+  await prisma.membresiaEmpresa.upsert({
+    where: { usuarioId_empresaId: { usuarioId, empresaId } },
+    create: { usuarioId, empresaId, rol },
+    update: { rol },
+  });
+}
+
 for (const e of EMPRESAS) {
   const editables = JSON.stringify(e);
   if (editables.includes("EDITAR")) {
@@ -112,6 +130,7 @@ for (const e of EMPRESAS) {
               rol: "admin_empresa", empresaId: empresa.id },
     update: { rol: "admin_empresa", empresaId: empresa.id },
   });
+  await membresia(adm.id, empresa.id, "admin_empresa");
   credenciales.push([e.nombre, "admin_empresa", e.admin.email, adm.pass]);
 
   for (const t of e.empleados) {
@@ -122,6 +141,11 @@ for (const e of EMPRESAS) {
                 rol: "colaborador", empresaId: empresa.id },
       update: {},
     });
+    // Va aunque el `update: {}` de arriba no haya tocado nada: una cuenta que ya
+    // existía (p. ej. nacida por login con Google) tiene su puntero puesto y le
+    // falta justo esto. El rol de la membresía es el de ESTA empresa; el de la
+    // cuenta no se pisa, que es lo que el `update: {}` viene diciendo.
+    await membresia(cu.id, empresa.id, "colaborador");
     await prisma.empleado.upsert({
       where: { empresaId_documento: { empresaId: empresa.id, documento: t.documento } },
       create: { empresaId: empresa.id, usuarioId: cu.id, invitacionAceptadaEn: new Date(),

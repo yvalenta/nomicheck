@@ -25,7 +25,10 @@ const { prismaMock } = vi.hoisted(() => ({
     empleado: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     reciboPago: { count: vi.fn() },
     turno: { count: vi.fn() },
-    usuario: { updateMany: vi.fn() },
+    usuario: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    // La pertenencia. `retirarEmpleado` la lee (¿es el vínculo de nómina o el
+    // de staff?) y la borra por `lib/membresias.ts`.
+    membresiaEmpresa: { findMany: vi.fn(), deleteMany: vi.fn() },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -78,6 +81,46 @@ let bdEmpleados: FilaEmpleado[];
 // Historial por empleado — decide si "eliminar" es conflicto (409) o soft delete.
 let recibosPorEmpleado: Record<number, number>;
 let turnosPorEmpleado: Record<number, number>;
+
+// --- mini-base de pertenencia ----------------------------------------------
+//
+// `retirarEmpleado` termina el vínculo de NÓMINA de una cuenta con la empresa, y
+// eso hoy son dos escrituras (la membresía y el puntero) que solo tienen sentido
+// juntas. Con stubs no se puede afirmar lo único que importa —"¿le queda alguna
+// forma de volver a entrar?"—, así que acá hay estado y las pruebas leen cómo
+// quedó, igual que en `lib/__tests__/membresias.test.ts`.
+//
+// La empresa 3 existe para el caso en que la cuenta pertenece a DOS: retirarla
+// de la A no puede desalojarla de la C, donde sigue trabajando.
+const EMPRESA_C = 3;
+
+interface FilaMembresia {
+  usuarioId: string;
+  empresaId: number;
+  rol: string;
+  creadoEn: number;
+}
+
+interface FilaUsuario {
+  id: string;
+  rol: string;
+  empresaId: number | null;
+}
+
+let bdMembresias: FilaMembresia[];
+let bdUsuarios: FilaUsuario[];
+
+/** Las empresas a las que la cuenta todavía pertenece — o sea, las únicas que
+ * `POST /auth/empresa-activa` podría encontrar por la PK del par. */
+function pertenenciaDe(usuarioId: string): number[] {
+  return bdMembresias.filter((m) => m.usuarioId === usuarioId).map((m) => m.empresaId);
+}
+
+/** El rol de cuenta y dónde quedó parada, después de la operación. */
+function perfil(id: string) {
+  const u = bdUsuarios.find((x) => x.id === id)!;
+  return { rol: u.rol, empresaId: u.empresaId };
+}
 
 /** Evalúa el subconjunto de operadores de where que este servicio usa:
  * igualdad (incluye null), `{ in: [...] }`. `OR` (búsqueda por q) se ignora
@@ -134,6 +177,42 @@ beforeEach(() => {
     async ({ where }: { where: { empleadoId: number } }) => turnosPorEmpleado[where.empleadoId] ?? 0
   );
   prismaMock.usuario.updateMany.mockResolvedValue({ count: 1 });
+
+  // Diego (504) es el colaborador de la empresa A con cuenta: la membresía que
+  // el retiro tiene que terminar.
+  bdUsuarios = [{ id: "uid-diego", rol: "colaborador", empresaId: EMPRESA_A }];
+  bdMembresias = [{ usuarioId: "uid-diego", empresaId: EMPRESA_A, rol: "colaborador", creadoEn: 100 }];
+
+  prismaMock.membresiaEmpresa.findMany.mockImplementation(
+    async ({ where, orderBy }: { where: { usuarioId: string }; orderBy?: unknown }) => {
+      // El orden lo decide la consulta: si `membresiasDe` dejara de pedirlo, a
+      // qué empresa cae el puntero pasaría a depender del orden físico.
+      const filas = bdMembresias.filter((m) => m.usuarioId === where.usuarioId);
+      if (orderBy !== undefined) filas.sort((a, b) => a.creadoEn - b.creadoEn || a.empresaId - b.empresaId);
+      return filas.map((m) => ({ empresaId: m.empresaId, rol: m.rol, empresa: { activa: true } }));
+    }
+  );
+  prismaMock.membresiaEmpresa.deleteMany.mockImplementation(
+    async ({ where }: { where: { usuarioId: string; empresaId: number } }) => {
+      const antes = bdMembresias.length;
+      bdMembresias = bdMembresias.filter(
+        (m) => !(m.usuarioId === where.usuarioId && m.empresaId === where.empresaId)
+      );
+      return { count: antes - bdMembresias.length };
+    }
+  );
+  prismaMock.usuario.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
+    const u = bdUsuarios.find((x) => x.id === where.id);
+    return u ? { ...u } : null;
+  });
+  prismaMock.usuario.update.mockImplementation(
+    async ({ where, data }: { where: { id: string }; data: Partial<FilaUsuario> }) => {
+      const u = bdUsuarios.find((x) => x.id === where.id);
+      if (!u) throw new Prisma.PrismaClientKnownRequestError("No encontrado", { code: "P2025", clientVersion: "test" });
+      Object.assign(u, data);
+      return { ...u };
+    }
+  );
 
   // conAuditoria (lib/auditoria.ts) envuelve todo en $transaction y setea
   // app.usuario_actual vía $executeRaw. Acá la transacción es el propio mock:
@@ -407,6 +486,77 @@ describe("eliminarEmpleado", () => {
     expect(prismaMock.turno.count).not.toHaveBeenCalled();
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
   });
+
+  // --- la pertenencia, igual que en el retiro ------------------------------
+  //
+  // Las dos bajas de nómina tienen que terminar la misma membresía, y esta es
+  // la MÁS dura de las dos: eliminar es lo que se usa para el "creado por
+  // error", o sea justo el caso donde la persona nunca debió pertenecer. Que
+  // el retiro revocara y esta no era la incoherencia al revés de la que hacía
+  // falta.
+
+  it("si el empleado eliminado tenía cuenta, la baja le REVOCA la membresía", async () => {
+    // El hueco concreto: la cuenta que ACEPTÓ la invitación tiene membresía
+    // `colaborador`, y "sin recibos ni turnos" —la condición para poder
+    // eliminar— es justo el estado en que llega. Sin revocar, le quedaba una
+    // membresía viva de una empresa cuyo registro de empleado se borró:
+    // `whoami` se la sigue ofreciendo en el selector y `listarStaff` no la
+    // muestra (solo analistas y auditores), así que no había ruta por la que
+    // el admin pudiera sacarla. Se afirma la PERTENENCIA, no el update.
+    await eliminarEmpleado(EMPRESA_A, 504, null, "uid-admin");
+
+    expect(pertenenciaDe("uid-diego")).toEqual([]);
+    expect(perfil("uid-diego")).toEqual({ rol: "individual", empresaId: null });
+  });
+
+  it("el eliminado que además pertenece a OTRA empresa cae ahí, con el rol de ESA empresa", async () => {
+    bdMembresias.push({ usuarioId: "uid-diego", empresaId: EMPRESA_C, rol: "auditor", creadoEn: 200 });
+
+    await eliminarEmpleado(EMPRESA_A, 504, null, "uid-admin");
+
+    expect(pertenenciaDe("uid-diego")).toEqual([EMPRESA_C]);
+    expect(perfil("uid-diego")).toEqual({ rol: "auditor", empresaId: EMPRESA_C });
+  });
+
+  it("STAFF: eliminar de la nómina a quien administra la empresa NO le quita su membresía", async () => {
+    // Mismo límite que en el retiro: el vínculo de administración lo otorga
+    // `asignarStaff` y lo termina `quitarStaff`. Si la eliminación borrara esa
+    // membresía, el dueño que se saca de su propia nómina perdería su empresa
+    // sin vuelta por API.
+    bdUsuarios[0] = { id: "uid-diego", rol: "admin_empresa", empresaId: EMPRESA_A };
+    bdMembresias = [{ usuarioId: "uid-diego", empresaId: EMPRESA_A, rol: "admin_empresa", creadoEn: 100 }];
+
+    await eliminarEmpleado(EMPRESA_A, 504, null, "uid-admin");
+
+    expect(bdEmpleados.find((f) => f.id === 504)!.eliminadoEn).toBeInstanceOf(Date);
+    expect(pertenenciaDe("uid-diego")).toEqual([EMPRESA_A]);
+    expect(perfil("uid-diego")).toEqual({ rol: "admin_empresa", empresaId: EMPRESA_A });
+    expect(prismaMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("sin cuenta vinculada no toca ni membresías ni usuarios", async () => {
+    await eliminarEmpleado(EMPRESA_A, 501, null, null);
+    expect(prismaMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
+  });
+
+  it("con historial la baja se rechaza ENTERA: ni el soft delete ni la revocación", async () => {
+    // El 409 tiene que dejar todo como estaba. Si la revocación se colara
+    // antes del chequeo, un intento fallido de eliminar sacaría a la persona
+    // de la empresa igual — una baja por la puerta de atrás.
+    recibosPorEmpleado[504] = 1;
+
+    await expect(eliminarEmpleado(EMPRESA_A, 504, null, "uid-admin")).rejects.toBeInstanceOf(ErrorConflicto);
+
+    expect(pertenenciaDe("uid-diego")).toEqual([EMPRESA_A]);
+    expect(prismaMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("la revocación va por el `tx` de conAuditoria: el trigger de Usuario puede nombrar al admin que eliminó", async () => {
+    await eliminarEmpleado(EMPRESA_A, 504, null, "uid-admin");
+    expect(prismaMock.$executeRaw.mock.calls[0]).toContain("uid-admin");
+    expect(prismaMock.membresiaEmpresa.deleteMany).toHaveBeenCalledTimes(1);
+  });
 });
 
 // --- retirarEmpleado -------------------------------------------------------
@@ -427,28 +577,97 @@ describe("retirarEmpleado", () => {
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
   });
 
-  it("si el empleado tenía cuenta, la libera — y el where del updateMany LLEVA el empresaId", async () => {
-    // Diego (504) tiene usuarioId. La cuenta queda libre (empresaId: null)
-    // para que otra empresa pueda invitarla. El `empresaId` en el where es
-    // la red de seguridad: si la cuenta ya migró a otra empresa, este
-    // updateMany no debe tocarla — sin ese filtro, retirar en A podría
-    // desvincular a un usuario que ya trabaja en B.
+  it("si el empleado tenía cuenta, el retiro le REVOCA la membresía: no le queda forma de volver a entrar", async () => {
+    // Lo que estaba roto no se veía mirando `Usuario`: el retiro ya ponía el
+    // puntero en null, pero dejaba viva la fila de `MembresiaEmpresa`. Y ahí la
+    // baja no era una baja — `whoami` le seguía ofreciendo la empresa y un solo
+    // `POST /auth/empresa-activa` le devolvía el puntero con el rol de la
+    // membresía, porque `cambiarEmpresaActiva` la encuentra por la PK del par y
+    // con eso le alcanza. Por eso se afirma la PERTENENCIA y no el update.
     await retirarEmpleado(EMPRESA_A, 504, { fechaRetiro: "2026-07-31" }, null, "uid-admin");
-    expect(prismaMock.usuario.updateMany).toHaveBeenCalledWith({
-      where: { id: "uid-diego", empresaId: EMPRESA_A },
-      data: { empresaId: null },
-    });
+
+    expect(pertenenciaDe("uid-diego")).toEqual([]);
+    expect(perfil("uid-diego")).toEqual({ rol: "individual", empresaId: null });
   });
 
-  it("sin cuenta vinculada no toca la tabla de usuarios", async () => {
+  it("el retirado que además pertenece a OTRA empresa cae ahí, con el rol de ESA empresa", async () => {
+    // Diego también es auditor de la C. Retirarlo de la nómina de la A no puede
+    // dejarlo sin sesión: el puntero se muda a la membresía que le queda.
+    bdMembresias.push({ usuarioId: "uid-diego", empresaId: EMPRESA_C, rol: "auditor", creadoEn: 200 });
+
+    await retirarEmpleado(EMPRESA_A, 504, { fechaRetiro: "2026-07-31" }, null, "uid-admin");
+
+    expect(pertenenciaDe("uid-diego")).toEqual([EMPRESA_C]);
+    // El rol es el de la C. Si arrastrara el de la A, una baja en una empresa
+    // le cambiaría el rol en otra.
+    expect(perfil("uid-diego")).toEqual({ rol: "auditor", empresaId: EMPRESA_C });
+  });
+
+  it("STAFF: retirar de la nómina a quien administra la empresa NO le quita su membresía ni lo mueve", async () => {
+    // El dueño que está en su propia nómina. `retirarEmpleado` termina el
+    // vínculo de NÓMINA; el de administración lo otorga `asignarStaff` y lo
+    // termina `quitarStaff`. Si el retiro borrara esa membresía, retirarse a sí
+    // mismo como empleado le quitaría su propia empresa, sin vuelta por API —
+    // ninguna ruta se la devuelve.
+    bdUsuarios[0] = { id: "uid-diego", rol: "admin_empresa", empresaId: EMPRESA_A };
+    bdMembresias = [{ usuarioId: "uid-diego", empresaId: EMPRESA_A, rol: "admin_empresa", creadoEn: 100 }];
+
+    await retirarEmpleado(EMPRESA_A, 504, { fechaRetiro: "2026-07-31" }, null, "uid-admin");
+
+    // El Empleado sí queda retirado; lo que no se toca es la pertenencia.
+    expect(bdEmpleados.find((f) => f.id === 504)!.activo).toBe(false);
+    expect(pertenenciaDe("uid-diego")).toEqual([EMPRESA_A]);
+    expect(perfil("uid-diego")).toEqual({ rol: "admin_empresa", empresaId: EMPRESA_A });
+    expect(prismaMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("si el puntero estaba parado en otra empresa, la baja borra la membresía y NO lo desaloja de donde trabaja", async () => {
+    // Es colaborador de la A y auditor de la C, y está mirando la C ahora
+    // mismo. Que el retiro en la A le moviera la sesión sería un salto de
+    // empresa que nadie pidió.
+    bdUsuarios[0] = { id: "uid-diego", rol: "auditor", empresaId: EMPRESA_C };
+    bdMembresias.push({ usuarioId: "uid-diego", empresaId: EMPRESA_C, rol: "auditor", creadoEn: 200 });
+
+    await retirarEmpleado(EMPRESA_A, 504, { fechaRetiro: "2026-07-31" }, null, "uid-admin");
+
+    expect(pertenenciaDe("uid-diego")).toEqual([EMPRESA_C]);
+    expect(perfil("uid-diego")).toEqual({ rol: "auditor", empresaId: EMPRESA_C });
+  });
+
+  it("cuenta SIN membresía en esta empresa: no hay nada que borrar y se le suelta el puntero", async () => {
+    // Dato viejo (o invitación aún pendiente): el puntero apunta a una empresa
+    // de la que la cuenta no es miembro, que en `requiereAuth` es 403 en todo.
+    // Es lo que hacía el `usuario.updateMany` de antes, y sigue haciendo falta:
+    // soltar el puntero es lo único que devuelve esa cuenta a un estado usable.
+    bdMembresias = [];
+
+    await retirarEmpleado(EMPRESA_A, 504, { fechaRetiro: "2026-07-31" }, null, "uid-admin");
+
+    expect(perfil("uid-diego")).toEqual({ rol: "individual", empresaId: null });
+  });
+
+  it("sin cuenta vinculada no toca ni membresías ni usuarios", async () => {
     await retirarEmpleado(EMPRESA_A, 501, { fechaRetiro: "2026-07-31" }, null, null);
-    expect(prismaMock.usuario.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
   });
 
   it("CROSS-TENANT: retirar con id ajeno falla como inexistente, sin escrituras", async () => {
     await expect(retirarEmpleado(EMPRESA_A, 601, { fechaRetiro: "2026-07-31" }, null, null))
       .rejects.toThrow("Empleado no encontrado");
     expect(prismaMock.empleado.update).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
+  });
+
+  it("la revocación va por el `tx` de conAuditoria: el trigger de Usuario puede nombrar al admin que retiró", async () => {
+    // `Usuario` está vigilado por `fn_auditar_cambio`, que lee el autor de
+    // `app.usuario_actual`. Si la baja de la membresía o el movimiento del
+    // puntero colgaran del cliente raíz, quedarían FUERA de la transacción: el
+    // rastro diría que a alguien lo sacaron de una empresa y no quién, y un
+    // rollback del retiro dejaría la membresía borrada igual.
+    await retirarEmpleado(EMPRESA_A, 504, { fechaRetiro: "2026-07-31" }, null, "uid-admin");
+    expect(prismaMock.$executeRaw.mock.calls[0]).toContain("uid-admin");
+    expect(prismaMock.membresiaEmpresa.deleteMany).toHaveBeenCalledTimes(1);
   });
 });

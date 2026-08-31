@@ -11,7 +11,10 @@ import EmptyState from "../components/EmptyState.tsx";
 import SegmentedControl from "../components/SegmentedControl.tsx";
 import Sello from "../components/Sello.tsx";
 import Skeleton from "../components/Skeleton.tsx";
-import type { EstadoPeriodo } from "../apiEmpresa";
+import SelectorEmpresa from "../components/empresa/SelectorEmpresa.tsx";
+import TablaPermisos from "../components/empresa/TablaPermisos.tsx";
+import { agruparPorDominio } from "../lib/permisosCatalogo.ts";
+import type { EstadoPeriodo, FilaMatriz } from "../apiEmpresa";
 
 // /showcase — la vitrina de componentes (CLAUDE.md: un componente nuevo nace
 // acá, se juega con él aislado, y solo después se conecta al portal). No es
@@ -21,9 +24,9 @@ import type { EstadoPeriodo } from "../apiEmpresa";
 
 const RUTA = "apps/web/src";
 
-function Muestra({ titulo, archivo, nota, children }: { titulo: string; archivo: string; nota?: string; children: React.ReactNode }) {
+function Muestra({ titulo, archivo, nota, children, ancho }: { titulo: string; archivo: string; nota?: string; children: React.ReactNode; ancho?: boolean }) {
   return (
-    <section className="rounded-2xl border border-borde bg-white shadow-suave p-5">
+    <section className={`rounded-2xl border border-borde bg-white shadow-suave p-5 ${ancho ? "sm:col-span-2" : ""}`}>
       <header className="mb-4 flex items-baseline justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-medium text-ink">{titulo}</h3>
         <code className="font-mono text-[11px] text-quiet">{RUTA}/{archivo}</code>
@@ -109,6 +112,43 @@ function DemoCombobox() {
           { value: "obra_labor", label: "Obra o labor" },
           { value: "servicios", label: "Prestación de servicios" },
         ]}
+      />
+    </div>
+  );
+}
+
+// Matriz de mentira, y dicho en voz alta: la de verdad la publica la API
+// (`GET /empresa/permisos`) y la vitrina no habla con la red. Sirve para ver la
+// tabla con los tres casos que importan — un permiso de lectura que casi todos
+// tienen, uno de escritura que solo el admin, y una clave SIN ficha en
+// `permisosCatalogo.ts`, que debe salir igual con su nombre crudo.
+const MATRIZ_VITRINA: FilaMatriz[] = [
+  { clave: "empresa.ver", roles: ["admin_empresa", "analista_rrhh", "auditor"] },
+  { clave: "nomina.operar", roles: ["admin_empresa", "analista_rrhh"] },
+  { clave: "nomina.pagar", roles: ["admin_empresa"] },
+  { clave: "auditoria.ver", roles: ["admin_empresa", "analista_rrhh", "auditor"] },
+  { clave: "permiso.inventado.ver", roles: ["auditor"] },
+];
+
+const ROLES_VITRINA = ["admin_empresa", "analista_rrhh", "auditor", "colaborador"];
+
+const EMPRESAS_VITRINA = [
+  { id: 1, nombre: "Distribuciones El Puerto S.A.S.", rol: "admin_empresa" },
+  { id: 2, nombre: "Clínica Andina Ltda.", rol: "admin_empresa" },
+  { id: 3, nombre: "Transportes del Norte", rol: "auditor" },
+];
+
+function DemoSelectorEmpresa() {
+  const [activa, setActiva] = useState(1);
+  return (
+    // Sobre midnight porque es donde vive: el disparador está dibujado para el
+    // header corporativo y sobre blanco no se leería.
+    <div className="rounded-xl bg-midnight bg-dots p-3 flex justify-end">
+      <SelectorEmpresa
+        empresas={EMPRESAS_VITRINA}
+        activaId={activa}
+        onElegir={setActiva}
+        rolAdmitido={(rol) => rol === "admin_empresa"}
       />
     </div>
   );
@@ -241,6 +281,25 @@ export default function Showcase() {
                 icon={FileSearch}
                 titulo="Sin resultados"
                 descripcion="Mismo bloque en toda la app en vez de un párrafo distinto por pantalla."
+              />
+            </Muestra>
+            <Muestra
+              titulo="SelectorEmpresa"
+              archivo="components/empresa/SelectorEmpresa.tsx"
+              nota="Solo aparece con dos membresías o más. El rol es POR empresa; la que el portal todavía no abre se ofrece deshabilitada en vez de esconderse."
+            >
+              <DemoSelectorEmpresa />
+            </Muestra>
+            <Muestra
+              titulo="TablaPermisos"
+              archivo="components/empresa/TablaPermisos.tsx"
+              ancho
+              nota="Fase 1 documental: no hay input que tocar. El sello «solo lectura» se mide sobre la matriz recibida (permisos que terminan en .ver), no se escribe. La última fila no tiene ficha en permisosCatalogo.ts y sale igual, con su clave cruda: un permiso nuevo del backend nunca desaparece de la tabla."
+            >
+              <TablaPermisos
+                roles={ROLES_VITRINA}
+                grupos={agruparPorDominio(MATRIZ_VITRINA)}
+                rolPropio="analista_rrhh"
               />
             </Muestra>
           </div>

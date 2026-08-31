@@ -358,10 +358,21 @@ export async function listarMisLiquidaciones(): Promise<LiquidacionListada[]> {
 
 // --- "¿Quién soy?" — usado por el login unificado y por los 3 portales
 // para redirigir a la cuenta a donde le corresponde según su rol real. ---
+export interface EmpresaDeLaCuenta {
+  id: number;
+  nombre: string;
+  /** El rol EN ESA empresa, no el de la cuenta: la misma persona puede ser
+   *  admin_empresa en una y auditor en otra. */
+  rol: string;
+}
+
 export interface MiRol {
   rol: string;
   empresaId: number | null;
   empleadoId: number | null;
+  /** Todas las membresías de la cuenta — es lo que dibuja el selector del
+   *  header. `empresaId` dice en cuál está parada ahora. */
+  empresas: EmpresaDeLaCuenta[];
 }
 
 export async function obtenerMiRol(): Promise<MiRol> {
@@ -375,7 +386,12 @@ export async function obtenerMiRol(): Promise<MiRol> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? "No se pudo determinar tu rol");
-  return body as MiRol;
+  // `empresas` se normaliza acá y no en cada pantalla: la API la degrada a
+  // lista vacía si `MembresiaEmpresa` no migró todavía, y una API vieja no la
+  // manda. Sin este piso, el selector del header explota con `undefined.length`
+  // en el caso que la propia API se tomó el trabajo de no romper.
+  const cuerpo = body as MiRol;
+  return { ...cuerpo, empresas: Array.isArray(cuerpo.empresas) ? cuerpo.empresas : [] };
 }
 
 export interface MensajeChat {

@@ -4,6 +4,17 @@ import { cambiarEstadoEmpresaSchema, crearEmpresaAdminSchema, reasignarAdminSche
 import { crearEmpresaConAdmin, quitarAdminEmpresa, reasignarAdminEmpresa } from "../services/authService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
 
+// Las tres rutas que escriben `Usuario` desde acá pasan `req.usuario!.id`
+// hasta el servicio: `Usuario` está vigilado por `fn_auditar_cambio`
+// (migración `20260830140000_auditoria_usuario`), que lee el autor de
+// `app.usuario_actual`, y sin ese id el rastro queda con `usuarioId = NULL` —
+// constancia de que a alguien lo sacaron de una empresa y ninguna de quién lo
+// sacó. El `!` no es optimismo: las cuatro rutas del panel entran por
+// `conPermiso("plataforma.empresas")`, que es `[requiereAuth, requierePermiso]`,
+// así que `req.usuario` ya está adjunto cuando el controlador corre. El actor
+// viaja SOLO para el trigger: nunca decide nada (quién puede hacerlo ya lo
+// decidió `requierePermiso`).
+
 export async function listar(_req: Request, res: Response) {
   res.json(await listarEmpresasAdmin());
 }
@@ -15,7 +26,7 @@ export async function crear(req: Request, res: Response) {
     return;
   }
   try {
-    const { empresa, usuario } = await crearEmpresaConAdmin(parseo.data);
+    const { empresa, usuario } = await crearEmpresaConAdmin(parseo.data, req.usuario!.id);
     res.status(201).json({ empresa, usuario });
   } catch (err) {
     if (err instanceof ErrorConflicto) {
@@ -34,7 +45,7 @@ export async function reasignarAdmin(req: Request, res: Response) {
     return;
   }
   try {
-    const usuario = await reasignarAdminEmpresa(empresaId, parseo.data);
+    const usuario = await reasignarAdminEmpresa(empresaId, parseo.data, req.usuario!.id);
     res.status(201).json({ usuario });
   } catch (err) {
     if (err instanceof ErrorConflicto) {
@@ -49,7 +60,7 @@ export async function quitarAdmin(req: Request, res: Response) {
   const empresaId = Number(req.params.id);
   const usuarioId = String(req.params.usuarioId);
   try {
-    await quitarAdminEmpresa(empresaId, usuarioId);
+    await quitarAdminEmpresa(empresaId, usuarioId, req.usuario!.id);
     res.status(204).end();
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo quitar el admin" });

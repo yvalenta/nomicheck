@@ -1,5 +1,6 @@
 import { conAuditoria } from "../lib/auditoria.js";
 import { acotadoAparte } from "../lib/alcance.js";
+import { otorgarMembresia } from "../lib/membresias.js";
 import { prisma } from "../lib/prisma.js";
 import { ErrorConflicto } from "./empleadosService.js";
 import type { crearReporteSchema } from "../validation/discrepancia.js";
@@ -79,7 +80,32 @@ export async function aceptarInvitacion(usuarioId: string, empleadoId: number) {
       where: { id: empleadoId },
       data: { invitacionAceptadaEn: new Date() },
     });
-    await tx.usuario.update({ where: { id: usuarioId }, data: { empresaId: empleado.empresaId } });
+    // La MEMBRESÍA, no el puntero suelto. Hasta acá esta función escribía
+    // `Usuario.empresaId = empleado.empresaId` y nada más, y eso dejaba a la
+    // persona ENCERRADA: `requiereAuth` resuelve el rol contra
+    // `MembresiaEmpresa` y un puntero sin membresía es 403 en TODAS las rutas
+    // —`whoami` incluido, y el propio `POST /auth/empresa-activa` que sería el
+    // camino de vuelta—. Aceptar la invitación era, literalmente, la última
+    // cosa que la cuenta podía hacer.
+    //
+    // `otorgarMembresia` escribe las dos cosas juntas y en esta misma
+    // transacción: si la membresía se creara aparte, un commit a medias dejaría
+    // exactamente el estado de arriba.
+    //
+    // El rol es `colaborador` y sale de acá, no del perfil de la cuenta: es lo
+    // que la persona pasa a ser EN ESA EMPRESA al aceptar. Y de paso corrige el
+    // caso de la cuenta `individual` (el verificador anónimo al que una empresa
+    // invita por correo): antes aceptaba y seguía siendo `individual`, o sea sin
+    // una sola celda en la matriz de permisos.
+    //
+    // El puntero lo mueve `otorgarMembresia` solo si estaba en `null` o ya en
+    // esta empresa — quien ya está parado en otra donde es miembro no se
+    // teletransporta por aceptar una invitación; cambia con el selector.
+    await otorgarMembresia(tx, {
+      usuarioId,
+      empresaId: empleado.empresaId,
+      rol: "colaborador",
+    });
     return actualizado;
   });
 }

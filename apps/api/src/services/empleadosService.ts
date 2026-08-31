@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { conAuditoria } from "../lib/auditoria.js";
+import { membresiasDe, revocarMembresia } from "../lib/membresias.js";
+import type { TxAcotada } from "../lib/alcance.js";
 import type { RespuestaPaginada } from "../lib/paginacion.js";
 import type { empleadoSchema, empleadoUpdateSchema, retiroSchema } from "../validation/empresa.js";
 import type { z } from "zod";
@@ -113,13 +115,38 @@ export async function actualizarEmpleado(
 // como conflicto).
 export class ErrorConflicto extends Error {}
 
+/** El rol de membresía que otorga `aceptarInvitacion`: el vínculo de NÓMINA.
+ * Es el único que una baja de nómina termina — lo usan las DOS bajas,
+ * `eliminarEmpleado` y `retirarEmpleado`, con el mismo criterio. */
+const ROL_NOMINA = "colaborador";
+
+/** La baja de nómina, compartida por las dos rutas que la ejecutan.
+ *
+ * SOLO EL VÍNCULO DE NÓMINA: si la cuenta además es staff de la empresa
+ * (`admin_empresa`, `analista_rrhh`, `auditor`), esa membresía es otra cosa —la
+ * otorga `asignarStaff`, la termina `quitarStaff`— y sacar a alguien de la
+ * nómina no puede quitarle su silla de administración; el dueño que se retira a
+ * sí mismo como empleado perdería su propia empresa, sin vuelta por API.
+ *
+ * Sin membresía en esta empresa la llamada no borra nada y lo único que hace es
+ * SOLTAR el puntero si estaba parado acá — que es lo que el `updateMany`
+ * anterior hacía, y lo que rescata a una cuenta que quedó apuntando a una
+ * empresa de la que no es miembro (403 en todo).
+ */
+async function terminarVinculoDeNomina(tx: TxAcotada, usuarioId: string, empresaId: number) {
+  const suya = (await membresiasDe(tx, usuarioId)).find((m) => m.empresaId === empresaId);
+  if (suya === undefined || suya.rol === ROL_NOMINA) {
+    await revocarMembresia(tx, { usuarioId, empresaId });
+  }
+}
+
 export async function eliminarEmpleado(
   empresaId: number,
   empleadoId: number,
   sedes: number[] | null = null,
   usuarioId: string | null = null
 ) {
-  await empleadoAccesible(empresaId, empleadoId, sedes);
+  const empleado = await empleadoAccesible(empresaId, empleadoId, sedes);
 
   const [recibos, turnos] = await Promise.all([
     prisma.reciboPago.count({ where: { empleadoId, empleado: { empresaId } } }),
@@ -130,9 +157,33 @@ export async function eliminarEmpleado(
       "El empleado tiene historial de nómina (recibos o turnos registrados) y no puede eliminarse: los registros de nómina deben conservarse. Usa 'Retirar' para desactivarlo conservando el historial."
     );
   }
-  return conAuditoria(usuarioId, (tx) =>
-    tx.empleado.update({ where: { id: empleadoId }, data: { eliminadoEn: new Date(), activo: false } })
-  );
+  return conAuditoria(usuarioId, async (tx) => {
+    const actualizado = await tx.empleado.update({
+      where: { id: empleadoId },
+      data: { eliminadoEn: new Date(), activo: false },
+    });
+    // La baja MÁS dura de las dos también revoca. Que `retirarEmpleado` lo
+    // hiciera y esta no era la peor forma de la incoherencia: eliminar es lo
+    // que se usa para el "creado por error", o sea justo el caso donde la
+    // persona nunca debió pertenecer.
+    //
+    // El hueco que cierra: si la cuenta había ACEPTADO la invitación
+    // (`aceptarInvitacion` otorga la membresía `colaborador`) y todavía no
+    // tiene recibos ni turnos —que es exactamente la condición para poder
+    // eliminar—, el soft delete dejaba viva la membresía. `requiereAuth`
+    // resuelve `empleadoId` con `activo: true`, así que sus recibos no se
+    // abren; lo que queda es una membresía que dice "pertenece" de alguien
+    // cuyo registro se borró: `whoami` le sigue ofreciendo la empresa en el
+    // selector, conserva `invitaciones.*` y `empresas.propias.ver` sobre ella,
+    // y `listarStaff` no la muestra (solo lista analistas y auditores), o sea
+    // que no hay ninguna ruta por la que el admin pueda sacarla. Miembro
+    // invisible e inextirpable, igual que el que arreglaron `listarStaff` y
+    // `quitarStaff`.
+    if (empleado.usuarioId) {
+      await terminarVinculoDeNomina(tx, empleado.usuarioId, empresaId);
+    }
+    return actualizado;
+  });
 }
 
 // Marca el retiro: el empleado deja de aparecer en periodos futuros
@@ -154,14 +205,35 @@ export async function retirarEmpleado(
       where: { id: empleadoId },
       data: { fechaRetiro: datos.fechaRetiro, activo: false },
     });
-    // Si este empleado era la membresía activa de una cuenta, la cuenta queda
-    // LIBRE (Usuario.empresaId = null) para poder ser invitada por otra empresa
-    // — el Empleado retirado permanece con su usuarioId como historial.
+    // Si este empleado era la pertenencia de una cuenta, el retiro la TERMINA:
+    // se borra la membresía y el puntero se va con ella. El Empleado retirado
+    // conserva su `usuarioId` como historial — la nómina vieja sigue siendo de
+    // esa persona; lo que se acaba es que siga perteneciendo a la empresa.
+    //
+    // Antes esto era un `usuario.updateMany({ ... }, { empresaId: null })` y
+    // nada más: dejaba viva la fila de `MembresiaEmpresa`. Y ahí la baja no era
+    // una baja — `whoami` le seguía ofreciendo la empresa, `POST
+    // /auth/empresa-activa` le devolvía el puntero con el rol de la membresía, y
+    // la persona retirada seguía figurando como miembro en la pantalla de Roles
+    // de la empresa, para siempre y sin ninguna ruta que la sacara
+    // (`quitarStaff` solo mira `analista_rrhh` y `auditor`).
+    //
+    // POR QUÉ SE REVOCA AUNQUE EL RETIRADO NO GANE NINGÚN DATO CON LA MEMBRESÍA:
+    // el acceso a sus recibos históricos ya se lo corta `requiereAuth`, que
+    // resuelve `empleadoId` con `activo: true` — retirado, `/colaborador/recibos`
+    // responde "Tu cuenta no está vinculada a ningún colaborador" con o sin
+    // membresía. O sea que hoy lo único que sostiene la baja es el flag de OTRA
+    // tabla, no la tabla de autorización. Una membresía que dice "pertenece" de
+    // alguien que ya no pertenece es una mentira en la única tabla que esta
+    // entrega puso a mandar.
+    //
+    // El criterio de qué membresía termina una baja de nómina —solo la de
+    // `colaborador`— vive en `terminarVinculoDeNomina`, compartido con
+    // `eliminarEmpleado`. Las dos bajas tienen que decidir lo mismo: si cada
+    // una llevara su copia, la que se toque después se separaría de la otra sin
+    // que nada lo avise.
     if (empleado.usuarioId) {
-      await tx.usuario.updateMany({
-        where: { id: empleado.usuarioId, empresaId },
-        data: { empresaId: null },
-      });
+      await terminarVinculoDeNomina(tx, empleado.usuarioId, empresaId);
     }
     return actualizado;
   });

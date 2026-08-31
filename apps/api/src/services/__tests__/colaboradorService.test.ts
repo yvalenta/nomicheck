@@ -6,12 +6,13 @@
 // 0750834`: el scoping vive EN EL WHERE, no en un if después, y la prueba que
 // no mira el where no lo protege.
 //
-// HALLAZGO VIGENTE (caracterizado abajo, no corregido acá): aceptar y
-// rechazar invitación ESCRIBEN en `Empleado` —tabla auditada por el trigger
-// inmutable— sin pasar por `conAuditoria` (lib/auditoria.ts). El trigger
-// registra el cambio, pero con usuarioId = NULL: la auditoría pierde al actor
-// exacto de un cambio de membresía. Todos los demás writes a Empleado
-// (empleadosService) sí van por conAuditoria.
+// El otro peso está en `aceptarInvitacion`, que es donde nace la PERTENENCIA
+// de una cuenta a una empresa. Hasta esta entrega escribía el puntero
+// (`Usuario.empresaId`) y nada más, y como `requiereAuth` resuelve el rol
+// contra `MembresiaEmpresa`, un puntero sin membresía dejaba a la persona
+// encerrada: 403 en todo, incluido el `POST /auth/empresa-activa` que sería la
+// salida. Las pruebas de acá abajo miran la MEMBRESÍA, no el puntero — el
+// puntero solo, sin fila que lo respalde, es exactamente el bug.
 //
 // Hermético: el corte va en `lib/prisma.js`, como en batchPublicoService.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +20,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { prismaMock, txMock } = vi.hoisted(() => {
   const txMock = {
     empleado: { update: vi.fn() },
-    usuario: { update: vi.fn() },
+    // `otorgarMembresia` (lib/membresias.ts) usa las tres: upsert de la
+    // membresía, lectura del perfil y —solo si corresponde— el movimiento del
+    // puntero. Cuelgan del `tx` y no del cliente raíz a propósito: una
+    // escritura fuera de esta transacción no se revertiría con las demás.
+    membresiaEmpresa: { upsert: vi.fn() },
+    usuario: { findUnique: vi.fn(), update: vi.fn() },
     // `conAuditoria` corre DE VERDAD en estas pruebas —no se mockea— porque lo
     // que hay que demostrar es que el actor llega a `app.usuario_actual`, que
     // es de donde el trigger lo lee. Mockear el wrapper probaría el mock.
@@ -51,7 +57,31 @@ import { ErrorConflicto } from "../empleadosService.js";
 
 const EMPLEADO_ID = 500;
 const EMPRESA_B = 2;
+// Otra empresa donde la misma cuenta ya es miembro: sirve para el caso en que
+// el puntero NO debe moverse al aceptar.
+const EMPRESA_C = 3;
 const UID_COLAB = "11111111-1111-4111-8111-111111111111";
+
+// --- mini-base de pertenencia ----------------------------------------------
+//
+// `otorgarMembresia` decide qué escribir mirando el perfil que lee del `tx`, así
+// que un stub que devuelva siempre lo mismo no probaría nada: acá hay estado y
+// las pruebas leen cómo quedó. Es la única forma de afirmar la diferencia entre
+// "creó la fila" y "además dejó el puntero donde tenía que quedar".
+interface FilaMembresia {
+  usuarioId: string;
+  empresaId: number;
+  rol: string;
+}
+
+let bdMembresias: FilaMembresia[];
+let perfilUsuario: { id: string; rol: string; empresaId: number | null };
+
+/** Las empresas a las que la cuenta pertenece — las únicas que
+ * `cambiarEmpresaActiva` podría encontrar por la PK del par. */
+function pertenenciaDe(usuarioId: string) {
+  return bdMembresias.filter((m) => m.usuarioId === usuarioId).map((m) => ({ empresaId: m.empresaId, rol: m.rol }));
+}
 
 function empleadoFixture(over: Record<string, unknown> = {}) {
   return {
@@ -80,7 +110,42 @@ beforeEach(() => {
   // se puede afirmar qué se escribió DENTRO de la transacción.
   prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock));
   txMock.empleado.update.mockImplementation(async ({ data }: { data: object }) => ({ id: EMPLEADO_ID, ...data }));
-  txMock.usuario.update.mockResolvedValue({});
+
+  // La cuenta arranca libre: sin membresías y sin puntero. Es el estado de
+  // quien recibe una invitación in-app.
+  bdMembresias = [];
+  perfilUsuario = { id: UID_COLAB, rol: "individual", empresaId: null };
+
+  txMock.membresiaEmpresa.upsert.mockImplementation(
+    async ({
+      where,
+      create,
+      update,
+    }: {
+      where: { usuarioId_empresaId: { usuarioId: string; empresaId: number } };
+      create: FilaMembresia;
+      update: { rol: string };
+    }) => {
+      const { usuarioId, empresaId } = where.usuarioId_empresaId;
+      const fila = bdMembresias.find((m) => m.usuarioId === usuarioId && m.empresaId === empresaId);
+      if (fila) {
+        fila.rol = update.rol;
+        return { ...fila };
+      }
+      bdMembresias.push({ ...create });
+      return { ...create };
+    }
+  );
+  txMock.usuario.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+    where.id === perfilUsuario.id ? { ...perfilUsuario } : null
+  );
+  txMock.usuario.update.mockImplementation(
+    async ({ where, data }: { where: { id: string }; data: Partial<typeof perfilUsuario> }) => {
+      if (where.id !== perfilUsuario.id) throw new Error("Usuario no encontrado");
+      Object.assign(perfilUsuario, data);
+      return { ...perfilUsuario };
+    }
+  );
 });
 
 // --- listarRecibosPropios --------------------------------------------------
@@ -174,11 +239,11 @@ describe("aceptarInvitacion", () => {
     });
   });
 
-  it("acepta: marca la invitación y mueve la cuenta a la empresa DEL EMPLEADO VALIDADO, en la misma transacción", async () => {
-    // El empresaId que se escribe en Usuario sale del registro que pasó el
-    // where scoped — no de un parámetro del caller. Y las dos escrituras van
-    // juntas: una cuenta con empresaId de una empresa donde su Empleado sigue
-    // "pendiente" sería el estado intermedio que la transacción prohíbe.
+  it("acepta: marca la invitación y OTORGA LA MEMBRESÍA de la empresa DEL EMPLEADO VALIDADO, en la misma transacción", async () => {
+    // El empresaId que se escribe sale del registro que pasó el where scoped —
+    // no de un parámetro del caller. Y las escrituras van juntas: una cuenta
+    // parada en una empresa donde su Empleado sigue "pendiente" sería el estado
+    // intermedio que la transacción prohíbe.
     prismaMock.empleado.findFirst
       .mockResolvedValueOnce(empleadoFixture({ empresaId: EMPRESA_B }))
       .mockResolvedValueOnce(null);
@@ -188,10 +253,74 @@ describe("aceptarInvitacion", () => {
       where: { id: EMPLEADO_ID },
       data: { invitacionAceptadaEn: expect.any(Date) },
     });
-    expect(txMock.usuario.update).toHaveBeenCalledWith({
-      where: { id: UID_COLAB },
-      data: { empresaId: EMPRESA_B },
+    // La MEMBRESÍA por la PK del par, con el rol de esta empresa.
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledWith({
+      where: { usuarioId_empresaId: { usuarioId: UID_COLAB, empresaId: EMPRESA_B } },
+      create: { usuarioId: UID_COLAB, empresaId: EMPRESA_B, rol: "colaborador" },
+      update: { rol: "colaborador" },
     });
+    expect(pertenenciaDe(UID_COLAB)).toEqual([{ empresaId: EMPRESA_B, rol: "colaborador" }]);
+  });
+
+  it("EL ENCIERRO: aceptar deja a la cuenta con membresía, no con un puntero suelto", async () => {
+    // Este es el bug, y no se ve mirando `Usuario`: el puntero quedaba igual de
+    // bien puesto que ahora. Lo que faltaba era la fila que lo respalda, y sin
+    // ella `requiereAuth` responde 403 en TODAS las rutas —`whoami` incluido, y
+    // el propio `POST /auth/empresa-activa` que sería el camino de vuelta—. O
+    // sea que aceptar la invitación era la última cosa que la cuenta podía
+    // hacer. Por eso se afirma la pertenencia y NO solo el update del puntero.
+    prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture()).mockResolvedValueOnce(null);
+    await aceptarInvitacion(UID_COLAB, EMPLEADO_ID);
+
+    expect(perfilUsuario.empresaId).toBe(EMPRESA_B);
+    // La empresa donde está parada es una a la que pertenece: la condición
+    // exacta que el middleware exige para dejar pasar el request.
+    expect(pertenenciaDe(UID_COLAB).map((m) => m.empresaId)).toContain(perfilUsuario.empresaId);
+  });
+
+  it("una cuenta `individual` que acepta queda como colaborador: el rol sale de la membresía nueva", async () => {
+    // El verificador anónimo al que una empresa invita por correo llega acá con
+    // rol de cuenta `individual`, que no tiene una sola celda en la matriz de
+    // permisos. Antes aceptaba y seguía siendo `individual`: entraba a la
+    // empresa sin poder hacer nada en ella, ni ver sus propios recibos.
+    expect(perfilUsuario.rol).toBe("individual");
+    prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture()).mockResolvedValueOnce(null);
+
+    await aceptarInvitacion(UID_COLAB, EMPLEADO_ID);
+
+    expect(perfilUsuario).toEqual({ id: UID_COLAB, rol: "colaborador", empresaId: EMPRESA_B });
+  });
+
+  it("si ya está parada en OTRA empresa suya, la aceptación crea la membresía y NO la teletransporta", async () => {
+    // Es miembro de la C y está trabajando ahí ahora mismo. Aceptar la
+    // invitación de la B la suma a la B; de cuál mira en este momento decide
+    // ella, con el selector del header — no una invitación que aceptó.
+    bdMembresias = [{ usuarioId: UID_COLAB, empresaId: EMPRESA_C, rol: "auditor" }];
+    perfilUsuario = { id: UID_COLAB, rol: "auditor", empresaId: EMPRESA_C };
+    prismaMock.empleado.findFirst
+      .mockResolvedValueOnce(empleadoFixture({ empresaId: EMPRESA_B }))
+      .mockResolvedValueOnce(null);
+
+    await aceptarInvitacion(UID_COLAB, EMPLEADO_ID);
+
+    expect(pertenenciaDe(UID_COLAB)).toEqual([
+      { empresaId: EMPRESA_C, rol: "auditor" },
+      { empresaId: EMPRESA_B, rol: "colaborador" },
+    ]);
+    expect(perfilUsuario).toEqual({ id: UID_COLAB, rol: "auditor", empresaId: EMPRESA_C });
+  });
+
+  it("la membresía se escribe por el `tx` de conAuditoria, no por el cliente raíz", async () => {
+    // Si colgara de `prisma` en vez del `tx`, quedaría FUERA de la transacción:
+    // un rollback del update del Empleado dejaría viva una membresía de una
+    // invitación que nunca se aceptó. Y el trigger de `Usuario` registraría el
+    // movimiento del puntero sin autor, porque `SET LOCAL` no sale de su
+    // transacción.
+    prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture()).mockResolvedValueOnce(null);
+    await aceptarInvitacion(UID_COLAB, EMPLEADO_ID);
+
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
   });
 
   it("la aceptación pasa por conAuditoria: el actor llega a app.usuario_actual", async () => {

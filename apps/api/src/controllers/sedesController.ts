@@ -59,7 +59,9 @@ export async function asignarStaffCtrl(req: Request, res: Response) {
     return;
   }
   try {
-    res.json(await asignarStaff(req.usuario!.empresaId!, parseo.data));
+    // El tercer argumento es el ACTOR (quién asigna), no el asignado: el
+    // trigger de auditoría sobre `Usuario` lo lee de `app.usuario_actual`.
+    res.json(await asignarStaff(req.usuario!.empresaId!, parseo.data, req.usuario!.id));
   } catch (err) {
     if (err instanceof ErrorAsignacionStaff) {
       res.status(422).json({ error: err.message });
@@ -71,7 +73,7 @@ export async function asignarStaffCtrl(req: Request, res: Response) {
 
 export async function quitarStaffCtrl(req: Request, res: Response) {
   try {
-    await quitarStaff(req.usuario!.empresaId!, String(req.params.id));
+    await quitarStaff(req.usuario!.empresaId!, String(req.params.id), req.usuario!.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : "No encontrado" });

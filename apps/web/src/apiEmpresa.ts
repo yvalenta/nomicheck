@@ -45,8 +45,13 @@ async function autenticado(path: string, init: RequestInit = {}) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(body.error ?? "Error de red") as Error & { body?: unknown };
+    const err = new Error(body.error ?? "Error de red") as Error & { body?: unknown; status?: number };
     err.body = body;
+    // El código también viaja, no solo el mensaje: hay un caso donde el CÓDIGO
+    // es el dato — `obtenerMatrizPermisos` necesita distinguir "la API todavía
+    // no monta esa ruta" (404) de "falló de verdad", y el 404 de Express ni
+    // siquiera trae JSON, así que ahí `body.error` no existe.
+    err.status = res.status;
     throw err;
   }
   return body;
@@ -659,4 +664,67 @@ export interface EstadoCuenta {
 
 export function obtenerEstadoCuenta(mes?: string): Promise<EstadoCuenta> {
   return autenticado(`/empresa/cuenta${mes ? `?mes=${mes}` : ""}`);
+}
+
+// --- Multi-empresa y matriz de permisos (tareas/2026-08-31-matriz-permisos-y-multiorg.md) ---
+
+/**
+ * Cambiar de empresa activa sin re-login (paso 5 de la tarea).
+ *
+ * El `empresaId` es una PROPUESTA: quien decide es la membresía del par
+ * (cuenta, empresa) del lado del servidor. Si la cuenta no pertenece a esa
+ * empresa —o la empresa está suspendida— vuelve 403 y el portal se queda donde
+ * estaba. El cliente NUNCA asume que el cambio ocurrió: espera esta respuesta.
+ */
+export function cambiarEmpresaActiva(empresaId: number): Promise<{ empresaId: number; rol: string }> {
+  return autenticado("/auth/empresa-activa", { method: "POST", body: JSON.stringify({ empresaId }) });
+}
+
+/**
+ * Una fila de la matriz, tal como la publica la API.
+ *
+ * `rutas` es opcional a propósito: cuando la API las derive del router (que es
+ * quien las sabe de verdad), la tabla muestra ESAS. Mientras tanto cae al
+ * resumen escrito a mano en `lib/permisosCatalogo.ts`, que es texto de
+ * presentación y no decide nada.
+ */
+export interface FilaMatriz {
+  clave: string;
+  roles: string[];
+  rutas?: string[];
+}
+
+/**
+ * La matriz permiso × rol.
+ *
+ * `publicada: false` no es un error: es el estado real del producto mientras
+ * `GET /empresa/permisos` (paso 2 de la tarea) no exista. Se distingue del
+ * error de red porque la pantalla dice cosas distintas — una explica que falta
+ * publicar la matriz, la otra que algo se rompió — y porque un 404 no se
+ * reintenta.
+ */
+export type MatrizPermisos =
+  | { publicada: true; roles: string[]; permisos: FilaMatriz[] }
+  | { publicada: false };
+
+/**
+ * Pide la matriz que la API hace cumplir.
+ *
+ * La web NO tiene copia local de la matriz, y eso es la mitad del punto de la
+ * página de Roles: un check dibujado acá sin guarda allá sería exactamente la
+ * divergencia que `apps/api/src/lib/permisos.ts` vino a cerrar. Si la API no la
+ * publica, la tabla no se dibuja — no se inventa.
+ */
+export async function obtenerMatrizPermisos(): Promise<MatrizPermisos> {
+  let cuerpo: { roles?: unknown; permisos?: unknown };
+  try {
+    cuerpo = await autenticado("/empresa/permisos");
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return { publicada: false };
+    throw e; // 401, 403, 500 o red caída: eso sí es un error y se muestra como tal
+  }
+  // Un 200 con otra forma vale lo mismo que no tenerla: media tabla es peor
+  // que ninguna, porque una fila que falta se lee como "nadie puede eso".
+  if (!Array.isArray(cuerpo.roles) || !Array.isArray(cuerpo.permisos)) return { publicada: false };
+  return { publicada: true, roles: cuerpo.roles as string[], permisos: cuerpo.permisos as FilaMatriz[] };
 }

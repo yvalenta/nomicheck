@@ -28,6 +28,7 @@ export type Seccion =
   | "cumplimiento"
   | "sedes"
   | "auditoria"
+  | "roles"
   | "cuenta";
 
 export type Destino = "inicio" | "personas" | "liquidacion" | "control" | "cuenta";
@@ -74,6 +75,9 @@ export const DESTINOS: {
       { valor: "cumplimiento", etiqueta: "Cumplimiento" },
       { valor: "discrepancias", etiqueta: "Discrepancias" },
       { valor: "auditoria", etiqueta: "Auditoría" },
+      // Junto a Auditoría a propósito: esa dice quién tocó qué y esta quién
+      // puede tocarlo. Son la misma pregunta en pasado y en futuro.
+      { valor: "roles", etiqueta: "Roles" },
     ],
   },
   {

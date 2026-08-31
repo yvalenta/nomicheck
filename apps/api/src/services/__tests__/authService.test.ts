@@ -13,21 +13,37 @@
 // `createClient(process.env.SUPABASE_URL!, ...)` en el import y explota con
 // "supabaseUrl is required" sin variables. Que esta suite pase con
 // `env -u DATABASE_URL` es parte del criterio de terminado.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthError } from "@supabase/supabase-js";
 
 const { prismaMock, txMock, authAdminMock } = vi.hoisted(() => {
   // `invitarColaborador` escribe `Empleado` dentro de `conAuditoria`, que abre
   // una transaccion y setea `app.usuario_actual` — es de ahi que el trigger de
   // auditoria lee el actor. El wrapper corre DE VERDAD acá: mockearlo probaria
-  // el mock, no que el actor llegue.
-  const txMock = { empleado: { update: vi.fn() }, $executeRaw: vi.fn() };
+  // el mock, no que el actor llegue. `cambiarEmpresaActiva` usa el mismo
+  // wrapper para mover `Usuario.empresaId`, y por eso el `tx` también tiene
+  // `usuario` y `membresiaEmpresa`.
+  //
+  // Desde el 2026-08-31 el `tx` es casi toda la superficie de este servicio: las
+  // altas crean Empresa + Usuario + MEMBRESÍA juntas y las bajas revocan la
+  // membresía y reapuntan el puntero, todo en UNA transacción. `lib/membresias.js`
+  // tampoco se mockea —por la misma razón que `conAuditoria`—, así que lo que
+  // se ve en `txMock.membresiaEmpresa` son las escrituras de verdad; su
+  // comportamiento contra una mini-base vive en `lib/__tests__/membresias.test.ts`.
+  const txMock = {
+    empresa: { create: vi.fn() },
+    empleado: { update: vi.fn() },
+    usuario: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    membresiaEmpresa: { findUnique: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
+    $executeRaw: vi.fn(),
+  };
   return {
     txMock,
     prismaMock: {
       usuario: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
       empleado: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
       empresa: { create: vi.fn(), findUnique: vi.fn(), delete: vi.fn() },
+      membresiaEmpresa: { findMany: vi.fn() },
       $transaction: vi.fn(async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)),
     },
     authAdminMock: { createUser: vi.fn(), deleteUser: vi.fn(), inviteUserByEmail: vi.fn() },
@@ -39,7 +55,9 @@ vi.mock("../../lib/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { admin: a
 
 import {
   asegurarPerfilIndividual,
+  cambiarEmpresaActiva,
   crearEmpresaConAdmin,
+  empresasDeUsuario,
   esAdminDeEmpresa,
   esCorreoDuplicado,
   invitarColaborador,
@@ -49,15 +67,20 @@ import {
   registrarIndividual,
 } from "../authService.js";
 import { ErrorConflicto } from "../empleadosService.js";
+import { usarEmisor, type LineaDeRegistro } from "../../lib/registro.js";
 
 // --- fixtures -------------------------------------------------------------
 
-// El admin que invita. Viaja hasta el servicio solo para que el trigger de
-// auditoria pueda nombrarlo: sin el, el rastro del vinculo queda sin actor.
+// El admin que invita (o el admin_plataforma que da de alta y de baja). Viaja
+// hasta el servicio solo para que el trigger de auditoria pueda nombrarlo: sin
+// el, el rastro del vinculo queda sin actor.
 const UID_ADMIN = "11111111-1111-4111-8111-111111111111";
 const EMPRESA_A = 1;
 const EMPRESA_B = 2;
-const UID_NUEVO = "11111111-1111-4111-8111-111111111111";
+// La cuenta que crea Supabase Auth. Distinta del actor a propósito: cuando las
+// dos eran el mismo uuid, la aserción "el rastro lleva al ADMIN que invitó" se
+// cumplía también si el servicio firmaba con el invitado.
+const UID_NUEVO = "33333333-3333-4333-8333-333333333333";
 const UID_AJENO = "22222222-2222-4222-8222-222222222222";
 
 /** Un AuthError de Supabase tiene más campos de los que el servicio mira; solo
@@ -114,7 +137,31 @@ beforeEach(() => {
   prismaMock.empresa.create.mockImplementation(async ({ data }: { data: object }) => ({ id: EMPRESA_A, ...data }));
   prismaMock.empresa.findUnique.mockResolvedValue({ id: EMPRESA_A, nombre: "Acme" });
   prismaMock.empresa.delete.mockResolvedValue({ id: EMPRESA_A });
+  prismaMock.membresiaEmpresa.findMany.mockResolvedValue([]);
+  // El lado transaccional: acá pasan las altas (Empresa + Usuario + membresía)
+  // y las bajas (revocar + reapuntar el puntero).
+  txMock.empresa.create.mockImplementation(async ({ data }: { data: object }) => ({ id: EMPRESA_A, ...data }));
+  txMock.usuario.create.mockImplementation(async ({ data }: { data: object }) => data);
+  txMock.usuario.update.mockImplementation(async ({ data }: { data: object }) => data);
+  txMock.usuario.findUnique.mockResolvedValue(null);
+  txMock.empleado.update.mockImplementation(async ({ data }: { data: object }) => data);
+  txMock.membresiaEmpresa.findUnique.mockResolvedValue(null);
+  txMock.membresiaEmpresa.findMany.mockResolvedValue([]);
+  txMock.membresiaEmpresa.upsert.mockImplementation(async ({ create }: { create: object }) => create);
+  txMock.membresiaEmpresa.deleteMany.mockResolvedValue({ count: 1 });
 });
+
+/** Lo que `otorgarMembresia` le manda al upsert para el par (cuenta, empresa):
+ * la fila nueva y, si ya estaba, el rol pisado. Se afirma entero porque el
+ * `where` es la PK del par —una membresía por cuenta y empresa— y el rol es lo
+ * que `requiereAuth` va a leer en cada request de esa persona. */
+function altaDeMembresia(usuarioId: string, empresaId: number, rol: string) {
+  return {
+    where: { usuarioId_empresaId: { usuarioId, empresaId } },
+    create: { usuarioId, empresaId, rol },
+    update: { rol },
+  };
+}
 
 // --- esCorreoDuplicado ----------------------------------------------------
 
@@ -155,11 +202,45 @@ describe("esCorreoDuplicado", () => {
 
 describe("registrarEmpresa", () => {
   it("crea la Empresa y el perfil con rol admin_empresa ligado a ESA empresa", async () => {
-    prismaMock.empresa.create.mockResolvedValue({ id: 77, nombre: "Acme" });
+    txMock.empresa.create.mockResolvedValue({ id: 77, nombre: "Acme" });
     await registrarEmpresa(datosRegistroEmpresa);
-    expect(prismaMock.usuario.create).toHaveBeenCalledWith({
+    expect(txMock.usuario.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ id: UID_NUEVO, rol: "admin_empresa", empresaId: 77 }),
     });
+  });
+
+  it("H2 — la cuenta nace CON su membresía: sin ella el registro entrega un 403 permanente", async () => {
+    // El puntero solo dice "en cuál de mis empresas estoy parado"; la
+    // autorización es la membresía. Una cuenta con puntero y sin membresía
+    // recibe 403 en TODOS los endpoints —incluido `whoami`, así que el portal
+    // ni sabe a dónde mandarla, e incluido `POST /auth/empresa-activa`, que
+    // sería el camino de vuelta—: registrarse dejaba de funcionar el minuto en
+    // que se aplicaba la migración.
+    txMock.empresa.create.mockResolvedValue({ id: 77, nombre: "Acme" });
+    txMock.usuario.findUnique.mockResolvedValue({ rol: "admin_empresa", empresaId: 77 });
+    await registrarEmpresa(datosRegistroEmpresa);
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledWith(altaDeMembresia(UID_NUEVO, 77, "admin_empresa"));
+    // El perfil ya nació coherente con la membresía: no hay un UPDATE de más
+    // que deje una línea de auditoría de un cambio que nunca ocurrió.
+    expect(txMock.usuario.update).not.toHaveBeenCalled();
+  });
+
+  it("H2 — Empresa, perfil y membresía van en UNA transacción, no por el cliente raíz", async () => {
+    // Un commit a medias deja exactamente lo que esto viene a prohibir: la
+    // empresa creada y su dueño sin poder entrar, o al revés.
+    await registrarEmpresa(datosRegistroEmpresa);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.empresa.create).not.toHaveBeenCalled();
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+  });
+
+  it("H7 — el alta queda firmada por la cuenta que se registró, no con autor NULL", async () => {
+    // `Empresa` y `Usuario` están vigilados por `fn_auditar_cambio`, que lee el
+    // autor de `app.usuario_actual`. En un registro no hay nadie más que la
+    // propia persona: sin el wrapper, el alta de una empresa entera quedaba sin
+    // decir quién la creó.
+    await registrarEmpresa(datosRegistroEmpresa);
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_NUEVO);
   });
 
   it("el rol NO se toma del payload: un body con rol admin_plataforma se ignora", async () => {
@@ -169,22 +250,28 @@ describe("registrarEmpresa", () => {
     // diferencia entre registrarse y volverse dueño de la plataforma.
     const conBasura = { ...datosRegistroEmpresa, rol: "admin_plataforma", empresaId: EMPRESA_B };
     await registrarEmpresa(conBasura as unknown as typeof datosRegistroEmpresa);
-    const args = prismaMock.usuario.create.mock.calls[0]![0] as { data: Record<string, unknown> };
+    const args = txMock.usuario.create.mock.calls[0]![0] as { data: Record<string, unknown> };
     expect(args.data.rol).toBe("admin_empresa");
     expect(args.data.empresaId).toBe(EMPRESA_A);
+    // Y la membresía tampoco: el rol de la empresa sale del servicio, no del body.
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledWith(
+      altaDeMembresia(UID_NUEVO, EMPRESA_A, "admin_empresa")
+    );
   });
 
   it("correo ya registrado: 409 y no se crea NADA en Postgres", async () => {
     authAdminMock.createUser.mockResolvedValue({ data: { user: null }, error: errorAuth("email_exists") });
     await expect(registrarEmpresa(datosRegistroEmpresa)).rejects.toBeInstanceOf(ErrorConflicto);
-    expect(prismaMock.empresa.create).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(txMock.empresa.create).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.upsert).not.toHaveBeenCalled();
   });
 
   it("otro error de Auth (no duplicado) aborta antes de tocar Postgres", async () => {
     authAdminMock.createUser.mockResolvedValue({ data: { user: null }, error: errorAuth("weak_password") });
     await expect(registrarEmpresa(datosRegistroEmpresa)).rejects.not.toBeInstanceOf(ErrorConflicto);
-    expect(prismaMock.empresa.create).not.toHaveBeenCalled();
+    expect(txMock.empresa.create).not.toHaveBeenCalled();
   });
 
   it("Auth sin error pero SIN usuario: aborta, no crea un perfil con id undefined", async () => {
@@ -194,13 +281,22 @@ describe("registrarEmpresa", () => {
     // en su JWT hereda la empresa.
     authAdminMock.createUser.mockResolvedValue({ data: { user: null }, error: null });
     await expect(registrarEmpresa(datosRegistroEmpresa)).rejects.toThrow("No se pudo crear el usuario");
-    expect(prismaMock.empresa.create).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.empresa.create).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
   });
 
   it("si el perfil falla, compensa borrando la cuenta de Auth recién creada", async () => {
-    prismaMock.usuario.create.mockRejectedValue(new Error("NIT duplicado"));
+    txMock.usuario.create.mockRejectedValue(new Error("NIT duplicado"));
     await expect(registrarEmpresa(datosRegistroEmpresa)).rejects.toThrow("NIT duplicado");
+    expect(authAdminMock.deleteUser).toHaveBeenCalledWith(UID_NUEVO);
+  });
+
+  it("si la MEMBRESÍA falla, se compensa igual: no queda una empresa con un dueño en 403", async () => {
+    // La escritura nueva es parte del alta, no un extra opcional. Si reventara
+    // y el servicio siguiera de largo, el resultado sería un registro
+    // "exitoso" que nadie puede usar — el bug de arriba con otro disfraz.
+    txMock.membresiaEmpresa.upsert.mockRejectedValue(new Error("MembresiaEmpresa no existe"));
+    await expect(registrarEmpresa(datosRegistroEmpresa)).rejects.toThrow("MembresiaEmpresa no existe");
     expect(authAdminMock.deleteUser).toHaveBeenCalledWith(UID_NUEVO);
   });
 });
@@ -289,6 +385,139 @@ describe("asegurarPerfilIndividual", () => {
   });
 });
 
+// --- empresasDeUsuario ----------------------------------------------------
+
+describe("empresasDeUsuario", () => {
+  let lineas: LineaDeRegistro[] = [];
+  beforeEach(() => {
+    lineas = [];
+    usarEmisor((l) => lineas.push(l));
+  });
+  afterEach(() => usarEmisor(() => {}));
+
+  it("devuelve id, nombre y el rol DE CADA EMPRESA (no el de la cuenta)", async () => {
+    // Es lo que dibuja el selector del header: la misma persona puede aparecer
+    // como admin_empresa en una y auditor en otra, y el selector tiene que
+    // decirlo — si mostrara el rol de `Usuario`, mentiría en al menos una.
+    prismaMock.membresiaEmpresa.findMany.mockResolvedValue([
+      { rol: "admin_empresa", empresa: { id: EMPRESA_A, nombre: "Acme" } },
+      { rol: "auditor", empresa: { id: EMPRESA_B, nombre: "Beta" } },
+    ]);
+    expect(await empresasDeUsuario(UID_AJENO)).toEqual([
+      { id: EMPRESA_A, nombre: "Acme", rol: "admin_empresa" },
+      { id: EMPRESA_B, nombre: "Beta", rol: "auditor" },
+    ]);
+  });
+
+  it("pregunta SOLO por las membresías de esa cuenta", async () => {
+    // El `where` es la decisión: sin `usuarioId`, whoami devolvería el
+    // directorio de empresas de la plataforma entera a cualquiera con sesión.
+    await empresasDeUsuario(UID_AJENO);
+    const args = prismaMock.membresiaEmpresa.findMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(args.where).toEqual({ usuarioId: UID_AJENO });
+  });
+
+  it("sin membresías devuelve la lista vacía, no null", async () => {
+    expect(await empresasDeUsuario(UID_AJENO)).toEqual([]);
+  });
+
+  it("la tabla sin migrar degrada a lista vacía y lo dice, en vez de tumbar el login", async () => {
+    // Todos los portales llaman a whoami al arrancar: un 500 acá durante la
+    // ventana entre el deploy y `prisma migrate deploy` deja a todo el mundo
+    // afuera. La lista vacía es lo que había antes de las membresías.
+    prismaMock.membresiaEmpresa.findMany.mockRejectedValue(
+      Object.assign(new Error("The table `MembresiaEmpresa` does not exist"), { code: "P2021" })
+    );
+    expect(await empresasDeUsuario(UID_AJENO)).toEqual([]);
+    const aviso = lineas.find((l) => l.origen === "auth" && l.nivel === "warn");
+    expect(aviso).toBeDefined();
+    expect(aviso?.codigo).toBe("P2021");
+  });
+
+  it("cualquier OTRO error de la base propaga: no se disfraza de 'no tiene empresas'", async () => {
+    // Si "la base no responde" se tradujera a lista vacía, el header mostraría
+    // a un admin sin ninguna empresa y el bug parecería de datos.
+    prismaMock.membresiaEmpresa.findMany.mockRejectedValue(
+      Object.assign(new Error("Can't reach database server"), { code: "P1001" })
+    );
+    await expect(empresasDeUsuario(UID_AJENO)).rejects.toThrow("Can't reach database server");
+    expect(lineas).toHaveLength(0);
+  });
+});
+
+// --- cambiarEmpresaActiva -------------------------------------------------
+
+describe("cambiarEmpresaActiva", () => {
+  const membresia = (over: Partial<{ rol: string; activa: boolean }> = {}) => ({
+    rol: over.rol ?? "admin_empresa",
+    empresa: { activa: over.activa ?? true },
+  });
+
+  it("con membresía mueve el puntero y devuelve el rol de ESA empresa", async () => {
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresia({ rol: "auditor" }));
+    const resultado = await cambiarEmpresaActiva(UID_AJENO, EMPRESA_B);
+    expect(resultado).toEqual({ estado: "ok", empresaId: EMPRESA_B, rol: "auditor" });
+    expect(txMock.usuario.update).toHaveBeenCalledWith({
+      where: { id: UID_AJENO },
+      data: { empresaId: EMPRESA_B },
+    });
+  });
+
+  it("el cambio queda en la auditoría CON autor", async () => {
+    // `Usuario` está vigilado por el trigger (migración
+    // 20260830140000_auditoria_usuario) y el actor sale de
+    // `app.usuario_actual`, que setea `conAuditoria`. Sin el wrapper, el salto
+    // de empresa quedaría registrado con usuarioId NULL: constancia de que
+    // alguien cambió de empresa y ninguna de quién.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresia());
+    await cambiarEmpresaActiva(UID_AJENO, EMPRESA_B);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_AJENO);
+    // Y el UPDATE va por el `tx`, no por el cliente raíz: fuera de esa
+    // transacción el `SET LOCAL` no aplica y el trigger no vería al autor.
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
+  });
+
+  it("SIN membresía no toca el puntero", async () => {
+    // El agujero que esta función existe para no abrir: `empresaId` viene del
+    // body, y el puntero es de donde `requiereAuth` saca el rol de cada
+    // request. Escribirlo sin comprobar pertenencia sería "elegí de qué
+    // empresa querés ser admin".
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(null);
+    expect(await cambiarEmpresaActiva(UID_AJENO, EMPRESA_B)).toEqual({ estado: "sin_membresia" });
+    expect(txMock.usuario.update).not.toHaveBeenCalled();
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
+  });
+
+  it("una empresa que no existe es INDISTINGUIBLE de una sin membresía", async () => {
+    // Las dos son "no hay fila para este par": el servicio nunca consulta
+    // Empresa, así que la respuesta no puede funcionar como oráculo de qué ids
+    // existen en la plataforma.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(null);
+    expect(await cambiarEmpresaActiva(UID_AJENO, 99999)).toEqual({ estado: "sin_membresia" });
+    expect(prismaMock.empresa.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("la membresía se busca por el PAR (cuenta, empresa), que es la PK", async () => {
+    // Se afirma el `where` porque es la decisión de seguridad. Buscar por
+    // empresa sola autorizaría a cualquiera; buscar por cuenta y filtrar
+    // después abre la ventana entre las dos operaciones.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresia());
+    await cambiarEmpresaActiva(UID_AJENO, EMPRESA_B);
+    const args = txMock.membresiaEmpresa.findUnique.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(args.where).toEqual({ usuarioId_empresaId: { usuarioId: UID_AJENO, empresaId: EMPRESA_B } });
+  });
+
+  it("una empresa suspendida se rechaza ANTES de mover el puntero", async () => {
+    // Si el puntero entrara a una empresa suspendida, `requiereAuth` daría 403
+    // en TODOS los requests siguientes —incluido el que intentara volver— y la
+    // cuenta quedaría encerrada sin salida por la API.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresia({ activa: false }));
+    expect(await cambiarEmpresaActiva(UID_AJENO, EMPRESA_B)).toEqual({ estado: "suspendida" });
+    expect(txMock.usuario.update).not.toHaveBeenCalled();
+  });
+});
+
 // --- invitarColaborador ---------------------------------------------------
 
 describe("invitarColaborador", () => {
@@ -300,7 +529,7 @@ describe("invitarColaborador", () => {
   it("empleado inexistente: falla sin mandarle correo a nadie", async () => {
     await expect(invitarColaborador(999, "ana@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("Empleado no encontrado");
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
   });
 
   it("CERRADO 2026-08-05: un empleado de OTRA empresa es indistinguible de uno inexistente", async () => {
@@ -318,8 +547,9 @@ describe("invitarColaborador", () => {
     await expect(invitarColaborador(500, "atacante@evil.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("Empleado no encontrado");
     expect(prismaMock.empleado.findFirst).toHaveBeenCalledWith({ where: { id: 500, empresaId: EMPRESA_A } });
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
-    expect(prismaMock.empleado.update).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.upsert).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).not.toHaveBeenCalled();
   });
 
   it("el empresaId del invitante entra en el WHERE, no se comprueba despues", async () => {
@@ -339,7 +569,7 @@ describe("invitarColaborador", () => {
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture({ usuarioId: UID_AJENO }));
     await expect(invitarColaborador(500, "otra@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("ya tiene una cuenta vinculada");
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
-    expect(prismaMock.empleado.update).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).not.toHaveBeenCalled();
   });
 
   it("cuenta con membresía ACTIVA en otra empresa: 409 y el empleado no se toca", async () => {
@@ -351,7 +581,7 @@ describe("invitarColaborador", () => {
       .mockResolvedValueOnce({ id: 900, empresaId: EMPRESA_B });
     prismaMock.usuario.findUnique.mockResolvedValue(usuarioFixture());
     await expect(invitarColaborador(500, "ana@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toBeInstanceOf(ErrorConflicto);
-    expect(prismaMock.empleado.update).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).not.toHaveBeenCalled();
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
   });
 
@@ -387,7 +617,19 @@ describe("invitarColaborador", () => {
     });
     expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_ADMIN);
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+  });
+
+  it("la invitación PENDIENTE no otorga membresía: aceptar es del colaborador, no del admin", async () => {
+    // La contracara de H2: el alta de membresía va donde la persona ENTRA a la
+    // empresa, no donde la invitan. Otorgarla acá metería a alguien en una
+    // nómina ajena sin que se entere, que es exactamente lo que
+    // `invitacionAceptadaEn: null` existe para impedir.
+    prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
+    prismaMock.usuario.findUnique.mockResolvedValue(usuarioFixture());
+    await invitarColaborador(500, "ana@empresa.com", EMPRESA_A, UID_ADMIN);
+    expect(txMock.membresiaEmpresa.upsert).not.toHaveBeenCalled();
+    expect(txMock.usuario.update).not.toHaveBeenCalled();
   });
 
   it("correo sin cuenta: crea el perfil como colaborador de la empresa del empleado (= la del invitante)", async () => {
@@ -397,9 +639,36 @@ describe("invitarColaborador", () => {
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture({ empresaId: EMPRESA_B }));
     const resultado = await invitarColaborador(500, "nueva@empresa.com", EMPRESA_B, UID_ADMIN);
     expect(resultado).toEqual({ estado: "correo_enviado" });
-    expect(prismaMock.usuario.create).toHaveBeenCalledWith({
+    expect(txMock.usuario.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ id: UID_NUEVO, rol: "colaborador", empresaId: EMPRESA_B }),
     });
+  });
+
+  it("H2 — la cuenta nueva nace CON membresía de colaborador, en la MISMA transacción que el vínculo", async () => {
+    // Esta rama acepta la invitación implícitamente (`invitacionAceptadaEn` con
+    // fecha) y deja el puntero puesto: sin membresía, la persona entra por el
+    // correo de Supabase y se choca con un 403 en todos lados, sin salida.
+    prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture({ empresaId: EMPRESA_B }));
+    await invitarColaborador(500, "nueva@empresa.com", EMPRESA_B, UID_ADMIN);
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledWith(
+      altaDeMembresia(UID_NUEVO, EMPRESA_B, "colaborador")
+    );
+    // Una sola transacción para perfil + membresía + vínculo, y ninguna
+    // escritura por el cliente raíz: a medias, la persona queda con acceso sin
+    // pertenecer, o encerrada.
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).toHaveBeenCalledWith({
+      where: { id: 500 },
+      data: { usuarioId: UID_NUEVO, invitacionAceptadaEn: expect.any(Date) },
+    });
+  });
+
+  it("H7 — el alta de la cuenta nueva la firma el ADMIN que invitó, no el invitado", async () => {
+    prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
+    await invitarColaborador(500, "nueva@empresa.com", EMPRESA_A, UID_ADMIN);
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_ADMIN);
+    expect(txMock.$executeRaw.mock.calls[0]).not.toContain(UID_NUEVO);
   });
 
   it("Supabase reporta duplicado al invitar: 409 sin crear perfil ni vincular", async () => {
@@ -408,8 +677,9 @@ describe("invitarColaborador", () => {
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: errorAuth("user_already_exists") });
     await expect(invitarColaborador(500, "huerfana@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toBeInstanceOf(ErrorConflicto);
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
-    expect(prismaMock.empleado.update).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.upsert).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).not.toHaveBeenCalled();
   });
 
   it("invitación sin error pero SIN usuario: aborta antes de vincular", async () => {
@@ -418,8 +688,9 @@ describe("invitarColaborador", () => {
     prismaMock.empleado.findFirst.mockResolvedValueOnce(empleadoFixture());
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: null });
     await expect(invitarColaborador(500, "nueva@empresa.com", EMPRESA_A, UID_ADMIN)).rejects.toThrow("No se pudo enviar la invitación");
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
-    expect(prismaMock.empleado.update).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.upsert).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).not.toHaveBeenCalled();
   });
 
   it("el correo se busca literal: otra capitalización NO encuentra la cuenta existente", async () => {
@@ -443,12 +714,18 @@ describe("invitarColaborador", () => {
     // La membresía activa nunca se consultó: findFirst corrió UNA sola vez (el
     // empleado). La rama que la mira quedó afuera.
     expect(prismaMock.empleado.findFirst).toHaveBeenCalledTimes(1);
-    expect(prismaMock.empleado.update).not.toHaveBeenCalled();
+    expect(txMock.empleado.update).not.toHaveBeenCalled();
   });
 });
 
 // --- esAdminDeEmpresa / quitarAdminEmpresa -------------------------------
 
+// Lo que recibe el predicado es la MEMBRESÍA del par (cuenta, empresa) — la
+// fila de `MembresiaEmpresa`, no la de `Usuario`. Con el rol de cuenta y el
+// puntero, los dos globales, se equivocaba en los dos sentidos apenas una
+// cuenta pertenece a dos empresas (ver el describe de `quitarAdminEmpresa`).
+// Los casos de acá siguen valiendo igual: cambia de dónde sale el dato, no qué
+// se exige de él.
 describe("esAdminDeEmpresa", () => {
   it("acepta únicamente al admin_empresa de ESA empresa", () => {
     expect(esAdminDeEmpresa({ rol: "admin_empresa", empresaId: EMPRESA_A }, EMPRESA_A)).toBe(true);
@@ -487,7 +764,7 @@ describe("esAdminDeEmpresa", () => {
     expect(esAdminDeEmpresa({ rol: "admin_empresa ", empresaId: EMPRESA_A }, EMPRESA_A)).toBe(false);
   });
 
-  it("usuario ausente o sin rol no pasa por omisión", () => {
+  it("membresía ausente o sin rol no pasa por omisión", () => {
     // `nil == nil` es true: si la comparación fuera laxa, un objeto vacío
     // contra un empresaId undefined daría permiso. Cada caso de acá es un
     // campo que falta, no un valor equivocado.
@@ -511,11 +788,11 @@ describe("esAdminDeEmpresa", () => {
     expect(esAdminDeEmpresa({ rol: "admin_empresa", empresaId: EMPRESA_A }, "1" as unknown as number)).toBe(false);
   });
 
-  it("el empresaId del usuario tampoco se coacciona: \"1\" no es 1", () => {
+  it("el empresaId de la membresía tampoco se coacciona: \"1\" no es 1", () => {
     // Agregada porque la mutación `==` en lugar de `===` sobrevivió a la
     // primera tanda: el guard numérico ya cubre el lado del argumento, así que
-    // el único síntoma que queda de una comparación laxa está del lado del
-    // usuario —un empresaId que llega como string (query cruda, JSON de un
+    // el único síntoma que queda de una comparación laxa está del lado de la
+    // fila —un empresaId que llega como string (query cruda, JSON de un
     // caché, un `select` armado a mano)—. Con `==`, "1" abriría la empresa 1.
     expect(esAdminDeEmpresa({ rol: "admin_empresa", empresaId: "1" as unknown as number }, 1)).toBe(false);
     expect(esAdminDeEmpresa({ rol: "admin_empresa", empresaId: "" as unknown as number }, 0)).toBe(false);
@@ -523,44 +800,136 @@ describe("esAdminDeEmpresa", () => {
 });
 
 describe("quitarAdminEmpresa", () => {
-  it("degrada al admin correcto a individual y sin empresa", async () => {
-    prismaMock.usuario.findUnique.mockResolvedValue(
-      usuarioFixture({ id: UID_AJENO, rol: "admin_empresa", empresaId: EMPRESA_A })
-    );
-    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO);
-    expect(prismaMock.usuario.update).toHaveBeenCalledWith({
+  /** La fila de `MembresiaEmpresa` del par: lo ÚNICO que autoriza la baja. */
+  const membresiaAdmin = (empresaId = EMPRESA_A) => ({ rol: "admin_empresa", empresaId });
+  /** Dónde está parada la cuenta y con qué rol de cuenta — el puntero, que la
+   * baja mueve pero al que ya no le pregunta nada. */
+  const parada = (empresaId: number | null, rol = "admin_empresa") => ({ rol, empresaId });
+
+  it("H1 — BORRA la membresía: sin eso el degradado se re-promueve con un POST /auth/empresa-activa", async () => {
+    // El agujero: la baja ponía `rol=individual, empresaId=null` y dejaba viva
+    // la fila de MembresiaEmpresa. `whoami` le seguía ofreciendo la empresa con
+    // el rol perdido y `POST /auth/empresa-activa` —la única ruta privada sin
+    // guarda de permiso— se lo devolvía. Ni el admin_plataforma podía desalojar
+    // a un admin: lo degradaba y el degradado volvía solo.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresiaAdmin());
+    txMock.usuario.findUnique.mockResolvedValue(parada(EMPRESA_A));
+
+    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN);
+
+    expect(txMock.membresiaEmpresa.deleteMany).toHaveBeenCalledWith({
+      where: { usuarioId: UID_AJENO, empresaId: EMPRESA_A },
+    });
+    // Y el puntero se cae con ella: sin otra membresía viva donde pararse,
+    // queda en null con rol de cuenta individual.
+    expect(txMock.usuario.update).toHaveBeenCalledWith({
       where: { id: UID_AJENO },
-      data: { rol: "individual", empresaId: null },
+      data: { empresaId: null, rol: "individual" },
     });
   });
 
-  it("no borra la cuenta: la operación es reversible", async () => {
+  it("H4 — al admin parado en OTRA empresa también se lo puede quitar, y no se lo desaloja de la otra", async () => {
+    // El caso de uso que las membresías vinieron a habilitar, visto desde el
+    // panel: alguien es admin_empresa en la A y está trabajando en la B.
+    // Preguntándole al puntero global, para esta función no era admin de
+    // ninguna —"ese usuario no es el admin_empresa de esta empresa"— y no había
+    // forma, ni por API ni por UI, de sacarlo de la A mientras él volvía cuando
+    // quisiera. Preguntándole a la membresía, sale.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresiaAdmin(EMPRESA_A));
+    txMock.usuario.findUnique.mockResolvedValue(parada(EMPRESA_B, "auditor"));
+
+    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN);
+
+    expect(txMock.membresiaEmpresa.deleteMany).toHaveBeenCalledWith({
+      where: { usuarioId: UID_AJENO, empresaId: EMPRESA_A },
+    });
+    // La baja en la A no lo saca de la B, donde sigue siendo miembro.
+    expect(txMock.usuario.update).not.toHaveBeenCalled();
+  });
+
+  it("H4 — el puntero global ya no autoriza: sin membresía se rechaza aunque Usuario diga admin_empresa", async () => {
+    // El otro sentido del mismo error. Una fila `Usuario` con el puntero en la
+    // empresa y rol admin_empresa, pero sin membresía, no es miembro de nada:
+    // `requiereAuth` le responde 403 en cada request. Autorizar una baja con
+    // ese dato es autorizarla con lo que quedó de la foto vieja.
     prismaMock.usuario.findUnique.mockResolvedValue(
       usuarioFixture({ id: UID_AJENO, rol: "admin_empresa", empresaId: EMPRESA_A })
     );
-    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO);
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(null);
+
+    await expect(quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN)).rejects.toThrow(
+      "no es el admin_empresa de esta empresa"
+    );
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+    expect(txMock.usuario.update).not.toHaveBeenCalled();
+    // Ni siquiera le preguntó a `Usuario`: la decisión sale de la membresía.
+    expect(prismaMock.usuario.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("la membresía se busca por el PAR (cuenta, empresa), que es la PK, y en la misma transacción que la baja", async () => {
+    // Se afirma el `where` porque es la decisión de seguridad: por empresa sola
+    // autorizaría a cualquiera, y por cuenta con un filtro después abre la
+    // ventana entre comprobar y escribir.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresiaAdmin());
+    txMock.usuario.findUnique.mockResolvedValue(parada(EMPRESA_A));
+
+    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN);
+
+    expect(txMock.membresiaEmpresa.findUnique).toHaveBeenCalledWith({
+      where: { usuarioId_empresaId: { usuarioId: UID_AJENO, empresaId: EMPRESA_A } },
+      select: { rol: true, empresaId: true },
+    });
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("no borra la cuenta: la operación es reversible", async () => {
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresiaAdmin());
+    txMock.usuario.findUnique.mockResolvedValue(parada(EMPRESA_A));
+    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN);
     expect(authAdminMock.deleteUser).not.toHaveBeenCalled();
   });
 
-  it("usuario inexistente: falla y no escribe", async () => {
-    prismaMock.usuario.findUnique.mockResolvedValue(null);
-    await expect(quitarAdminEmpresa(EMPRESA_A, UID_AJENO)).rejects.toThrow("no es el admin_empresa de esta empresa");
-    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
+  it("cuenta sin membresía en esa empresa (o inexistente): falla y no escribe", async () => {
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(null);
+    await expect(quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN)).rejects.toThrow(
+      "no es el admin_empresa de esta empresa"
+    );
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("admin de OTRA empresa: falla y no escribe (scoping de verdad, no solo el mensaje)", async () => {
-    prismaMock.usuario.findUnique.mockResolvedValue(
-      usuarioFixture({ id: UID_AJENO, rol: "admin_empresa", empresaId: EMPRESA_B })
+  it("rol insuficiente en la MISMA empresa: falla y no escribe", async () => {
+    // El analista_rrhh es el caso interesante: es miembro de esta empresa, así
+    // que la membresía existe — lo que no alcanza es el rol.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue({ rol: "analista_rrhh", empresaId: EMPRESA_A });
+    await expect(quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN)).rejects.toThrow(
+      "no es el admin_empresa de esta empresa"
     );
-    await expect(quitarAdminEmpresa(EMPRESA_A, UID_AJENO)).rejects.toThrow("no es el admin_empresa de esta empresa");
-    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("rol insuficiente en la misma empresa: falla y no escribe", async () => {
-    prismaMock.usuario.findUnique.mockResolvedValue(
-      usuarioFixture({ id: UID_AJENO, rol: "analista_rrhh", empresaId: EMPRESA_A })
+  it("id de empresa basura de la URL: falla cerrado sin abrir transacción ni consultar", async () => {
+    // El controlador hace `Number(req.params.id)`: "abc" llega como NaN. Antes
+    // el predicado lo frenaba sin tocar la base; ahora la consulta va primero,
+    // así que el guard numérico tiene que seguir estando ANTES — con NaN,
+    // Prisma tiraría su error crudo en la cara del admin.
+    await expect(quitarAdminEmpresa(NaN, UID_AJENO, UID_ADMIN)).rejects.toThrow(
+      "no es el admin_empresa de esta empresa"
     );
-    await expect(quitarAdminEmpresa(EMPRESA_A, UID_AJENO)).rejects.toThrow("no es el admin_empresa de esta empresa");
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("H7 — la baja queda en la bitácora CON el actor que la ejecutó, y nada se escribe fuera de la transacción", async () => {
+    // `Usuario` está vigilado por `fn_auditar_cambio`, que lee el autor de
+    // `app.usuario_actual`. Con `prisma.usuario.update` pelado quedaba
+    // constancia de que a alguien lo sacaron de una empresa y ninguna de quién
+    // — el mismo medio-rastro que `invitarColaborador` ya había arreglado.
+    txMock.membresiaEmpresa.findUnique.mockResolvedValue(membresiaAdmin());
+    txMock.usuario.findUnique.mockResolvedValue(parada(EMPRESA_A));
+
+    await quitarAdminEmpresa(EMPRESA_A, UID_AJENO, UID_ADMIN);
+
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_ADMIN);
     expect(prismaMock.usuario.update).not.toHaveBeenCalled();
   });
 });
@@ -577,9 +946,26 @@ describe("crearEmpresaConAdmin", () => {
   it("el invitado queda como admin_empresa de la empresa recién creada", async () => {
     prismaMock.empresa.create.mockResolvedValue({ id: 42, nombre: "Beta" });
     await crearEmpresaConAdmin(datosCrearEmpresa);
-    expect(prismaMock.usuario.create).toHaveBeenCalledWith({
+    expect(txMock.usuario.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ id: UID_NUEVO, rol: "admin_empresa", empresaId: 42 }),
     });
+  });
+
+  it("H2 — el admin del onboarding manual nace CON membresía: si no, el correo de invitación lleva a un 403", async () => {
+    // Mismo agujero que el registro, por la puerta del admin_plataforma: la
+    // persona define su contraseña por correo, entra, y `requiereAuth` la
+    // rebota en todos los endpoints porque su puntero no tiene membresía.
+    prismaMock.empresa.create.mockResolvedValue({ id: 42, nombre: "Beta" });
+    await crearEmpresaConAdmin(datosCrearEmpresa, UID_ADMIN);
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledWith(altaDeMembresia(UID_NUEVO, 42, "admin_empresa"));
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+  });
+
+  it("H7 — el alta la firma el admin_plataforma que la ejecutó", async () => {
+    prismaMock.empresa.create.mockResolvedValue({ id: 42, nombre: "Beta" });
+    await crearEmpresaConAdmin(datosCrearEmpresa, UID_ADMIN);
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_ADMIN);
   });
 
   it("correo duplicado: 409 y la empresa se borra (no queda una empresa sin dueño)", async () => {
@@ -589,7 +975,8 @@ describe("crearEmpresaConAdmin", () => {
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: errorAuth("email_exists") });
     await expect(crearEmpresaConAdmin(datosCrearEmpresa)).rejects.toBeInstanceOf(ErrorConflicto);
     expect(prismaMock.empresa.delete).toHaveBeenCalledWith({ where: { id: 42 } });
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.upsert).not.toHaveBeenCalled();
   });
 
   it("invitación sin error pero SIN usuario: revierte la empresa y aborta", async () => {
@@ -597,13 +984,21 @@ describe("crearEmpresaConAdmin", () => {
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: null });
     await expect(crearEmpresaConAdmin(datosCrearEmpresa)).rejects.toThrow("No se pudo enviar la invitación");
     expect(prismaMock.empresa.delete).toHaveBeenCalledWith({ where: { id: 42 } });
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
   });
 
   it("si el perfil falla, compensa las dos cosas: cuenta de Auth y empresa", async () => {
     prismaMock.empresa.create.mockResolvedValue({ id: 42, nombre: "Beta" });
-    prismaMock.usuario.create.mockRejectedValue(new Error("choque de unicidad"));
+    txMock.usuario.create.mockRejectedValue(new Error("choque de unicidad"));
     await expect(crearEmpresaConAdmin(datosCrearEmpresa)).rejects.toThrow("choque de unicidad");
+    expect(authAdminMock.deleteUser).toHaveBeenCalledWith(UID_NUEVO);
+    expect(prismaMock.empresa.delete).toHaveBeenCalledWith({ where: { id: 42 } });
+  });
+
+  it("si la membresía falla, compensa igual: ni cuenta de Auth ni empresa a medias", async () => {
+    prismaMock.empresa.create.mockResolvedValue({ id: 42, nombre: "Beta" });
+    txMock.membresiaEmpresa.upsert.mockRejectedValue(new Error("MembresiaEmpresa no existe"));
+    await expect(crearEmpresaConAdmin(datosCrearEmpresa)).rejects.toThrow("MembresiaEmpresa no existe");
     expect(authAdminMock.deleteUser).toHaveBeenCalledWith(UID_NUEVO);
     expect(prismaMock.empresa.delete).toHaveBeenCalledWith({ where: { id: 42 } });
   });
@@ -614,49 +1009,106 @@ describe("crearEmpresaConAdmin", () => {
 describe("reasignarAdminEmpresa", () => {
   const datosAdmin = { nombreAdmin: "Nuevo Admin", emailAdmin: "nuevo@acme.com" };
 
+  /** La búsqueda de los admins anteriores pregunta por empresa; la de
+   * `revocarMembresia`, por cuenta. El mismo mock atiende a las dos y las
+   * distingue por el `where`, que es justo lo que las diferencia. */
+  function conAdminAnterior(usuarioId: string) {
+    txMock.membresiaEmpresa.findMany.mockImplementation(
+      async ({ where }: { where: Record<string, unknown> }) =>
+        where.usuarioId === undefined ? [{ usuarioId }] : []
+    );
+  }
+
   it("empresa inexistente: falla ANTES de mandarle un correo a un tercero", async () => {
     // Un id de URL equivocado no puede terminar en una invitación real a una
     // persona que nunca va a tener a dónde entrar.
     prismaMock.empresa.findUnique.mockResolvedValue(null);
     await expect(reasignarAdminEmpresa(999, datosAdmin)).rejects.toThrow("Empresa no encontrada");
     expect(authAdminMock.inviteUserByEmail).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("H1 — al admin anterior le REVOCA la membresía, no solo el puntero", async () => {
+    // Con el `updateMany` a `Usuario` el reemplazado quedaba "individual" pero
+    // con su membresía de admin_empresa intacta: volvía a serlo con un solo
+    // `POST /auth/empresa-activa`, y la empresa terminaba con dos admins, uno
+    // de ellos invisible en el panel.
+    conAdminAnterior(UID_AJENO);
+    txMock.usuario.findUnique.mockResolvedValue({ rol: "admin_empresa", empresaId: EMPRESA_A });
+
+    await reasignarAdminEmpresa(EMPRESA_A, datosAdmin, UID_ADMIN);
+
+    expect(txMock.membresiaEmpresa.deleteMany).toHaveBeenCalledWith({
+      where: { usuarioId: UID_AJENO, empresaId: EMPRESA_A },
+    });
+    // Y el puntero del reemplazado cae con su membresía.
+    expect(txMock.usuario.update).toHaveBeenCalledWith({
+      where: { id: UID_AJENO },
+      data: { empresaId: null, rol: "individual" },
+    });
+    // Nada de degradar cuentas con un updateMany global: la baja va de a una,
+    // por membresía, porque a cada persona hay que reapuntarle el puntero a lo
+    // que le quede.
     expect(prismaMock.usuario.updateMany).not.toHaveBeenCalled();
   });
 
-  it("degrada a los admins viejos SOLO de esa empresa y sin tocar al nuevo", async () => {
+  it("H4 — busca a los anteriores por MEMBRESÍA de esa empresa, sin incluir al reemplazo", async () => {
     // Las dos condiciones del `where` son de seguridad, no de estilo:
-    //   - sin `empresaId`, un updateMany dejaría sin admin a TODAS las
-    //     empresas del sistema de una sola petición;
-    //   - sin el `NOT`, el reemplazo se degradaría a sí mismo y la empresa
+    //   - sin `empresaId`, esto revocaría a los admins de TODAS las empresas
+    //     del sistema de una sola petición;
+    //   - sin el `NOT`, el reemplazo se revocaría a sí mismo y la empresa
     //     quedaría sin nadie que pueda invitar ni liquidar.
-    prismaMock.usuario.create.mockResolvedValue(usuarioFixture({ id: UID_NUEVO, rol: "admin_empresa", empresaId: EMPRESA_A }));
-    await reasignarAdminEmpresa(EMPRESA_A, datosAdmin);
-    expect(prismaMock.usuario.updateMany).toHaveBeenCalledWith({
-      where: { empresaId: EMPRESA_A, rol: "admin_empresa", NOT: { id: UID_NUEVO } },
-      data: { rol: "individual", empresaId: null },
+    // Y por membresía y no por `Usuario.empresaId`: al admin anterior que
+    // estuviera parado en otra empresa suya, el `updateMany` no lo alcanzaba —
+    // seguía siendo admin de esta para siempre.
+    await reasignarAdminEmpresa(EMPRESA_A, datosAdmin, UID_ADMIN);
+    expect(txMock.membresiaEmpresa.findMany).toHaveBeenCalledWith({
+      where: { empresaId: EMPRESA_A, rol: "admin_empresa", NOT: { usuarioId: UID_NUEVO } },
+      select: { usuarioId: true },
     });
+  });
+
+  it("H2 — el reemplazo nace con su membresía, en la misma transacción que la baja del anterior", async () => {
+    // Si el alta y la baja no fueran atómicas, un fallo entre las dos deja a la
+    // empresa sin ningún admin, o con dos.
+    conAdminAnterior(UID_AJENO);
+    await reasignarAdminEmpresa(EMPRESA_A, datosAdmin, UID_ADMIN);
+    expect(txMock.membresiaEmpresa.upsert).toHaveBeenCalledWith(
+      altaDeMembresia(UID_NUEVO, EMPRESA_A, "admin_empresa")
+    );
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
+  });
+
+  it("H7 — el relevo queda en la bitácora con el actor que lo ejecutó", async () => {
+    conAdminAnterior(UID_AJENO);
+    await reasignarAdminEmpresa(EMPRESA_A, datosAdmin, UID_ADMIN);
+    expect(txMock.$executeRaw.mock.calls[0]).toContain(UID_ADMIN);
+    expect(prismaMock.usuario.update).not.toHaveBeenCalled();
   });
 
   it("correo duplicado: 409 y el admin actual queda intacto", async () => {
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: errorAuth("email_exists") });
     await expect(reasignarAdminEmpresa(EMPRESA_A, datosAdmin)).rejects.toBeInstanceOf(ErrorConflicto);
-    expect(prismaMock.usuario.create).not.toHaveBeenCalled();
-    expect(prismaMock.usuario.updateMany).not.toHaveBeenCalled();
+    expect(txMock.usuario.create).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
   });
 
   it("invitación sin usuario: aborta sin degradar a nadie", async () => {
     authAdminMock.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: null });
     await expect(reasignarAdminEmpresa(EMPRESA_A, datosAdmin)).rejects.toThrow("No se pudo enviar la invitación");
-    expect(prismaMock.usuario.updateMany).not.toHaveBeenCalled();
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
   });
 
   it("si el perfil nuevo falla, el admin actual sobrevive y se borra la cuenta invitada", async () => {
-    // El orden importa: crear primero y degradar después es lo que hace que un
+    // El orden importa: crear primero y revocar después es lo que hace que un
     // fallo a mitad de camino deje a la empresa CON admin en vez de sin
-    // ninguno.
-    prismaMock.usuario.create.mockRejectedValue(new Error("correo ya usado en Usuario"));
-    await expect(reasignarAdminEmpresa(EMPRESA_A, datosAdmin)).rejects.toThrow("correo ya usado");
-    expect(prismaMock.usuario.updateMany).not.toHaveBeenCalled();
+    // ninguno. Ahora además la transacción revierte lo que ya se hubiera
+    // escrito, así que "sobrevive" es literal.
+    conAdminAnterior(UID_AJENO);
+    txMock.usuario.create.mockRejectedValue(new Error("correo ya usado en Usuario"));
+    await expect(reasignarAdminEmpresa(EMPRESA_A, datosAdmin, UID_ADMIN)).rejects.toThrow("correo ya usado");
+    expect(txMock.membresiaEmpresa.deleteMany).not.toHaveBeenCalled();
     expect(authAdminMock.deleteUser).toHaveBeenCalledWith(UID_NUEVO);
   });
 });

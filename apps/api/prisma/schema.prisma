@@ -45,9 +45,20 @@ model Usuario {
   //                    funcionando). Puede liquidar. NO invita ni borra.
   //   auditor        → solo lectura de todo lo de su empresa. Cualquier POST/PUT/
   //                    DELETE le devuelve 403 (middleware bloqueaEscritura).
+  //
+  // OJO: este campo ya NO es el rol efectivo dentro de una empresa. Desde
+  // MembresiaEmpresa, el rol con el que se resuelve cada request sale de la
+  // membresía (usuarioId, empresaId activa) — una misma cuenta puede ser
+  // admin_empresa en una y auditor en otra. Este `rol` queda como rol de
+  // cuenta: sirve para admin_plataforma (que no tiene membresías) y como
+  // valor de arranque al crear la primera membresía.
   rol       String
-  // Empresa activa actual (puntero denormalizado). Null = sin empresa: recién
-  // registrado admin_plataforma, o colaborador libre entre empresas.
+  // Empresa ACTIVA actual (puntero denormalizado, no la pertenencia). La
+  // pertenencia vive en MembresiaEmpresa; esto solo dice "en cuál de mis
+  // empresas estoy parado ahora", y se valida contra la membresía en cada
+  // request (requiereAuth): puntero sin membresía → 403, nunca acceso.
+  // Null = sin empresa: recién registrado admin_plataforma, o colaborador
+  // libre entre empresas.
   empresaId Int?
   empresa   Empresa? @relation(fields: [empresaId], references: [id])
 
@@ -60,6 +71,10 @@ model Usuario {
   // Sedes asignadas a un analista_rrhh (many-to-many). Vacío = ve todas las
   // de su empresa (útil para empresas chicas sin sucursales).
   sedesAsignadas UsuarioSede[]
+  // A qué empresas pertenece esta cuenta y con qué rol en cada una. Fuente de
+  // verdad de la tenencia: `empresaId` de arriba es solo el puntero a la
+  // activa, y tiene que estar en esta lista para valer.
+  membresias     MembresiaEmpresa[]
   creadoEn       DateTime              @default(now())
 
   @@index([empresaId])
@@ -111,12 +126,49 @@ model Empresa {
   // trabajador ve su resultado. Ver `apps/web/src/lanzamiento/origenCampana.ts`.
   origen         String?
 
+  // Cuentas que tienen a ESTA empresa como activa (puntero). Para saber quién
+  // pertenece a la empresa se usa `membresias`, no esta lista: un admin de dos
+  // empresas aparece aquí solo en la que está parado ahora mismo.
   usuarios     Usuario[]
+  // Quién pertenece a esta empresa y con qué rol (fuente de verdad).
+  membresias   MembresiaEmpresa[]
   empleados    Empleado[]
   contratistas Contratista[]
   periodos     PeriodoNomina[]
   sedes        Sede[]
   evidencias   EvidenciaCierre[]
+}
+
+// La fuente de verdad de "a qué empresas pertenece este usuario y con qué rol"
+// (SDD §15). Antes la respuesta era `Usuario.empresaId` + `Usuario.rol`: una
+// cuenta = una empresa, así que un admin de dos empresas necesitaba dos
+// cuentas. Con esta tabla la pertenencia es N:M y el rol es POR EMPRESA — la
+// misma persona puede ser admin_empresa en una y auditor en otra.
+//
+// El reparto de responsabilidades quedó así:
+//   MembresiaEmpresa  → a cuáles pertenece y con qué rol (autorización).
+//   Usuario.empresaId → en cuál está parado ahora (puntero a la activa).
+// `requiereAuth` valida el puntero contra esta tabla en CADA request y saca de
+// aquí el rol efectivo. Un puntero sin fila acá no da acceso: responde 403.
+// Por eso el cambio de empresa activa no necesita re-login ni toca permisos.
+model MembresiaEmpresa {
+  usuarioId String   @db.Uuid
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  // admin_empresa | analista_rrhh | auditor | colaborador — mismos nombres que
+  // Usuario.rol (ver allí qué puede cada uno), pero acotado a esta empresa.
+  // admin_plataforma NO se modela acá: no pertenece a ninguna empresa, y su
+  // "ver como" entra por una membresía temporal explícita de rol auditor.
+  rol       String
+  creadoEn  DateTime @default(now())
+
+  // Una sola fila por (cuenta, empresa): el rol de alguien en una empresa es
+  // uno solo. La PK compuesta ya lo impone.
+  @@id([usuarioId, empresaId])
+  // Para "quiénes son los miembros de esta empresa" (pantalla de Roles) sin
+  // escanear la tabla; el otro sentido lo sirve el prefijo de la PK.
+  @@index([empresaId])
 }
 
 // Sucursal/departamento dentro de una empresa (SDD §15, pilar 1). Modelo

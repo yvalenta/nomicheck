@@ -7,10 +7,12 @@ import BotonCerrarSesion from "./components/BotonCerrarSesion.tsx";
 import HeaderProfile from "./components/HeaderProfile.tsx";
 import SidebarEmpresa, { destinoDeSeccion, type Seccion } from "./components/empresa/SidebarEmpresa.tsx";
 import AuthEmpresa from "./components/empresa/AuthEmpresa.tsx";
+import SelectorEmpresa from "./components/empresa/SelectorEmpresa.tsx";
 import Skeleton from "./components/Skeleton.tsx";
 import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
-import { obtenerMiRol } from "./api.ts";
-import { irAPortalSegunRol } from "./lib/irAPortal.ts";
+import { obtenerMiRol, type MiRol } from "./api.ts";
+import { irAPortalSegunRol, portalDeRol } from "./lib/irAPortal.ts";
+import { cambiarEmpresaYRecargar } from "./lib/cambiarEmpresa.ts";
 
 // Una sección = un chunk (rendimiento SPA). Nadie usa las 10 pestañas en una
 // sesión, y varias arrastran librerías pesadas: Resumen trae recharts (~347 KB)
@@ -26,6 +28,7 @@ const PilaEmpresa = lazy(() => import("./components/empresa/PilaEmpresa.tsx"));
 const CumplimientoEmpresa = lazy(() => import("./components/empresa/CumplimientoEmpresa.tsx"));
 const SedesEmpresa = lazy(() => import("./components/empresa/SedesEmpresa.tsx"));
 const AuditoriaEmpresa = lazy(() => import("./components/empresa/AuditoriaEmpresa.tsx"));
+const RolesEmpresa = lazy(() => import("./components/empresa/RolesEmpresa.tsx"));
 const CuentaEmpresa = lazy(() => import("./components/empresa/CuentaEmpresa.tsx"));
 
 
@@ -36,6 +39,12 @@ export default function EmpresaApp() {
   // su portal real (ver irAPortalSegunRol) — evita mostrar este dashboard a
   // una cuenta que entró aquí por error (ej. con Google) siendo otro rol.
   const [rolOk, setRolOk] = useState<boolean | undefined>(undefined);
+  // La respuesta completa de whoami: el rol decide si se entra, y `empresas`
+  // es lo que dibuja el selector del header. Se guarda entera para no pedir el
+  // mismo endpoint dos veces en la misma carga.
+  const [yo, setYo] = useState<MiRol | null>(null);
+  const [cambiandoEmpresa, setCambiandoEmpresa] = useState(false);
+  const [errorCambio, setErrorCambio] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -54,19 +63,48 @@ export default function EmpresaApp() {
     // Cada sesión nueva re-verifica desde cero: sin esto, un logout+login con
     // otra cuenta mostraba el panel un instante con el rolOk viejo.
     setRolOk(undefined);
+    setYo(null);
     obtenerMiRol()
-      .then(({ rol }) => {
-        if (rol === "admin_empresa") setRolOk(true);
+      .then((quien) => {
+        setYo(quien);
+        if (quien.rol === "admin_empresa") setRolOk(true);
         else irAPortalSegunRol();
       })
       .catch(() => setRolOk(true)); // si falla la verificación, no bloquea el acceso normal
   }, [session, recuperando]);
 
+  // Cambio de empresa activa: el servidor decide (valida la membresía) y recién
+  // entonces se recarga el portal. Si rechaza, el error se muestra en el propio
+  // menú y la persona sigue donde estaba.
+  function elegirEmpresa(empresaId: number) {
+    if (cambiandoEmpresa) return; // dos clics encimados = dos POST y una carrera por cuál recarga
+    setCambiandoEmpresa(true);
+    setErrorCambio(null);
+    cambiarEmpresaYRecargar(empresaId).catch((e) => {
+      setErrorCambio(e instanceof Error ? e.message : "No se pudo cambiar de empresa");
+      setCambiandoEmpresa(false);
+    });
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <HeaderProfile
         paso={session ? "Panel de empresa" : "Acceso empresa"}
-        accion={!recuperando && session && rolOk ? <BotonCerrarSesion /> : undefined}
+        accion={
+          !recuperando && session && rolOk ? (
+            <div className="flex items-center gap-3">
+              <SelectorEmpresa
+                empresas={yo?.empresas ?? []}
+                activaId={yo?.empresaId ?? null}
+                onElegir={elegirEmpresa}
+                cambiando={cambiandoEmpresa}
+                error={errorCambio}
+                rolAdmitido={(rol) => portalDeRol(rol) === "/empresa"}
+              />
+              <BotonCerrarSesion />
+            </div>
+          ) : undefined
+        }
       />
       {/* El panel con sidebar necesita más ancho que las pantallas de acceso;
           login y recuperación siguen centrados y angostos. */}
@@ -113,6 +151,7 @@ const PRECARGA: Record<Seccion, () => Promise<unknown>> = {
   cumplimiento: () => import("./components/empresa/CumplimientoEmpresa.tsx"),
   sedes: () => import("./components/empresa/SedesEmpresa.tsx"),
   auditoria: () => import("./components/empresa/AuditoriaEmpresa.tsx"),
+  roles: () => import("./components/empresa/RolesEmpresa.tsx"),
   cuenta: () => import("./components/empresa/CuentaEmpresa.tsx"),
 };
 
@@ -168,6 +207,7 @@ function PanelConRutas() {
         <Route path="/cumplimiento" element={<CumplimientoEmpresa />} />
         <Route path="/sedes" element={<SedesEmpresa />} />
         <Route path="/auditoria" element={<AuditoriaEmpresa />} />
+        <Route path="/roles" element={<RolesEmpresa />} />
         <Route path="/cuenta" element={<CuentaEmpresa />} />
       </Routes>
         </Suspense>

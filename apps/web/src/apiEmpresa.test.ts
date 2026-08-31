@@ -22,6 +22,7 @@ vi.mock("./lib/supabase", () => ({ supabase: { auth: { getSession } } }));
 
 import {
   actualizarEmpleado,
+  cambiarEmpresaActiva,
   crearEmpleado,
   eliminarEmpleado,
   encolarLiquidacion,
@@ -31,6 +32,7 @@ import {
   listarPeriodos,
   obtenerCostos,
   obtenerEstadoLiquidacion,
+  obtenerMatrizPermisos,
   type RechazoQA,
 } from "./apiEmpresa";
 
@@ -224,6 +226,64 @@ describe("apiEmpresa", () => {
 
       await eliminarEmpleado(7);
       expect(ultima()).toMatchObject({ url: "/api/empresa/empleados/7", init: { method: "DELETE" } });
+    });
+  });
+
+  describe("matriz de permisos", () => {
+    // La página de Roles dibuja LO QUE MANDA la API y no tiene copia local de
+    // quién puede qué. Eso obliga a distinguir tres respuestas que para el
+    // resto del panel serían la misma:
+    //
+    //   - 404: la ruta todavía no existe (paso 2 de la tarea). No es un fallo,
+    //     es el estado del producto, y la pantalla lo dice con esas palabras.
+    //   - 200 con otra forma: media tabla es peor que ninguna — una fila que
+    //     falta se lee como "nadie puede eso".
+    //   - 403/500/red: eso sí es un error y tiene que verse como error, no
+    //     disfrazarse de "todavía no está publicada".
+
+    it("un 404 significa 'la API no la publica todavía', no un fallo", async () => {
+      // El 404 de Express ni siquiera trae JSON: sin el status, este caso
+      // llegaría a la pantalla como "Error de red".
+      fetchMock.mockResolvedValue(respuestaSinJson(404));
+      await expect(obtenerMatrizPermisos()).resolves.toEqual({ publicada: false });
+      expect(ultima().url).toBe("/api/empresa/permisos");
+    });
+
+    it("un 200 con la forma esperada se pasa tal cual", async () => {
+      const cuerpo = {
+        roles: ["admin_empresa", "auditor"],
+        permisos: [{ clave: "empresa.ver", roles: ["admin_empresa", "auditor"] }],
+      };
+      fetchMock.mockResolvedValue(respuesta(200, cuerpo));
+      await expect(obtenerMatrizPermisos()).resolves.toEqual({ publicada: true, ...cuerpo });
+    });
+
+    it("un 200 con otra forma vale lo mismo que no tenerla", async () => {
+      fetchMock.mockResolvedValue(respuesta(200, { roles: ["admin_empresa"] }));
+      await expect(obtenerMatrizPermisos()).resolves.toEqual({ publicada: false });
+    });
+
+    it("un 403 sí es un error y sube", async () => {
+      fetchMock.mockResolvedValue(respuesta(403, { error: "No perteneces a esa empresa" }));
+      await expect(obtenerMatrizPermisos()).rejects.toThrow("No perteneces a esa empresa");
+    });
+  });
+
+  describe("cambio de empresa activa", () => {
+    it("propone el id por POST y no lo mete en la URL", async () => {
+      // El id va en el cuerpo porque es una PROPUESTA que el servidor valida
+      // contra la membresía; nunca un parámetro que la ruta obedezca.
+      fetchMock.mockResolvedValue(respuesta(200, { empresaId: 4, rol: "admin_empresa" }));
+      await cambiarEmpresaActiva(4);
+      expect(ultima()).toMatchObject({
+        url: "/api/auth/empresa-activa",
+        init: { method: "POST", body: JSON.stringify({ empresaId: 4 }) },
+      });
+    });
+
+    it("el 403 de una empresa ajena llega con el mensaje del servidor", async () => {
+      fetchMock.mockResolvedValue(respuesta(403, { error: "No perteneces a esa empresa" }));
+      await expect(cambiarEmpresaActiva(999)).rejects.toThrow("No perteneces a esa empresa");
     });
   });
 });

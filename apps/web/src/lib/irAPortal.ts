@@ -10,10 +10,18 @@ const RUTA_POR_ROL: Record<string, string> = {
   individual: "/",
 };
 
+/** El portal que le corresponde a un rol, o `undefined` si no tiene uno propio.
+ *  Lo consulta el selector de empresa antes de ofrecer un cambio: entrar a una
+ *  empresa donde la cuenta es auditor la rebotaría a "/" —y como el selector
+ *  vive DENTRO del portal, se quedaría sin forma de volver. */
+export function portalDeRol(rol: string): string | undefined {
+  return RUTA_POR_ROL[rol];
+}
+
 // Consulta GET /api/auth/whoami y manda al portal correcto según el rol real
 // de la cuenta — usado tras un login exitoso (/login) y por los 3 portales
 // para rebotar si alguien entra con Google al portal equivocado.
 export async function irAPortalSegunRol(): Promise<void> {
   const { rol } = await obtenerMiRol();
-  window.location.href = RUTA_POR_ROL[rol] ?? "/";
+  window.location.href = portalDeRol(rol) ?? "/";
 }
