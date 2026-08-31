@@ -208,6 +208,129 @@ export async function cambiarEmpresaActiva(
   });
 }
 
+// ── «Ver como» del admin_plataforma (tarea 2026-08-31, paso 6 de multiorg) ──
+//
+// Entrar a una empresa desde /admin es una membresía EXPLÍCITA de rol
+// `auditor` (solo lectura por la matriz — sin ninguna celda de escritura) más
+// el puntero de empresa activa, jamás un bypass de `requiereAuth`: con la
+// vista puesta, el rol efectivo de cada request ES `auditor` y la API lo
+// trata como a cualquier auditor. Todo dentro de UN `conAuditoria`: el alta
+// de membresía y el salto de puntero quedan con autor en los triggers.
+
+export type ResultadoVistaPlataforma =
+  | { estado: "ok"; empresaId: number | null }
+  | { estado: "no_encontrada" }
+  | { estado: "suspendida" }
+  // El «salir» va por /auth con solo requiereAuth (adentro de la vista el rol
+  // efectivo es auditor y /admin responde 403) — la cuenta se verifica acá.
+  | { estado: "no_plataforma" }
+  // La cuenta ya tiene una membresía REAL (no auditor) en esa empresa — p.ej.
+  // el dueño de la plataforma que además es admin_empresa de la suya. Pisarla
+  // con el upsert la degradaría, y el «salir» la borraría: se rechaza y se
+  // entra por el selector de empresas, como cualquier miembro.
+  | { estado: "membresia_real"; rol: string };
+
+export async function entrarComoVistaPlataforma(
+  adminId: string,
+  empresaId: number
+): Promise<ResultadoVistaPlataforma> {
+  if (!esIdDeEmpresa(empresaId)) return { estado: "no_encontrada" };
+
+  return conAuditoria(adminId, async (tx) => {
+    // Acá no hay anti-oráculo que cuidar: quien llega ya pasó por
+    // `plataforma.empresas` y la lista completa de empresas es suya.
+    const empresa = await tx.empresa.findUnique({
+      where: { id: empresaId },
+      select: { activa: true },
+    });
+    if (!empresa) return { estado: "no_encontrada" };
+    // Suspendida no se entra: el puntero adentro dejaría cada request en 403
+    // (mismo criterio que cambiarEmpresaActiva; reactivala primero en /admin).
+    if (!empresa.activa) return { estado: "suspendida" };
+
+    const existente = await tx.membresiaEmpresa.findUnique({
+      where: { usuarioId_empresaId: { usuarioId: adminId, empresaId } },
+      select: { rol: true },
+    });
+    if (existente && existente.rol !== "auditor") {
+      return { estado: "membresia_real", rol: existente.rol };
+    }
+
+    // UNA vista a la vez: cualquier otra membresía auditor de la cuenta es una
+    // vista anterior (invariante de asignarStaff: la cuenta de plataforma no
+    // puede ser staff real de nadie) y se barre acá — sin este barrido, el
+    // puntero podía alejarse de una vista sin pasar por el salir (rescate de
+    // suspendida + entrar a otra, dos entrar encimados, el selector) y la
+    // membresía quedaba huérfana para siempre en el staff de esa empresa.
+    const vistasPrevias = await tx.membresiaEmpresa.findMany({
+      where: { usuarioId: adminId, rol: "auditor", empresaId: { not: empresaId } },
+      select: { empresaId: true },
+    });
+    for (const vista of vistasPrevias) {
+      await revocarMembresia(tx, { usuarioId: adminId, empresaId: vista.empresaId });
+    }
+
+    // El embudo NO mueve el puntero para admin_plataforma (guarda deliberada
+    // de otorgarMembresia): el salto es responsabilidad de este servicio, en
+    // la misma transacción. Y todo solo si hace falta: el upsert sobre una
+    // fila que ya dice auditor sería un UPDATE idéntico, y el trigger de
+    // auditoría no compara valores — quedaría una línea con antes = después.
+    if (!existente) {
+      await otorgarMembresia(tx, { usuarioId: adminId, empresaId, rol: "auditor" });
+    }
+    const perfil = await tx.usuario.findUnique({ where: { id: adminId }, select: { empresaId: true } });
+    if (perfil?.empresaId !== empresaId) {
+      await tx.usuario.update({ where: { id: adminId }, data: { empresaId } });
+    }
+    return { estado: "ok", empresaId };
+  });
+}
+
+// El «salir» barre TODAS las vistas de la cuenta, no solo la del puntero: por
+// el invariante de asignarStaff, toda membresía auditor de la cuenta de
+// plataforma ES una vista, y el puntero pudo alejarse de alguna sin pasar por
+// acá (rescate de suspendida, el selector hacia una membresía real). El
+// puntero se lee de la BASE, no del request —con la empresa suspendida el
+// middleware ya lo ignoró en contexto pero la fila sigue apuntando— y solo se
+// limpia si estaba sobre una vista o quedó huérfano: parado en una membresía
+// REAL (el dueño en su propia empresa) se queda donde está. Nunca borra una
+// fila que no sea rol auditor. Idempotente: sin vistas responde ok.
+export async function salirDeVistaPlataforma(adminId: string): Promise<ResultadoVistaPlataforma> {
+  return conAuditoria(adminId, async (tx) => {
+    const perfil = await tx.usuario.findUnique({
+      where: { id: adminId },
+      select: { rol: true, empresaId: true },
+    });
+    // Solo la cuenta de plataforma: un auditor real que llamara esto se
+    // autoborraría la membresía que su empresa le dio. Rol de CUENTA, de la
+    // base — el efectivo del request es "auditor" justamente con la vista puesta.
+    if (!perfil || perfil.rol !== "admin_plataforma") return { estado: "no_plataforma" };
+
+    const vistas = await tx.membresiaEmpresa.findMany({
+      where: { usuarioId: adminId, rol: "auditor" },
+      select: { empresaId: true },
+    });
+    for (const vista of vistas) {
+      // Rama admin_plataforma de revocarMembresia: borra la fila y, si el
+      // puntero apuntaba a ESA empresa, lo limpia sin tocar el rol de cuenta.
+      await revocarMembresia(tx, { usuarioId: adminId, empresaId: vista.empresaId });
+    }
+
+    // Puntero huérfano (apunta a donde no queda membresía — la fila vieja del
+    // backfill, o una vista que ya no está): se limpia con el mismo revocar,
+    // que tolera la fila ausente. Si apunta a una membresía REAL, se respeta.
+    if (perfil.empresaId !== null && !vistas.some((v) => v.empresaId === perfil.empresaId)) {
+      const real = await tx.membresiaEmpresa.findUnique({
+        where: { usuarioId_empresaId: { usuarioId: adminId, empresaId: perfil.empresaId } },
+        select: { rol: true },
+      });
+      if (!real) await revocarMembresia(tx, { usuarioId: adminId, empresaId: perfil.empresaId });
+    }
+
+    return { estado: "ok", empresaId: vistas.find((v) => v.empresaId === perfil.empresaId)?.empresaId ?? null };
+  });
+}
+
 export type ResultadoInvitacion =
   // Cuenta nueva: se creó vía correo de Supabase y quedó unida (sin paso de aceptar).
   | { estado: "correo_enviado" }

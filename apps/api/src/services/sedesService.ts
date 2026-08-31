@@ -114,11 +114,26 @@ export async function asignarStaff(
 ) {
   const usuario = await prisma.usuario.findUnique({
     where: { email: datos.email.toLowerCase() },
-    select: { id: true, email: true, nombre: true, empresaId: true },
+    select: { id: true, email: true, nombre: true, empresaId: true, rol: true },
   });
   if (!usuario) {
     throw new ErrorAsignacionStaff(
       `No hay una cuenta registrada con "${datos.email}". Pide a la persona que se registre primero vía /login.`
+    );
+  }
+
+  // La cuenta de plataforma no puede ser staff de NADIE (tarea 2026-08-31,
+  // ver-como): su estado normal (cero membresías, puntero null) es idéntico
+  // al de una cuenta libre, así que sin esta guarda un admin_empresa la
+  // absorbía por email — y con el «ver como» en pie, re-rolearle la membresía
+  // auditor de una vista a analista_rrhh le daba ESCRITURA sobre el tenant y
+  // la dejaba encerrada (rol efectivo sin /admin ni salir). El invariante que
+  // esta guarda sostiene: toda membresía de una cuenta admin_plataforma es
+  // una VISTA (rol auditor, escrita solo por entrarComoVistaPlataforma) — de
+  // él dependen el barrido del salir y el guard membresia_real.
+  if (usuario.rol === "admin_plataforma") {
+    throw new ErrorAsignacionStaff(
+      `La cuenta "${datos.email}" opera la plataforma y no puede ser staff de una empresa.`
     );
   }
 

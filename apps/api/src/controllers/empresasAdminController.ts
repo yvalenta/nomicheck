@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { cambiarEstadoEmpresa, listarEmpresasAdmin } from "../services/empresasAdminService.js";
 import { cambiarEstadoEmpresaSchema, crearEmpresaAdminSchema, reasignarAdminSchema } from "../validation/empresa.js";
-import { crearEmpresaConAdmin, quitarAdminEmpresa, reasignarAdminEmpresa } from "../services/authService.js";
+import { crearEmpresaConAdmin, entrarComoVistaPlataforma, quitarAdminEmpresa, reasignarAdminEmpresa } from "../services/authService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
 
 // Las tres rutas que escriben `Usuario` desde acá pasan `req.usuario!.id`
@@ -64,6 +64,32 @@ export async function quitarAdmin(req: Request, res: Response) {
     res.status(204).end();
   } catch (err) {
     res.status(422).json({ error: err instanceof Error ? err.message : "No se pudo quitar el admin" });
+  }
+}
+
+// «Ver como» (solo lectura): entra a la empresa con membresía auditor +
+// puntero. La vuelta NO está acá: con la vista puesta el rol efectivo es
+// auditor y este panel entero responde 403 — el salir vive en
+// POST /auth/vista-plataforma/salir, alcanzable desde adentro.
+export async function entrar(req: Request, res: Response) {
+  const empresaId = Number(req.params.id);
+  const resultado = await entrarComoVistaPlataforma(req.usuario!.id, empresaId);
+  switch (resultado.estado) {
+    case "ok":
+      res.json({ empresaId: resultado.empresaId });
+      return;
+    case "membresia_real":
+      // Sin instrucciones de navegación: el selector vive dentro de /empresa
+      // y una cuenta de plataforma parada en ninguna empresa no llega ahí.
+      res.status(409).json({
+        error: `Tu cuenta ya es ${resultado.rol} de esta empresa — esa pertenencia es real, no una vista.`,
+      });
+      return;
+    case "suspendida":
+      res.status(422).json({ error: "La empresa está suspendida; reactívala antes de entrar." });
+      return;
+    default: // no_encontrada (el servicio jamás devuelve no_plataforma acá)
+      res.status(422).json({ error: "Empresa no encontrada" });
   }
 }
 

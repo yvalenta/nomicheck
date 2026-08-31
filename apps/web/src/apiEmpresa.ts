@@ -681,6 +681,18 @@ export function cambiarEmpresaActiva(empresaId: number): Promise<{ empresaId: nu
 }
 
 /**
+ * Salir del «ver como» de plataforma (tareas/2026-08-31-ver-como-solo-lectura-plataforma.md).
+ *
+ * Revoca la membresía auditor de la vista y limpia la empresa activa — solo
+ * responde ok a la cuenta admin_plataforma (el server verifica el rol de
+ * CUENTA; con la vista puesta el efectivo es "auditor" y por eso esta ruta no
+ * puede vivir bajo /admin). Idempotente: sin vista puesta también es ok.
+ */
+export function salirVistaPlataforma(): Promise<{ empresaId: number | null }> {
+  return autenticado("/auth/vista-plataforma/salir", { method: "POST" });
+}
+
+/**
  * Una fila de la matriz, tal como la publica la API.
  *
  * `rutas` es opcional a propósito: cuando la API las derive del router (que es

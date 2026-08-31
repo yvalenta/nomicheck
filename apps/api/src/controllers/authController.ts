@@ -7,6 +7,7 @@ import {
   invitarColaborador,
   asegurarPerfilIndividual,
   cambiarEmpresaActiva,
+  salirDeVistaPlataforma,
   empresasDeUsuario,
 } from "../services/authService.js";
 import { ErrorConflicto } from "../services/empleadosService.js";
@@ -86,9 +87,12 @@ export async function perfilIndividual(req: Request, res: Response) {
 // header la dibuja y `empresaId` dice en cuál está parada ahora. Va acá y no en
 // un endpoint aparte porque el portal ya llama a whoami al arrancar: un segundo
 // fetch para pintar el mismo header sería una ida de más en cada carga.
+// `rolCuenta` viaja junto al efectivo por el «ver como»: es lo único que le
+// permite a la web distinguir la vista de plataforma (cuenta admin_plataforma
+// parada como auditor) de un auditor real, y pintar la barra de salida.
 export async function whoami(req: Request, res: Response) {
-  const { id, rol, empresaId, empleadoId } = req.usuario!;
-  res.json({ rol, empresaId, empleadoId, empresas: await empresasDeUsuario(id) });
+  const { id, rol, rolCuenta, empresaId, empleadoId } = req.usuario!;
+  res.json({ rol, rolCuenta, empresaId, empleadoId, empresas: await empresasDeUsuario(id) });
 }
 
 // Cambiar de empresa activa. El `empresaId` del body es una PROPUESTA: quien
@@ -112,6 +116,30 @@ export async function empresaActiva(req: Request, res: Response) {
     return;
   }
   res.json({ empresaId: resultado.empresaId, rol: resultado.rol });
+}
+
+// Salir del «ver como» de plataforma (la contraparte de
+// POST /admin/empresas/:id/entrar — ver el porqué de la ruta en routes/index.ts).
+// Idempotente: sin vista puesta responde ok igual.
+export async function salirVistaPlataforma(req: Request, res: Response) {
+  const resultado = await salirDeVistaPlataforma(req.usuario!.id);
+  if (resultado.estado === "no_plataforma") {
+    res.status(403).json({ error: "Solo la cuenta de plataforma puede salir de una vista." });
+    return;
+  }
+  if (resultado.estado === "membresia_real") {
+    res.status(409).json({
+      error: "Estás en esta empresa por una membresía real, no por una vista; usa el selector de empresas.",
+    });
+    return;
+  }
+  if (resultado.estado !== "ok") {
+    // no_encontrada/suspendida no salen del salir; el estrechamiento es para
+    // el compilador y para que un estado nuevo del union no pase en silencio.
+    res.status(422).json({ error: "No se pudo salir de la vista." });
+    return;
+  }
+  res.json({ empresaId: resultado.empresaId });
 }
 
 export async function invitar(req: Request, res: Response) {

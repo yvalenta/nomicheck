@@ -24,6 +24,7 @@ import {
   perfilIndividual,
   whoami,
   empresaActiva,
+  salirVistaPlataforma,
 } from "../controllers/authController.js";
 import {
   actualizarDatos as actualizarDatosEmpresa,
@@ -35,6 +36,7 @@ import {
   reasignarAdmin as reasignarAdminEmpresa,
   quitarAdmin as quitarAdminEmpresa,
   cambiarEstado as cambiarEstadoEmpresa,
+  entrar as entrarEmpresaAdmin,
 } from "../controllers/empresasAdminController.js";
 import { crear as crearLiquidacion, listar as listarLiquidaciones } from "../controllers/liquidacionesController.js";
 import { listar, crear, actualizar, eliminar, retirar, liquidacionFinal } from "../controllers/empleadosController.js";
@@ -249,6 +251,12 @@ router.get("/auth/whoami", requiereAuth, whoami);
 // el puntero. Un `requierePermiso` acá sería una guarda que mira el rol en la
 // empresa de la que el usuario se está yendo — la pregunta equivocada.
 router.post("/auth/empresa-activa", requiereAuth, empresaActiva);
+// Salir del «ver como» de plataforma. Solo pide sesión por la misma razón de
+// arriba — y además PORQUE NO QUEDA OTRA: con la vista puesta el rol efectivo
+// es auditor y cualquier permiso de plataforma daría 403 justo a quien
+// necesita salir. La cuenta se verifica en el servicio (rol de CUENTA
+// admin_plataforma en la base); cualquier otra recibe 403.
+router.post("/auth/vista-plataforma/salir", requiereAuth, salirVistaPlataforma);
 
 // Historial personal de liquidaciones — cualquier usuario autenticado guarda
 // y lista SUS propias (scoping por req.usuario.id, no por rol).
@@ -388,5 +396,9 @@ router.put("/admin/empresas/:id/admin", ...conPermiso("plataforma.empresas"), re
 router.delete("/admin/empresas/:id/admin/:usuarioId", ...conPermiso("plataforma.empresas"), quitarAdminEmpresa);
 // Suspender/reactivar: bloquea/desbloquea de verdad el acceso (ver middleware/auth.ts).
 router.put("/admin/empresas/:id/estado", ...conPermiso("plataforma.empresas"), cambiarEstadoEmpresa);
+// «Ver como» solo lectura: membresía auditor + puntero, auditados. La vuelta
+// vive en POST /auth/vista-plataforma/salir — con la vista puesta el rol
+// efectivo es auditor y este prefijo entero responde 403.
+router.post("/admin/empresas/:id/entrar", ...conPermiso("plataforma.empresas"), entrarEmpresaAdmin);
 
 export default router;

@@ -106,3 +106,11 @@ export function quitarAdmin(empresaId: number, usuarioId: string): Promise<null>
 export function cambiarEstadoEmpresa(empresaId: number, activa: boolean): Promise<{ empresa: EmpresaAdmin }> {
   return autenticado(`/admin/empresas/${empresaId}/estado`, { method: "PUT", body: JSON.stringify({ activa }) });
 }
+
+// «Ver como» solo lectura (tareas/2026-08-31-ver-como-solo-lectura-plataforma.md):
+// el server crea la membresía auditor y mueve la empresa activa; tras el ok se
+// recarga en /empresa. La vuelta es salirVistaPlataforma() en apiEmpresa.ts —
+// con la vista puesta el rol efectivo es auditor y /admin responde 403.
+export function entrarEmpresa(empresaId: number): Promise<{ empresaId: number }> {
+  return autenticado(`/admin/empresas/${empresaId}/entrar`, { method: "POST" });
+}

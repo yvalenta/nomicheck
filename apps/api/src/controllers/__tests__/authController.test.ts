@@ -14,6 +14,7 @@ import type { Request, Response } from "express";
 const { servicioMock } = vi.hoisted(() => ({
   servicioMock: {
     cambiarEmpresaActiva: vi.fn(),
+    salirDeVistaPlataforma: vi.fn(),
     empresasDeUsuario: vi.fn(),
     registrarEmpresa: vi.fn(),
     registrarIndividual: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock("../../services/authService.js", () => servicioMock);
 vi.mock("../../lib/prisma.js", () => ({ prisma: {} }));
 vi.mock("../../lib/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { admin: {} } } }));
 
-import { empresaActiva, whoami } from "../authController.js";
+import { empresaActiva, salirVistaPlataforma, whoami } from "../authController.js";
 import { EMPRESA_SUSPENDIDA, NO_PERTENECES, type UsuarioAutenticado } from "../../middleware/auth.js";
 
 const UID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -35,7 +36,15 @@ const EMPRESA_B = 2;
 
 /** El `req.usuario` que dejó `requiereAuth` — ya validado contra la membresía. */
 function sesion(over: Partial<UsuarioAutenticado> = {}): UsuarioAutenticado {
-  return { id: UID, nombre: "Ana", rol: "admin_empresa", empresaId: EMPRESA_A, empleadoId: null, ...over };
+  return {
+    id: UID,
+    nombre: "Ana",
+    rol: "admin_empresa",
+    rolCuenta: "admin_empresa",
+    empresaId: EMPRESA_A,
+    empleadoId: null,
+    ...over,
+  };
 }
 
 function pedir(body: unknown, usuario: UsuarioAutenticado = sesion()) {
@@ -73,6 +82,7 @@ describe("whoami", () => {
 
     expect(visto.cuerpo).toEqual({
       rol: "admin_empresa",
+      rolCuenta: "admin_empresa",
       empresaId: EMPRESA_A,
       empleadoId: 7,
       empresas: [
@@ -82,6 +92,17 @@ describe("whoami", () => {
     });
   });
 
+  it("con la vista de plataforma puesta, rol y rolCuenta divergen — y los dos viajan", async () => {
+    // Es lo ÚNICO que le permite a la web distinguir el «ver como» (barra de
+    // salida) de un auditor real: el efectivo dice auditor, la cuenta dice
+    // plataforma.
+    const { req, res, visto } = pedir(undefined, sesion({ rol: "auditor", rolCuenta: "admin_plataforma" }));
+
+    await whoami(req, res);
+
+    expect(visto.cuerpo).toMatchObject({ rol: "auditor", rolCuenta: "admin_plataforma" });
+  });
+
   it("las empresas se piden por el id de la SESIÓN, nunca por uno del cliente", async () => {
     const { req, res } = pedir(undefined);
     await whoami(req, res);
@@ -89,9 +110,47 @@ describe("whoami", () => {
   });
 
   it("una cuenta sin empresas responde la lista vacía (individual, colaborador libre)", async () => {
-    const { req, res, visto } = pedir(undefined, sesion({ rol: "individual", empresaId: null }));
+    const { req, res, visto } = pedir(undefined, sesion({ rol: "individual", rolCuenta: "individual", empresaId: null }));
     await whoami(req, res);
-    expect(visto.cuerpo).toEqual({ rol: "individual", empresaId: null, empleadoId: null, empresas: [] });
+    expect(visto.cuerpo).toEqual({
+      rol: "individual",
+      rolCuenta: "individual",
+      empresaId: null,
+      empleadoId: null,
+      empresas: [],
+    });
+  });
+});
+
+describe("POST /auth/vista-plataforma/salir", () => {
+  it("ok responde la empresa que se dejó", async () => {
+    servicioMock.salirDeVistaPlataforma.mockResolvedValue({ estado: "ok", empresaId: EMPRESA_A });
+    const { req, res, visto } = pedir(undefined, sesion({ rol: "auditor", rolCuenta: "admin_plataforma" }));
+
+    await salirVistaPlataforma(req, res);
+
+    expect(visto.estado).toBeUndefined(); // 200 implícito
+    expect(visto.cuerpo).toEqual({ empresaId: EMPRESA_A });
+    // El id sale de la sesión, jamás de un body del cliente.
+    expect(servicioMock.salirDeVistaPlataforma).toHaveBeenCalledWith(UID);
+  });
+
+  it("una cuenta que no es de plataforma recibe 403", async () => {
+    servicioMock.salirDeVistaPlataforma.mockResolvedValue({ estado: "no_plataforma" });
+    const { req, res, visto } = pedir(undefined, sesion({ rol: "auditor", rolCuenta: "colaborador" }));
+
+    await salirVistaPlataforma(req, res);
+
+    expect(visto.estado).toBe(403);
+  });
+
+  it("parado por membresía real es 409: eso no es una vista y no se borra", async () => {
+    servicioMock.salirDeVistaPlataforma.mockResolvedValue({ estado: "membresia_real", rol: "admin_empresa" });
+    const { req, res, visto } = pedir(undefined, sesion({ rolCuenta: "admin_plataforma" }));
+
+    await salirVistaPlataforma(req, res);
+
+    expect(visto.estado).toBe(409);
   });
 });
 

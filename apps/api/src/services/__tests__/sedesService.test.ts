@@ -122,6 +122,9 @@ function semillaUsuarios(): FilaUsuario[] {
     { id: "uid-admin-a", email: "admin@a.com", nombre: "Admin A", rol: "admin_empresa", empresaId: EMPRESA_A },
     { id: "uid-analista-a", email: "analista@a.com", nombre: "Analista A", rol: "analista_rrhh", empresaId: EMPRESA_A },
     { id: "uid-libre", email: "libre@x.com", nombre: "Cuenta Libre", rol: "individual", empresaId: null },
+    // La cuenta de plataforma: cero membresías y puntero null — idéntica a
+    // una cuenta libre salvo por el rol. Es el señuelo del test del ver-como.
+    { id: "uid-plataforma", email: "duenio@plataforma.com", nombre: "Dueño Plataforma", rol: "admin_plataforma", empresaId: null },
     { id: "uid-cfo-b", email: "cfo@b.com", nombre: "CFO de B", rol: "admin_empresa", empresaId: EMPRESA_B },
     { id: "uid-analista-b", email: "analista@b.com", nombre: "Analista B", rol: "analista_rrhh", empresaId: EMPRESA_B },
     { id: "uid-beto", email: "beto@x.com", nombre: "Beto Dos Empresas", rol: "admin_empresa", empresaId: EMPRESA_B },
@@ -526,6 +529,23 @@ describe("asignarStaff", () => {
       asignarStaff(EMPRESA_A, { email: "suelto@b.com", rol: "auditor", sedeIds: [] }, ACTOR)
     ).rejects.toThrow("ya está vinculada a otra empresa");
     expect(pertenenciaDe("uid-suelto-b")).toEqual([EMPRESA_B]);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("la cuenta de plataforma no se absorbe NUNCA — su estado normal es idéntico al de una libre", async () => {
+    // El ver-como (tarea 2026-08-31) depende de este invariante: toda
+    // membresía auditor de una cuenta admin_plataforma es una VISTA y el
+    // salir la barre. Si un tenant pudiera absorberla como staff —o
+    // re-rolearle a analista_rrhh la membresía de una vista puesta— le daría
+    // ESCRITURA sobre su empresa al superadmin y lo dejaría encerrado (rol
+    // efectivo sin /admin ni salir).
+    await expect(
+      asignarStaff(EMPRESA_A, { email: "duenio@plataforma.com", rol: "auditor", sedeIds: [] }, ACTOR)
+    ).rejects.toThrow("opera la plataforma");
+    await expect(
+      asignarStaff(EMPRESA_A, { email: "duenio@plataforma.com", rol: "analista_rrhh", sedeIds: [] }, ACTOR)
+    ).rejects.toThrow("opera la plataforma");
+    expect(pertenenciaDe("uid-plataforma")).toEqual([]);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 

@@ -13,6 +13,7 @@ import ResetPasswordForm from "./components/ResetPasswordForm.tsx";
 import { obtenerMiRol, type MiRol } from "./api.ts";
 import { irAPortalSegunRol, portalDeRol } from "./lib/irAPortal.ts";
 import { cambiarEmpresaYRecargar } from "./lib/cambiarEmpresa.ts";
+import { salirVistaPlataforma } from "./apiEmpresa.ts";
 
 // Una sección = un chunk (rendimiento SPA). Nadie usa las 10 pestañas en una
 // sesión, y varias arrastran librerías pesadas: Resumen trae recharts (~347 KB)
@@ -45,6 +46,8 @@ export default function EmpresaApp() {
   const [yo, setYo] = useState<MiRol | null>(null);
   const [cambiandoEmpresa, setCambiandoEmpresa] = useState(false);
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
+  const [saliendoDeVista, setSaliendoDeVista] = useState(false);
+  const [errorSalida, setErrorSalida] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -67,7 +70,10 @@ export default function EmpresaApp() {
     obtenerMiRol()
       .then((quien) => {
         setYo(quien);
-        if (quien.rol === "admin_empresa") setRolOk(true);
+        // El auditor entra en solo lectura (la matriz del server no le concede
+        // escritura); incluye el «ver como» del admin_plataforma, que se para
+        // en la empresa con una membresía auditor.
+        if (quien.rol === "admin_empresa" || quien.rol === "auditor") setRolOk(true);
         else irAPortalSegunRol();
       })
       .catch(() => setRolOk(true)); // si falla la verificación, no bloquea el acceso normal
@@ -84,6 +90,23 @@ export default function EmpresaApp() {
       setErrorCambio(e instanceof Error ? e.message : "No se pudo cambiar de empresa");
       setCambiandoEmpresa(false);
     });
+  }
+
+  // «Ver como» de plataforma (whoami: efectivo auditor, cuenta admin_plataforma).
+  // La barra existe para que la vista jamás se confunda con el panel propio, y
+  // el salir es el único camino de vuelta: con la vista puesta /admin da 403.
+  const vistaPlataforma = yo?.rol === "auditor" && yo?.rolCuenta === "admin_plataforma";
+
+  function salirDeVista() {
+    if (saliendoDeVista) return;
+    setSaliendoDeVista(true);
+    setErrorSalida(null);
+    salirVistaPlataforma()
+      .then(() => window.location.assign("/admin"))
+      .catch((e) => {
+        setErrorSalida(e instanceof Error ? e.message : "No se pudo salir de la vista");
+        setSaliendoDeVista(false);
+      });
   }
 
   return (
@@ -106,6 +129,27 @@ export default function EmpresaApp() {
           ) : undefined
         }
       />
+      {vistaPlataforma && (
+        <div className="bg-amber-50 border-b border-borde">
+          <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-[13px] text-ink">
+            <span>
+              Vista de plataforma — solo lectura
+              {(() => {
+                const nombre = yo?.empresas.find((e) => e.id === yo?.empresaId)?.nombre;
+                return nombre ? ` · ${nombre}` : "";
+              })()}
+              {errorSalida && <span className="text-coral"> · {errorSalida}</span>}
+            </span>
+            <button
+              onClick={salirDeVista}
+              disabled={saliendoDeVista}
+              className="font-medium text-mint-dark hover:underline disabled:opacity-40 shrink-0"
+            >
+              Salir
+            </button>
+          </div>
+        </div>
+      )}
       {/* El panel con sidebar necesita más ancho que las pantallas de acceso;
           login y recuperación siguen centrados y angostos. */}
       <main

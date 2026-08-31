@@ -368,6 +368,11 @@ export interface EmpresaDeLaCuenta {
 
 export interface MiRol {
   rol: string;
+  /** Rol de CUENTA, sin pisar por la membresía. Con el «ver como» del
+   *  admin_plataforma diverge del efectivo (rol: "auditor",
+   *  rolCuenta: "admin_plataforma") y es lo que enciende la barra de salida.
+   *  Opcional: una API vieja no lo manda. */
+  rolCuenta?: string;
   empresaId: number | null;
   empleadoId: number | null;
   /** Todas las membresías de la cuenta — es lo que dibuja el selector del

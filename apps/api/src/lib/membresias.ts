@@ -277,9 +277,10 @@ export async function revocarMembresia(
   // El puntero estaba en otra empresa: la baja no lo alcanza.
   if (perfil.empresaId !== empresaId) return;
 
-  // Un admin_plataforma con puntero es una invariante ya rota (el backfill lo
-  // excluye y `requiereAuth` lo avisa por log). Se le limpia el puntero, que
-  // es lo que la baja pide, y NO se le toca el rol: degradarlo a
+  // Un admin_plataforma con puntero es o una fila vieja rota (el backfill lo
+  // excluye) o el «ver como» en curso (tarea 2026-08-31: entrar pone puntero
+  // + membresía auditor, y este revocar es su salida). Se le limpia el
+  // puntero, que es lo que la baja pide, y NO se le toca el rol: degradarlo a
   // `individual` lo dejaría fuera de la plataforma entera.
   if (perfil.rol === ROL_PLATAFORMA) {
     await tx.usuario.update({ where: { id: usuarioId }, data: { empresaId: null } });

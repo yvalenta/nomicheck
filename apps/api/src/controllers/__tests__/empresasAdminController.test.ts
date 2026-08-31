@@ -27,6 +27,7 @@ const { authMock, empresasMock } = vi.hoisted(() => ({
     crearEmpresaConAdmin: vi.fn(),
     reasignarAdminEmpresa: vi.fn(),
     quitarAdminEmpresa: vi.fn(),
+    entrarComoVistaPlataforma: vi.fn(),
   },
   empresasMock: {
     listarEmpresasAdmin: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock("../../services/empresasAdminService.js", () => empresasMock);
 vi.mock("../../lib/prisma.js", () => ({ prisma: {} }));
 vi.mock("../../lib/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { admin: {} } } }));
 
-import { crear, quitarAdmin, reasignarAdmin } from "../empresasAdminController.js";
+import { crear, entrar, quitarAdmin, reasignarAdmin } from "../empresasAdminController.js";
 import type { UsuarioAutenticado } from "../../middleware/auth.js";
 
 /** El admin_plataforma que ejecuta: es el que tiene que quedar firmado. */
@@ -54,7 +55,14 @@ const EMPRESA = 7;
  * por `conPermiso("plataforma.empresas")`, o sea `[requiereAuth,
  * requierePermiso]`, así que cuando el controlador corre ya está adjunto. */
 function sesion(): UsuarioAutenticado {
-  return { id: UID_ACTOR, nombre: "Plataforma", rol: "admin_plataforma", empresaId: null, empleadoId: null };
+  return {
+    id: UID_ACTOR,
+    nombre: "Plataforma",
+    rol: "admin_plataforma",
+    rolCuenta: "admin_plataforma",
+    empresaId: null,
+    empleadoId: null,
+  };
 }
 
 function pedir(body: unknown, params: Record<string, string> = {}) {
@@ -144,5 +152,44 @@ describe("quitarAdmin", () => {
 
     expect(visto.estado).toBe(422);
     expect(visto.cuerpo).toEqual({ error: "Ese usuario no es el admin_empresa de esta empresa" });
+  });
+});
+
+describe("POST /admin/empresas/:id/entrar — el «ver como» solo lectura", () => {
+  it("ok responde la empresa y firma con el actor de la sesión", async () => {
+    authMock.entrarComoVistaPlataforma.mockResolvedValue({ estado: "ok", empresaId: EMPRESA });
+    const { req, res, visto } = pedir(undefined, { id: String(EMPRESA) });
+
+    await entrar(req, res);
+
+    expect(visto.estado).toBeUndefined(); // 200 implícito
+    expect(visto.cuerpo).toEqual({ empresaId: EMPRESA });
+    expect(authMock.entrarComoVistaPlataforma).toHaveBeenCalledWith(UID_ACTOR, EMPRESA);
+  });
+
+  it("una membresía real de la cuenta es 409 y nombra el rol que ya tiene", async () => {
+    authMock.entrarComoVistaPlataforma.mockResolvedValue({ estado: "membresia_real", rol: "admin_empresa" });
+    const { req, res, visto } = pedir(undefined, { id: String(EMPRESA) });
+
+    await entrar(req, res);
+
+    expect(visto.estado).toBe(409);
+    expect(visto.cuerpo).toEqual({
+      error: "Tu cuenta ya es admin_empresa de esta empresa — esa pertenencia es real, no una vista.",
+    });
+  });
+
+  it("suspendida e inexistente responden 422 con mensajes distintos", async () => {
+    authMock.entrarComoVistaPlataforma.mockResolvedValue({ estado: "suspendida" });
+    const suspendida = pedir(undefined, { id: String(EMPRESA) });
+    await entrar(suspendida.req, suspendida.res);
+    expect(suspendida.visto.estado).toBe(422);
+    expect(suspendida.visto.cuerpo).toEqual({ error: "La empresa está suspendida; reactívala antes de entrar." });
+
+    authMock.entrarComoVistaPlataforma.mockResolvedValue({ estado: "no_encontrada" });
+    const inexistente = pedir(undefined, { id: "999" });
+    await entrar(inexistente.req, inexistente.res);
+    expect(inexistente.visto.estado).toBe(422);
+    expect(inexistente.visto.cuerpo).toEqual({ error: "Empresa no encontrada" });
   });
 });

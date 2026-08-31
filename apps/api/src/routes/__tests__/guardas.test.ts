@@ -26,6 +26,7 @@ vi.mock("../../lib/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: {} } }));
 
 import router from "../index.js";
 import { esGuarda, requiereAuth, requierePermiso, requiereRol, type Guarda } from "../../middleware/auth.js";
+import { puede, type Permiso } from "../../lib/permisos.js";
 
 // Las rutas que exigen sesión + rol. Todo lo que cuelga de estos tres prefijos
 // es privado por definición: el panel de la empresa, el portal del colaborador
@@ -137,6 +138,50 @@ describe("el router privado", () => {
     expect(mapa.get("post /empresa/periodos/:id/batch-pago")).toBe("nomina.pagar");
     expect(mapa.get("post /empresa/periodos/:id/revertir")).toBe("nomina.revertir");
     expect(mapa.get("delete /empresa/empleados/:id")).toBe("empleados.eliminar");
+    // El «entrar» del ver-como es acción de plataforma; el «salir» vive en
+    // /auth a propósito (adentro el rol efectivo es auditor y /admin da 403).
+    expect(mapa.get("post /admin/empresas/:id/entrar")).toBe("plataforma.empresas");
+  });
+
+  // La suite negativa del «ver como» (tarea 2026-08-31): no basta con que la
+  // MATRIZ le niegue la escritura al auditor (permisos.test.ts ya lo afirma) —
+  // acá se recorre cada ruta /empresa MONTADA y se exige que toda la que pide
+  // un permiso de escritura se lo niegue al rol auditor. Si mañana una ruta
+  // de escritura se cuelga con un permiso .ver por error, esta enumeración la
+  // nombra; la de la matriz sola no la vería.
+  it("toda ruta /empresa de escritura montada le queda vedada al rol auditor", () => {
+    const deEscritura = rutasDe(router)
+      .filter((r) => r.ruta.startsWith("/empresa/"))
+      .map((r) => {
+        const guarda = r.handlers.find(esGuarda) as Guarda;
+        return { ruta: `${r.metodo} ${r.ruta}`, permiso: "permiso" in guarda.exige ? guarda.exige.permiso : null };
+      })
+      .filter((r): r is { ruta: string; permiso: Permiso } => r.permiso !== null && !r.permiso.endsWith(".ver"));
+
+    // Guarda de la guarda: si el filtro quedara vacío, el for de abajo pasaría
+    // en verde sin haber mirado nada.
+    expect(deEscritura.length).toBeGreaterThanOrEqual(10);
+    for (const { ruta, permiso } of deEscritura) {
+      expect(puede("auditor", permiso), `${ruta} (${permiso})`).toBe(false);
+    }
+  });
+
+  // La señal INDEPENDIENTE que la enumeración de arriba no tiene: aquella
+  // deriva "escritura" del NOMBRE del permiso, que es justo lo que un
+  // copy-paste corrompe — POST /empresa/sedes colgado de "sedes.ver" quedaba
+  // FILTRADO (no nombrado) y el auditor habilitado para crear sedes, con la
+  // suite en verde (verificado por mutación). El método HTTP no depende del
+  // nombre: ninguna ruta /empresa que muta puede llevar un permiso .ver.
+  it("ninguna ruta /empresa con método de escritura lleva un permiso .ver", () => {
+    const sospechosas = rutasDe(router)
+      .filter((r) => r.ruta.startsWith("/empresa/") && ["post", "put", "patch", "delete"].includes(r.metodo))
+      .map((r) => {
+        const guarda = r.handlers.find(esGuarda) as Guarda;
+        return { ruta: `${r.metodo} ${r.ruta}`, permiso: "permiso" in guarda.exige ? guarda.exige.permiso : null };
+      })
+      .filter((r) => r.permiso !== null && r.permiso.endsWith(".ver"));
+
+    expect(sospechosas).toEqual([]);
   });
 });
 
@@ -193,6 +238,18 @@ describe("las excepciones, dichas y no supuestas", () => {
     // MembresiaEmpresa. Un `requierePermiso` acá miraría el rol en la empresa
     // de la que el usuario se está yendo — la pregunta equivocada.
     const ruta = buscar("post", "/auth/empresa-activa");
+    expect(ruta).toBeDefined();
+    expect(ruta!.handlers).toContain(requiereAuth);
+    expect(ruta!.handlers.some(esGuarda)).toBe(false);
+  });
+
+  it("/auth/vista-plataforma/salir pide sesión y NINGÚN permiso — un permiso acá ENCIERRA al admin", () => {
+    // La excepción más frágil de todas: con la vista puesta el rol efectivo
+    // es auditor, así que un requierePermiso("plataforma.*") le daría 403
+    // exactamente a quien necesita salir. La cuenta se verifica en el
+    // servicio (rol de CUENTA en la base). Verificado por mutación: con la
+    // guarda montada, las 978 pruebas quedaban en verde y el admin preso.
+    const ruta = buscar("post", "/auth/vista-plataforma/salir");
     expect(ruta).toBeDefined();
     expect(ruta!.handlers).toContain(requiereAuth);
     expect(ruta!.handlers.some(esGuarda)).toBe(false);

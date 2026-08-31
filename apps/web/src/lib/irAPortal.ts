@@ -3,6 +3,10 @@ import { obtenerMiRol } from "../api.ts";
 const RUTA_POR_ROL: Record<string, string> = {
   admin_plataforma: "/admin",
   admin_empresa: "/empresa",
+  // El auditor entra al panel de empresa en solo lectura: la matriz de
+  // permisos del server no le concede ni una celda de escritura. Es también
+  // el portal del «ver como» del admin_plataforma (membresía auditor).
+  auditor: "/empresa",
   colaborador: "/colaborador",
   // "individual" no tiene portal propio (es quien guardó liquidaciones desde
   // el verificador anónimo) — su lugar es el wizard, donde ya puede ver

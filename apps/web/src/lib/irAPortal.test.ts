@@ -36,6 +36,11 @@ describe("irAPortalSegunRol", () => {
   it.each([
     ["admin_plataforma", "/admin"],
     ["admin_empresa", "/empresa"],
+    // El auditor entra al panel de empresa en SOLO LECTURA (la matriz del
+    // server no le concede escritura); es también el portal del «ver como».
+    // Sin esta fila, borrar la entrada del mapa mandaba al auditor a "/" con
+    // la suite en verde.
+    ["auditor", "/empresa"],
     ["colaborador", "/colaborador"],
     // "individual" es quien guardó liquidaciones desde el verificador anónimo:
     // no tiene portal propio, su lugar es el wizard.

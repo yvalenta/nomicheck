@@ -243,6 +243,47 @@ describe("requiereAuth — el puntero de empresa se valida contra la membresía"
     expect(r.req.usuario?.empresaId).toBeNull();
     expect(lineas.map((l) => l.nivel)).toContain("warn");
   });
+
+  // El «ver como» (tarea 2026-08-31): con la vista puesta, el rol EFECTIVO
+  // del request es el de la membresía auditor; `rolCuenta` viaja aparte para
+  // que whoami pueda distinguir la vista de un auditor real.
+  it("con la vista puesta el rol efectivo es auditor y rolCuenta conserva admin_plataforma", async () => {
+    prismaMock.usuario.findUnique.mockResolvedValue(perfil({ rol: "admin_plataforma" }));
+    prismaMock.membresiaEmpresa.findMany.mockResolvedValue([membresia({ rol: "auditor" })]);
+
+    const r = await entrar();
+
+    expect(r.siguio).toBe(true);
+    expect(r.req.usuario?.rol).toBe("auditor");
+    expect(r.req.usuario?.rolCuenta).toBe("admin_plataforma");
+    expect(r.req.usuario?.empresaId).toBe(EMPRESA_A);
+  });
+
+  it("si suspenden la empresa con la vista puesta, el admin_plataforma NO queda preso: vuelve a plataforma", async () => {
+    // Para cualquier otro rol la suspensión es un 403 real (kill-switch del
+    // producto). Para la cuenta de plataforma sería un encierro: ni /admin ni
+    // el propio salir responden con el rol efectivo auditor. Se ignora el
+    // puntero —como en la rama del puntero huérfano— y queda dicho en el log.
+    prismaMock.usuario.findUnique.mockResolvedValue(perfil({ rol: "admin_plataforma" }));
+    prismaMock.membresiaEmpresa.findMany.mockResolvedValue([membresia({ rol: "auditor", activa: false })]);
+
+    const r = await entrar();
+
+    expect(r.siguio).toBe(true);
+    expect(r.req.usuario?.rol).toBe("admin_plataforma");
+    expect(r.req.usuario?.empresaId).toBeNull();
+    expect(lineas.map((l) => l.nivel)).toContain("warn");
+  });
+
+  it("el rescate de la suspendida es SOLO para la cuenta de plataforma: un auditor real sigue en 403", async () => {
+    prismaMock.usuario.findUnique.mockResolvedValue(perfil({ rol: "colaborador" }));
+    prismaMock.membresiaEmpresa.findMany.mockResolvedValue([membresia({ rol: "auditor", activa: false })]);
+
+    const r = await entrar();
+
+    expect(r.estado).toBe(403);
+    expect(r.req.usuario).toBeUndefined();
+  });
 });
 
 describe("requiereAuth — la tabla de membresías todavía no existe", () => {

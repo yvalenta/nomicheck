@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Building2, CalendarPlus, Pause, Play, Plus, Trash2, UserCog } from "lucide-react";
+import { Building2, CalendarPlus, Eye, Pause, Play, Plus, Trash2, UserCog } from "lucide-react";
 import {
   cambiarEstadoEmpresa,
   crearEmpresa,
+  entrarEmpresa,
   crearFestivo,
   crearVigencia,
   eliminarFestivo,
@@ -129,6 +130,20 @@ function FilaEmpresa({
     }
   }
 
+  // «Ver como» solo lectura: el server valida y recién entonces se recarga en
+  // /empresa (mismo esquema que el selector: el cliente jamás asume el cambio).
+  // Sin confirm: entrar es reversible con el Salir de la barra.
+  async function entrar() {
+    setProcesando(true);
+    try {
+      await entrarEmpresa(e.id);
+      window.location.assign("/empresa");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "No se pudo entrar a la empresa");
+      setProcesando(false);
+    }
+  }
+
   async function toggleEstado() {
     const accion = e.activa ? "suspender" : "reactivar";
     if (!confirm(`¿${e.activa ? "Suspender" : "Reactivar"} ${e.nombre}?${e.activa ? " Su admin_empresa y colaboradores no podrán entrar." : ""}`))
@@ -184,6 +199,14 @@ function FilaEmpresa({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={entrar}
+            disabled={procesando || !e.activa}
+            title={e.activa ? "Entrar (solo lectura)" : "Suspendida: reactívala para entrar"}
+            className="w-8 h-8 rounded-lg border border-slate-200 text-muted hover:text-mint-dark hover:border-mint flex items-center justify-center disabled:opacity-40"
+          >
+            <Eye size={15} />
+          </button>
           <button
             onClick={onToggleReasignar}
             title="Reasignar admin"

@@ -20,6 +20,14 @@ export interface UsuarioAutenticado {
    */
   rol: string;
   /**
+   * Rol de CUENTA (`Usuario.rol`), sin pisar por la membresía. Existe por el
+   * «ver como» del admin_plataforma: parado en una empresa vía membresía
+   * auditor, su rol efectivo es "auditor" y este campo es lo único que
+   * permite saber (whoami → barra de la web) que la vista es de plataforma
+   * y no de un auditor real. Mismo criterio de `rol`: `string`, no `Rol`.
+   */
+  rolCuenta: string;
+  /**
    * Empresa activa YA validada contra la membresía. Si el puntero de
    * `Usuario.empresaId` no tenía membresía que lo respaldara, este request
    * nunca llegó a tener `req.usuario`: se fue en 403.
@@ -312,17 +320,32 @@ export async function requiereAuth(req: Request, res: Response, next: NextFuncti
   }
 
   // Suspender una empresa (admin_plataforma) bloquea de verdad el acceso de
-  // su admin_empresa y colaboradores — admin_plataforma nunca tiene
-  // empresaId, así que jamás se bloquea a sí mismo (SDD.md §03 Módulo D).
+  // su admin_empresa y colaboradores (SDD.md §03 Módulo D). La única
+  // excepción es la cuenta admin_plataforma misma: con el «ver como» SÍ
+  // puede tener puntero (membresía auditor), y si la empresa que está
+  // mirando se suspende —otro admin de plataforma, por ejemplo— un 403 acá
+  // la encerraría afuera de TODO (ni /admin ni el propio «salir» responden).
+  // Se le ignora el puntero, como en la rama de la fila vieja: vuelve a ser
+  // plataforma y puede reactivar o salir de la vista.
   if (empresaSuspendida) {
-    res.status(403).json({ error: EMPRESA_SUSPENDIDA });
-    return;
+    if (perfil.rol === "admin_plataforma") {
+      registro.warn("auth", "admin_plataforma con vista sobre empresa suspendida: se ignora el puntero", {
+        usuarioId,
+        empresaId,
+      });
+      rol = perfil.rol;
+      empresaId = null;
+    } else {
+      res.status(403).json({ error: EMPRESA_SUSPENDIDA });
+      return;
+    }
   }
 
   req.usuario = {
     id: perfil.id,
     nombre: perfil.nombre,
     rol,
+    rolCuenta: perfil.rol,
     empresaId,
     empleadoId: empleadoActivo?.id ?? null,
   };
