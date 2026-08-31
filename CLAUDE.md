@@ -1,7 +1,7 @@
 # Convenciones para agentes en este repo
 
 <!-- BEGIN LINEA ROJA · generado por sigilo/scripts/propagar_linea_roja.rb — no editar a mano -->
-> **Línea roja de la casa** — `~/Developer/sigilo/LINEA_ROJA.md` (sha `580653df4296`).
+> **Línea roja de la casa** — `~/Developer/sigilo/LINEA_ROJA.md` (sha `cca5e08ed9f1`).
 > La regla madre, en una línea: si no se deshace en un minuto, espera. En la duda, aparca.
 >
 > Dos listas: lo que un agente hace **solo** (reversible en <1 min o solo lectura) y lo
