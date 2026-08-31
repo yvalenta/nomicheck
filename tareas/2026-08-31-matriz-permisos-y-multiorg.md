@@ -1,5 +1,5 @@
 ---
-estado: en-curso
+estado: hecha
 dueño: ambos
 fecha: 2026-08-31
 tema: matriz de permisos como código y admin multi-empresa sin re-login
@@ -41,3 +41,4 @@ non-null assertions de `empresaId` en controllers.
   **La revisión adversarial fue la que pagó la noche**: encontró que la membresía se LEÍA y nunca se ESCRIBÍA — revocar no revocaba (la persona volvía con un POST) y ninguna alta creaba membresía (el registro habría nacido en 403 al aplicar la migración). 7 hallazgos (2 críticos, 3 altos, 2 medios); re-revisados uno por uno: los 7 cerrados. Las escrituras quedaron en un solo embudo (`lib/membresias.ts`) y la auditoría siguió a la tabla que decide — con el hallazgo de que la función genérica habría **abortado toda alta** por PK compuesta sin columna `id`, así que va una función hermana.
   **NO SE CIERRA la tarea**: su criterio dice "MembresiaEmpresa *migrada* con backfill" y las 3 migraciones están escritas pero **no aplicadas a ninguna BD** — aplicarlas es de Yonatan (lista 2). Orden: `20260830120000_membresia_empresa` → `20260830140000_auditoria_usuario` → `20260830160000_auditoria_membresia`. Hasta entonces el middleware degrada al comportamiento viejo con ventana de 15 min y ruido, no en silencio.
   Riesgos que quedan declarados, no cerrados: el consentimiento de `asignarStaff` (absorber por correo sin aceptación) y `Liquidacion`/`ReporteDiscrepancia` fuera del embudo de `alcance.ts`.
+- 2026-08-31: **HECHA — criterio medido completo.** Yonatan aplicó las 3 migraciones con `prisma migrate deploy` (GO directo, en vivo); verificación de solo lectura contra producción: backfill exacto **5/5 membresías**, triggers `auditoria_Usuario` + `auditoria_MembresiaEmpresa` instalados, RLS activo en la tabla nueva, `migrate status` → "Database schema is up to date". Push a `main` hecho con su GO (`7ac7f6b`). Lo único que falta para que el producto SIRVA el comportamiento nuevo es desplegar la API — declarado como tarea propia en nomicheck_ops (los despliegues se gobiernan allá); hasta entonces producción corre el código viejo, que convive sano con el esquema nuevo (medido: la función de auditoría tolera el autor ausente).
