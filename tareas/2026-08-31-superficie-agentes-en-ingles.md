@@ -1,5 +1,5 @@
 ---
-estado: propuesta
+estado: bloqueada
 dueño: sesión
 fecha: 2026-08-31
 tema: la superficie para agentes del producto pasa a inglés, optimizada para descubrirse y ejecutarse
@@ -30,3 +30,27 @@ final es con GO de Yonatan, como siempre.
 
 ## Bitácora
 - 2026-08-31: declarada desde la sesión de nomicheck_ops al partir el pedido en dos repos.
+- 2026-08-31: Yonatan dio el GO («dale con la mitad del producto»); la sesión del apex se mudó acá y arranca.
+- 2026-08-31: traducida TODA la superficie de agentes del producto — llms.txt,
+  agents.md, quickstart/pricing/manifiesto (claves incluidas: schemas v1→v2,
+  sin integradores que romper — medido: cero órdenes), auth.md, las
+  descripciones del OpenAPI (tag `catálogo`→`catalog`; claves `x-x402`
+  intactas), el card A2A del origen, el server card, el 404, los markdown
+  negociados de /, /servicios y /lanzamiento, robots.txt, las tools WebMCP del
+  SPA (renombradas a inglés, declarado en cabecera) y los textos de las cinco
+  tools MCP (nombres intactos: clientes reales ya los ejercitaron). Las tres
+  páginas de confianza quedaron BILINGÜES a propósito: HTML humano en español,
+  markdown de agente en inglés, con guarda de paridad de hechos (URLs,
+  correos, leyes) — 4 pruebas nuevas. De yapa, dos mentiras heredadas
+  corregidas: el porqué de /pago-onchain en pricing describía OTRA ruta
+  (probado contra el OpenAPI) y `limits.docs` apuntaba al schema de /liquidar
+  como si fuera el general. Evidencia: 1673 pruebas verdes (35 mcp + 478
+  reglas + 204 web + 956 api), tsc limpio en los 4 workspaces, 7 mutaciones
+  plantadas / 7 cazadas, revisión adversarial de 3 lentes (28 hallazgos; 4
+  must-fix y 15 de calidad aplicados; el vendored sobre.mjs se deja en
+  español a propósito — es copia literal del verificador de referencia).
+- 2026-08-31: BLOQUEADA — la desbloquea el deploy de Yonatan
+  (`ssh ynt@18.191.129.33 'cd ~/docker-lab/apps/nomicheck && ./deploy.sh'`
+  con la imagen del CI de este commit). Tras el deploy: medir servido
+  (llms.txt, quickstart v2, /pricing en, agents.md, robots, MCP) y pasar a
+  `hecha`.

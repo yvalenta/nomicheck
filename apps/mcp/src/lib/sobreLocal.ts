@@ -37,14 +37,14 @@ export interface ResultadoSobre {
 
 const EXPLICACIONES: Record<Veredicto, string> = {
   verificable:
-    "La firma Ed25519 verifica contra la llave, el publicKeyId declarado corresponde a esa " +
-    "llave, y el sobre trae su procedencia completa (reglasHash, reglasVerificadasAl, habeasData).",
+    "The Ed25519 signature verifies against the key, the declared publicKeyId corresponds to " +
+    "that key, and the envelope carries its full provenance (reglasHash, reglasVerificadasAl, habeasData).",
   firmado_sin_procedencia:
-    "La firma verifica, pero al sobre le falta procedencia: se sabe QUIÉN lo firmó, no contra " +
-    "QUÉ catálogo se comprueba. Es una opinión firmada, no un resultado verificable.",
+    "The signature verifies, but the envelope lacks provenance: you know WHO signed it, not " +
+    "against WHICH catalog it is checked. It is a signed opinion, not a verifiable result.",
   invalido:
-    "Falló un check crítico: la firma no verifica contra esta llave, o el publicKeyId declarado " +
-    "no corresponde a ella. No hay que confiar en ningún campo del documento.",
+    "A critical check failed: the signature does not verify against this key, or the declared " +
+    "publicKeyId does not correspond to it. Do not trust any field of the document.",
 };
 
 export async function verificarSobre(
@@ -52,7 +52,7 @@ export async function verificarSobre(
   llavePublicaPem?: string,
 ): Promise<ResultadoSobre> {
   let pem = llavePublicaPem;
-  let fuenteLlave = "llave provista por el caller (pinneada — el caso fuerte)";
+  let fuenteLlave = "key provided by the caller (pinned — the strong case)";
 
   if (pem === undefined) {
     // Bajar la llave del MISMO origen que emitió el sobre es el caso débil:
@@ -64,12 +64,12 @@ export async function verificarSobre(
     const respuesta = await pedirJson(url);
     const publicada = campo(respuesta, "publicKeyPem");
     if (typeof publicada !== "string" || publicada.length === 0) {
-      throw new Error(`${url} no trajo \`publicKeyPem\`; no hay contra qué verificar.`);
+      throw new Error(`${url} did not carry \`publicKeyPem\`; there is nothing to verify against.`);
     }
     pem = publicada;
     fuenteLlave =
-      `${url} (bajada ahora — mismo origen que el sobre, así que esto prueba consistencia, ` +
-      "no identidad; pinneá la llave para el caso fuerte)";
+      `${url} (fetched just now — same origin as the envelope, so this proves consistency, ` +
+      "not identity; pin the key for the strong case)";
   }
 
   const checks = analizar(documento, pem) as CheckSobre[];

@@ -19,6 +19,16 @@
 // muro para cobrar— y la llave y el catálogo salen de quien los sirve. Si el
 // muro cobra otra cosa, este documento cambia solo. Es la ley de la casa
 // aplicada a la vitrina: una sola fuente por cifra.
+//
+// ── En INGLÉS, claves incluidas (2026-08-31, pedido de Yonatan) ────────────
+//
+// La audiencia medida son máquinas que operan en inglés. Las claves también
+// son interfaz para ese lector, así que el schema pasó de
+// `nomicheck-quickstart/v1` (claves en español) a `/v2` (inglés). El v1 nunca
+// tuvo compradores integrados —medido: cero órdenes—, por eso el cambio es
+// ahora y no después. Dos precisiones DELIBERADAS sobre el original: el
+// "in COP" del pre-chequeo (cierto: el delta suma pesos) y `limits.docs`
+// apuntando al OpenAPI (el /schema/v1.json pelado es solo el de /liquidar).
 import { origenPublico } from "../lib/pagosConfig.js";
 import { PRECIOS_USD } from "../lib/x402Config.js";
 import { obtenerPublicKeyId } from "./batchSignatureService.js";
@@ -31,107 +41,108 @@ export function construirQuickstart() {
   const precioVerificar = PRECIOS_USD["/verificar"];
 
   return {
-    schemaVersion: "nomicheck-quickstart/v1",
+    schemaVersion: "nomicheck-quickstart/v2",
     canonical: `${base}/api/batch/quickstart`,
 
-    queEs:
-      "Verificación determinística de comprobantes de pago (nómina) de Colombia. " +
-      "Recalcula las líneas de origen legal —salario, auxilio de transporte, salud, " +
-      "pensión y fondo de solidaridad— de forma independiente al comprobante, y las " +
-      "compara con lo declarado. Cero IA en el cálculo: mismo input, mismo output.",
+    whatIs:
+      "Deterministic verification of Colombian payslips (nómina). It independently " +
+      "recomputes the statutory lines — base salary, transport allowance, health, " +
+      "pension and solidarity fund — and compares them against what the payslip " +
+      "declares. Zero AI in the calculation: same input, same output.",
 
     // Lo primero que ve el lector es lo GRATIS, a propósito: si su comprobante
     // está limpio se entera sin pagar y no vuelve. Esa es la promesa publicada.
-    empezarGratis: {
+    startFree: {
       url: `${base}/api/batch/verificar/prechequeo`,
-      metodo: "POST",
-      precioUsd: 0,
-      requiereRegistro: false,
-      devuelve:
-        "Cuántos comprobantes traen discrepancias y cuánto pesan en neto. " +
-        "Nunca qué línea ni qué norma: eso es el informe pagado.",
-      mismoMotor:
-        "Corre el mismo cálculo que el informe. Si el pre-chequeo dice N, el informe encuentra N.",
-      porQueEsGratis:
-        "Cobrar según lo que se encuentra es el incentivo que un verificador no puede " +
-        "tener. Si tu comprobante está limpio, te enterás gratis y no pagás nunca.",
+      method: "POST",
+      priceUsd: 0,
+      signupRequired: false,
+      returns:
+        "How many payslips carry discrepancies and their net effect in COP. " +
+        "Never which line or which norm: that is the paid report.",
+      sameEngine:
+        "Runs the same calculation as the report. If the pre-check says N, the report finds N.",
+      whyFree:
+        "Charging based on what we find is the incentive a verifier must not have. " +
+        "If your payslip is clean, you find out for free and never pay.",
     },
 
-    informePagado: {
+    paidReport: {
       url: `${base}/api/batch/verificar`,
-      metodo: "POST",
-      precioUsd: precioVerificar,
-      precioFijo: true,
-      pago: {
-        protocolo: "x402",
-        comoFunciona:
-          "El endpoint responde 402 con el reto; el cliente firma una autorización " +
-          "EIP-3009 y reintenta con el header X-PAYMENT. Sin cuenta, sin API key.",
-        redes: ["base", "avalanche"],
-        moneda: "USDC",
+      method: "POST",
+      priceUsd: precioVerificar,
+      flatPrice: true,
+      payment: {
+        protocol: "x402",
+        howItWorks:
+          "The endpoint answers 402 with the exact requirements; the client signs an " +
+          "EIP-3009 authorization and retries with the X-PAYMENT header. No account, no API key.",
+        networks: ["base", "avalanche"],
+        currency: "USDC",
       },
-      devuelve:
-        "Veredicto por línea (correcto | pagado_de_mas | pagado_de_menos | " +
-        "faltante_en_comprobante | no_verificable_extralegal), el valor que manda la " +
-        "ley, la norma que lo rige, y el efecto neto estimado. Todo dentro de un " +
-        "sobre firmado Ed25519.",
+      returns:
+        "A verdict per line (correcto | pagado_de_mas | pagado_de_menos | " +
+        "faltante_en_comprobante | no_verificable_extralegal), the value the law " +
+        "mandates, the norm that governs it, and the estimated net effect. All inside " +
+        "an Ed25519-signed envelope.",
     },
 
     // La diferencia con cualquier otro verificador, y por eso va con su receta.
-    verificarLaSalida: {
-      queEs:
-        "La salida es un sobre firmado: se comprueba SIN hablar con este servidor y " +
-        "sin confiar en quien lo emitió. La firma cubre el documento entero.",
-      llavePublica: `${base}/api/batch/publickey`,
+    verifyTheOutput: {
+      whatIs:
+        "The output is a signed envelope: it can be checked WITHOUT talking to this " +
+        "server and without trusting the issuer. The signature covers the whole document.",
+      publicKey: `${base}/api/batch/publickey`,
       publicKeyId: obtenerPublicKeyId(),
-      unClic: `https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo`,
-      formato: "https://github.com/yvalenta/sobre",
+      oneClick: `https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo`,
+      format: "https://github.com/yvalenta/sobre",
       offline:
-        "Cuatro implementaciones independientes (Ruby, Node, navegador y una escrita " +
-        "por un tercero desde la especificación) producen los mismos bytes.",
+        "Four independent implementations (Ruby, Node, browser, and one written by a " +
+        "third party from the specification alone) produce the same bytes.",
     },
 
-    probarAntesDePagar: {
-      ejemplo: `${base}/api/batch/verificar/ejemplo`,
-      queTrae: "Un input real y su output exacto. Postealo y contrastá.",
-      esquema: `${base}/api/batch/verificar/schema/v1.json`,
+    tryBeforePaying: {
+      example: `${base}/api/batch/verificar/ejemplo`,
+      whatItCarries: "A real input and its exact output. POST it and compare.",
+      schema: `${base}/api/batch/verificar/schema/v1.json`,
       openapi: `${base}/api/batch/openapi.json`,
-      salud: `${base}/api/batch/health`,
-      parametros: `${base}/api/batch/parametros`,
+      health: `${base}/api/batch/health`,
+      legalParameters: `${base}/api/batch/parametros`,
     },
 
-    procedencia: {
-      reglasVerificadasAl: REGLAS_VERIFICADAS_AL,
-      queSignifica:
-        "La fecha en que un humano cotejó el catálogo legal contra la norma publicada. " +
-        "Cada salida trae además `reglasHash`: dos informes con el mismo hash se " +
-        "calcularon contra el mismo catálogo, y son comparables entre sí.",
+    provenance: {
+      rulesVerifiedAt: REGLAS_VERIFICADAS_AL,
+      whatItMeans:
+        "The date a human checked the legal catalog against the published norms. " +
+        "Every output also carries `reglasHash`: two reports with the same hash were " +
+        "computed against the same catalog and are comparable with each other.",
     },
 
     // Prestado del mismo paquete ajeno, y es la parte más honesta que tienen:
     // decir qué NO hace evita el peor estado de un verificador, que es el que
     // se lee como más de lo que es (§6.1 de la spec del sobre).
-    queNoHace: [
-      "No es dictamen contable ni asesoría legal (Ley 43/1990).",
-      "No verifica bonos, comisiones ni otros conceptos extralegales: sin base legal " +
-        "para derivarlos, salen marcados `no_verificable_extralegal`.",
-      "Un veredicto `correcto` dice que la línea es derivable del catálogo declarado, " +
-        "no que ese catálogo sea el vigente hoy. Para eso está `reglasVerificadasAl`.",
-      "No persiste los datos del batch (Ley 1581/2012, habeas data). No hay historial " +
-        "que consultar después.",
-      "No calcula la nómina: verifica una que ya existe.",
+    whatItDoesNot: [
+      "It is not an accounting opinion or legal advice (Colombian Law 43/1990).",
+      "It does not verify bonuses, commissions or other extralegal concepts: with no " +
+        "legal basis to derive them, they come back marked `no_verificable_extralegal`.",
+      "A `correcto` verdict says the line is derivable from the declared catalog, " +
+        "not that that catalog is the one in force today. That is what `reglasVerificadasAl` " +
+        "is for (served here as `provenance.rulesVerifiedAt`).",
+      "It does not persist batch data (Colombian Law 1581/2012, habeas data). There is " +
+        "no history to query afterwards.",
+      "It does not compute your payroll: it verifies one that already exists.",
     ],
 
-    manifiesto: {
+    manifest: {
       url: `${base}/api/batch/manifiesto`,
-      queTrae:
-        "En qué creemos, qué NO afirmamos, y las debilidades que conocemos — " +
-        "con fecha. Incluida la más incómoda: todavía nadie nos compró.",
+      whatItCarries:
+        "What we believe, what we do NOT claim, and the weaknesses we know about — " +
+        "dated. Including the most uncomfortable one: nobody has bought from us yet.",
     },
 
-    limites: {
-      docs: `${base}/api/batch/schema/v1.json`,
-      nota: "Los topes por lote se publican como `maxItems` en el esquema servido.",
+    limits: {
+      docs: `${base}/api/batch/openapi.json`,
+      note: "Each route's schema publishes its per-batch caps as `maxItems`.",
     },
   };
 }

@@ -4,8 +4,10 @@ import { PRECIOS_USD, RUTAS_CON_MURO } from "../../lib/x402Config.js";
 import {
   construirAboutHtml,
   construirAboutMd,
+  construirAboutMdEs,
   construirContactHtml,
   construirContactMd,
+  construirContactMdEs,
   construirHomeMd,
   construirLanzamientoMd,
   construirNoEncontradoHtml,
@@ -14,6 +16,7 @@ import {
   construirPricingMd,
   construirPrivacyHtml,
   construirPrivacyMd,
+  construirPrivacyMdEs,
   construirServiciosMd,
   construirSitemapXml,
   mdACuerpoHtml,
@@ -27,14 +30,16 @@ import {
 const MINIMO_CONFIANZA = 500;
 
 describe("las páginas de confianza", () => {
-  const casos: Array<[string, () => string, () => string]> = [
-    ["about", construirAboutMd, construirAboutHtml],
-    ["contact", construirContactMd, construirContactHtml],
-    ["privacy", construirPrivacyMd, construirPrivacyHtml],
-    ["pricing", construirPricingMd, construirPricingHtml],
+  // El idioma se asevera por página: las tres de confianza son humanas (es)
+  // y /pricing existe para el lector sin JavaScript, que es un agente (en).
+  const casos: Array<[string, () => string, () => string, "es" | "en"]> = [
+    ["about", construirAboutMd, construirAboutHtml, "es"],
+    ["contact", construirContactMd, construirContactHtml, "es"],
+    ["privacy", construirPrivacyMd, construirPrivacyHtml, "es"],
+    ["pricing", construirPricingMd, construirPricingHtml, "en"],
   ];
 
-  for (const [nombre, md, html] of casos) {
+  for (const [nombre, md, html, lang] of casos) {
     it(`/${nombre} en markdown trae contenido de verdad (≥${MINIMO_CONFIANZA} caracteres)`, () => {
       expect(md().length).toBeGreaterThanOrEqual(MINIMO_CONFIANZA);
       expect(md()).toMatch(/^# /);
@@ -43,7 +48,7 @@ describe("las páginas de confianza", () => {
     it(`/${nombre} en HTML es una página completa con canonical e idioma`, () => {
       const pagina = html();
       expect(pagina).toContain("<!doctype html>");
-      expect(pagina).toContain('lang="es"');
+      expect(pagina).toContain(`lang="${lang}"`);
       expect(pagina).toContain(`href="https://nomicheck.ynt.codes/${nombre}"`);
       expect(pagina).toContain("<h1>");
       // El markdown se convirtió: no puede quedar sintaxis cruda visible.
@@ -74,7 +79,7 @@ describe("la portada en markdown", () => {
   it("tiene H1, dice cuándo usarla y enlaza el resto de la superficie", () => {
     const home = construirHomeMd();
     expect(home).toMatch(/^# NomiCheck/);
-    expect(home).toContain("## Cuándo usar NomiCheck");
+    expect(home).toContain("## When to use NomiCheck");
     for (const enlace of ["/docs/", "/llms.txt", "/agents.md", "/api/batch/quickstart", "/sitemap.xml"]) {
       expect(home).toContain(enlace);
     }
@@ -82,7 +87,7 @@ describe("la portada en markdown", () => {
   });
 
   it("también dice qué NO hace — leerse como más de lo que se es, no", () => {
-    expect(construirHomeMd()).toContain("No sirve para");
+    expect(construirHomeMd()).toContain("Not for:");
   });
 });
 
@@ -99,15 +104,15 @@ describe("la página de precios", () => {
     const md = construirPricingMd();
     expect(md).toContain("/api/batch/verificar/prechequeo");
     expect(md).toContain("/api/batch/pricing");
-    expect(md).toContain("gratis");
+    expect(md).toContain("**free**");
   });
 
   it("ningún precio vive en esta página como texto propio: si la constante cambia, la página cambia", () => {
     // La aserción es indirecta pero suficiente: el markdown menciona exactamente
     // tantas rutas pagas como RUTAS_CON_MURO — ni una tabla vieja de más.
     const md = construirPricingMd();
-    const seccionPagado = md.slice(md.indexOf("## Lo pagado"));
-    expect(seccionPagado.match(/por llamada/g)?.length).toBe(RUTAS_CON_MURO.length);
+    const seccionPagado = md.slice(md.indexOf("## What is paid"));
+    expect(seccionPagado.match(/per call/g)?.length).toBe(RUTAS_CON_MURO.length);
   });
 });
 
@@ -173,6 +178,45 @@ describe("el 404", () => {
     const html = construirNoEncontradoHtml('/<script>alert(1)</script>');
     expect(html).not.toContain("<script>alert");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+
+describe("paridad de hechos entre las dos redacciones (en/es)", () => {
+  // Las páginas de confianza tienen DOS redacciones: la inglesa (markdown de
+  // agente) y la española (fuente del HTML humano). Textos en idiomas
+  // distintos no se pueden diffear, así que la guarda compara los HECHOS —
+  // URLs, correos y leyes citadas — igual que la spec bilingüe del sobre
+  // compara cifras contra vectores. Si una redacción gana o pierde un hecho
+  // sin la otra, esto sale rojo.
+  const hechos = (md: string) => ({
+    urls: new Set(md.match(/https?:\/\/[^\s)`>]+/g) ?? []),
+    correos: new Set(md.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) ?? []),
+    leyes: new Set(md.match(/\b\d{2,4}\/\d{4}\b/g) ?? []),
+  });
+
+  const pares: Array<[string, () => string, () => string]> = [
+    ["about", construirAboutMd, construirAboutMdEs],
+    ["contact", construirContactMd, construirContactMdEs],
+    ["privacy", construirPrivacyMd, construirPrivacyMdEs],
+  ];
+
+  for (const [nombre, en, es] of pares) {
+    it(`/${nombre}: la redacción inglesa y la española afirman los mismos hechos`, () => {
+      const hEn = hechos(en());
+      const hEs = hechos(es());
+      expect([...hEn.urls].sort()).toEqual([...hEs.urls].sort());
+      expect([...hEn.correos].sort()).toEqual([...hEs.correos].sort());
+      expect([...hEn.leyes].sort()).toEqual([...hEs.leyes].sort());
+    });
+  }
+
+  it("el HTML humano se construye de la redacción española, no de la inglesa", () => {
+    // Si alguien recablea el HTML a la inglesa, la página humana cambia de
+    // idioma en silencio. El H1 español es el testigo más barato.
+    expect(construirAboutHtml()).toContain("<h1>Sobre NomiCheck</h1>");
+    expect(construirContactHtml()).toContain("<h1>Contacto</h1>");
+    expect(construirPrivacyHtml()).toContain("<h1>Privacidad</h1>");
   });
 });
 

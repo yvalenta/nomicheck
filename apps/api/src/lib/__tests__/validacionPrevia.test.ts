@@ -61,9 +61,9 @@ describe("validar antes de cobrar", () => {
 
 describe("pricing", () => {
   it("los importes salen de PRECIOS_USD, no de una tabla escrita", () => {
-    for (const p of construirPricing().pagado) {
-      const ruta = p.ruta.replace("/api/batch", "");
-      expect(p.precioUsd).toBe(PRECIOS_USD[ruta]);
+    for (const p of construirPricing().paid) {
+      const ruta = p.route.replace("/api/batch", "");
+      expect(p.priceUsd).toBe(PRECIOS_USD[ruta]);
     }
   });
 
@@ -72,24 +72,24 @@ describe("pricing", () => {
   });
 
   it("declara la regla de incentivos antes que cualquier número", () => {
-    expect(construirPricing().reglaDeIncentivos).toMatch(/JAMÁS se cobra según lo que se encuentra/);
+    expect(construirPricing().incentiveRule).toMatch(/NEVER charge based on what we find/);
   });
 
   it("dice que validar no se cobra — la lección que se pagó", () => {
-    expect(construirPricing().validarNoSeCobra).toMatch(/ANTES de liquidar/);
+    expect(construirPricing().validationIsFree).toMatch(/BEFORE the payment settles/);
   });
 
   it("lo gratis incluye el pre-chequeo, la llave y el contrato", () => {
-    const rutas = construirPricing().gratis.map((g) => g.ruta).join(" ");
+    const rutas = construirPricing().free.map((g) => g.route).join(" ");
     expect(rutas).toContain("/verificar/prechequeo");
     expect(rutas).toContain("/publickey");
     expect(rutas).toContain("/openapi.json");
   });
 
   it("cada cosa gratis explica POR QUÉ lo es (si no, es marketing)", () => {
-    for (const g of construirPricing().gratis) {
-      expect(g.porque.length).toBeGreaterThan(40);
-      expect(g.precioUsd).toBe(0);
+    for (const g of construirPricing().free) {
+      expect(g.why.length).toBeGreaterThan(40);
+      expect(g.priceUsd).toBe(0);
     }
   });
 });
@@ -100,25 +100,25 @@ describe("manifiesto", () => {
   });
 
   it("cada debilidad trae CUÁNDO pasó: sin fecha es humildad de folleto", () => {
-    for (const d of construirManifiesto().debilidadesConocidas) {
-      expect(d.cuando.length).toBeGreaterThan(2);
-      expect(d.detalle.length).toBeGreaterThan(60);
+    for (const d of construirManifiesto().knownWeaknesses) {
+      expect(d.when.length).toBeGreaterThan(2);
+      expect(d.detail.length).toBeGreaterThan(60);
     }
   });
 
   it("incluye la más incómoda: que todavía nadie compró", () => {
-    const texto = construirManifiesto().debilidadesConocidas.map((d) => d.que).join(" ");
-    expect(texto).toMatch(/nadie nos ha comprado/i);
+    const texto = construirManifiesto().knownWeaknesses.map((d) => d.what).join(" ");
+    expect(texto).toMatch(/nobody has bought from us/i);
   });
 
   it("dice lo que NO afirma, no solo en lo que cree", () => {
     const m = construirManifiesto();
-    expect(m.loQueNoAfirmamos.length).toBeGreaterThanOrEqual(4);
-    expect(m.loQueNoAfirmamos.join(" ")).toMatch(/no_verificable_extralegal/);
+    expect(m.whatWeDoNotClaim.length).toBeGreaterThanOrEqual(4);
+    expect(m.whatWeDoNotClaim.join(" ")).toMatch(/no_verificable_extralegal/);
   });
 
   it("el principio de null vs 0 está declarado, y el código lo cumple", () => {
-    expect(construirManifiesto().enQueCreemos.join(" ")).toMatch(/ausencia de dato es `null`, nunca `0`/);
+    expect(construirManifiesto().whatWeBelieve.join(" ")).toMatch(/Missing data is `null`, never `0`/);
     // Y la otra mitad: que el motor de verdad devuelva null para lo extralegal.
     const linea = compararComprobante(
       [{ nombre: "Bono de productividad", valor: 500000 }],

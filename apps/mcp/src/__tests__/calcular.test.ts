@@ -98,7 +98,7 @@ describe("calcular sin pago: el 402 estructurado", () => {
     if (!("crucePayTo" in r)) throw new Error("esperaba un Resultado402");
     expect(r.accepts).toHaveLength(2);
     expect(r.crucePayTo.coinciden).toBeNull();
-    expect(r.crucePayTo.detalle).toContain("Verificalo antes de firmar");
+    expect(r.crucePayTo.detalle).toContain("Verify it before signing");
   });
 
   it("un payTo ajeno en la oferta sale marcado PELIGRO en el mismo 402", async () => {
@@ -112,7 +112,7 @@ describe("calcular sin pago: el 402 estructurado", () => {
     const r = await calcular("retencion", { version: "1" });
     if (!("crucePayTo" in r)) throw new Error("esperaba un Resultado402");
     expect(r.crucePayTo.coinciden).toBe(false);
-    expect(r.crucePayTo.detalle).toContain("PELIGRO");
+    expect(r.crucePayTo.detalle).toContain("DANGER");
   });
 });
 

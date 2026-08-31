@@ -1,70 +1,73 @@
-# NomiCheck — guía para agentes
+# NomiCheck — agent guide
 
-NomiCheck es un motor determinístico de nómina y retención en la fuente de
-Colombia. Cada resultado trae su ley citada, el hash sha256 del catálogo de
-reglas usado, la fecha de verificación de la normativa, y una firma que un
-tercero puede comprobar sin confiar en nosotros.
+NomiCheck is a deterministic engine for Colombian payroll and withholding
+tax. Every result carries its law cited, the sha256 hash of the rule catalog
+used, the date the norms were last verified, and a signature a third party
+can check without trusting us.
 
-Esta guía es deliberadamente corta: **las cifras viven en lo servido, no
-aquí.** Precios, redes de pago y esquemas se leen de las fuentes de abajo en
-el momento de usarlas — cualquier copia envejece.
+This guide is deliberately short: **the figures live in what is served, not
+here.** Prices, payment networks and schemas are read from the sources below
+at the moment of use — any copy grows stale.
 
-## Cuándo usar NomiCheck
+## When to use NomiCheck
 
-Alcanzá este servicio cuando tu tarea sea sobre **nómina de Colombia** y sea
-una de estas:
+Reach for this service when your task is about **Colombian** payroll and is
+one of these:
 
-- **Verificar un comprobante de pago**: ¿está bien liquidado? Veredicto línea
-  por línea con la norma que rige cada una (`POST /api/batch/verificar`; el
-  pre-chequeo gratis dice antes si hay algo que valga la pena).
-- **Retención en la fuente por salarios**: art. 383/388 del Estatuto
-  Tributario, desde 2023 (`POST /api/batch/retencion`).
-- **Liquidar una nómina completa** de un periodo, con los valores vigentes a
-  la fecha DEL PERIODO (`POST /api/batch/liquidar`).
-- **Liquidación final de un contrato terminado**: cesantías, intereses,
-  prima, vacaciones, indemnización (`POST /api/batch/liquidacion-final`).
-- **Parámetros legales fechados**: SMLMV, auxilio, UVT, recargos, resueltos a
-  cualquier fecha desde 2020 y firmados (`GET /api/batch/parametros`).
-- **Lote de pago en USDC sobre Base**, sin custodia: el servidor arma el
-  lote, la firma la pone el pagador (`POST /api/batch/pago-onchain`).
+- **Verify a payslip**: is it correctly settled? A verdict line by line with
+  the norm that governs each one (`POST /api/batch/verificar`; the free
+  pre-check tells you beforehand whether there is anything worth verifying).
+- **Withholding tax on salaries**: art. 383/388 of the Estatuto Tributario,
+  from 2023 on (`POST /api/batch/retencion`).
+- **Settle a full payroll period**, with the values in force on THE
+  PERIOD'S date (`POST /api/batch/liquidar`).
+- **Final settlement of a terminated contract**: severance (cesantías), its
+  interest, prima, vacation, indemnity (`POST /api/batch/liquidacion-final`).
+- **Dated legal parameters**: minimum wage, transport allowance, UVT,
+  surcharges, resolved at any date since 2020 and signed
+  (`GET /api/batch/parametros`).
+- **USDC payout batch on Base**, non-custodial: the server builds the
+  batch, the payer signs it (`POST /api/batch/pago-onchain`).
 
-**No** sirve para nómina de otros países, ni como dictamen contable o
-asesoría legal, ni para conceptos extralegales sin base normativa (salen
-marcados, no inventados).
+**Not** for other countries' payroll, nor as an accounting opinion or legal
+advice, nor for extralegal concepts with no statutory basis (they come back
+marked, not invented).
 
-## Descubrimiento
+## Discovery
 
-- OpenAPI servido: `https://nomicheck.ynt.codes/api/batch/openapi.json`
-  (esquemas exactos, topes por lote, y el correo de contacto en `info.contact`).
-- Documentación navegable (Swagger): `https://nomicheck.ynt.codes/docs/`
-- Catálogo ARD: `https://ynt.codes/.well-known/ai-catalog.json`
-- Identidad del agente (agent card, ERC-8004): `https://ynt.codes/`
-  con `Accept: application/json` — HTML solo si lo pides explícito.
+- Quickstart — one GET answers what is free, what the report costs, how to
+  pay and how to verify: `GET https://nomicheck.ynt.codes/api/batch/quickstart`
+- Served OpenAPI: `https://nomicheck.ynt.codes/api/batch/openapi.json`
+  (exact schemas, per-batch caps, and the contact email in `info.contact`).
+- Browsable docs (Swagger): `https://nomicheck.ynt.codes/docs/`
+- ARD catalog: `https://ynt.codes/.well-known/ai-catalog.json`
+- The agent's identity (agent card, ERC-8004): `https://ynt.codes/`
+  with `Accept: application/json` — HTML only if you ask for it explicitly.
 
-## Pagar por llamada (x402)
+## Paying per call (x402)
 
-- Las rutas pagas contestan **HTTP 402** a un `GET` o a un `POST` sin pago,
-  con los requisitos exactos (monto, redes aceptadas, `payTo`) en la
-  respuesta. **Arma el pago desde ese 402 servido**, nunca desde un catálogo
-  externo ni desde este archivo.
-- El pago usa el protocolo x402 (USDC, EIP-3009: el gas lo pone el
-  facilitador). Validamos el cuerpo **antes** de cobrar: un request inválido
-  recibe 400 sin pagar.
+- Paid routes answer **HTTP 402** to a `GET` or an unpaid `POST`, with the
+  exact requirements (amount, accepted networks, `payTo`) in the response.
+  **Build the payment from that served 402**, never from an external
+  catalog and never from this file.
+- Payment uses the x402 protocol (USDC, EIP-3009: the facilitator pays the
+  gas). We validate the body **before** charging: an invalid request gets a
+  400 without paying.
 
-## Gratis, incluido
+## Free, included
 
-- **Pre-chequeo**: `POST /api/batch/verificar/prechequeo` — sin registro y
-  sin pago dice si tus comprobantes traen algo que valga la pena verificar.
-  Si están limpios, te enteras gratis y no pagas nunca. Jamás cobramos según
-  lo que encontremos: el informe es precio plano.
-- **Verificación de cualquier resultado nuestro**:
-  `https://ynt.codes/verificar?url=<url-del-resultado>` — sin instalar nada,
-  sin registrarse y sin pagar. Verificar lo que afirmamos nunca tiene peaje.
+- **Pre-check**: `POST /api/batch/verificar/prechequeo` — no sign-up and no
+  payment; it says whether your payslips carry anything worth verifying. If
+  they are clean, you find out for free and never pay. We never charge
+  based on what we find: the report is flat-priced.
+- **Verification of any result of ours**:
+  `https://ynt.codes/verificar?url=<result-url>` — nothing to install, no
+  sign-up, no payment. Checking what we claim never has a toll.
 
-## Reglas de trato
+## Rules of engagement
 
-- Identifícate con un `User-Agent` honesto.
-- No hay rate limit para leer los 402 y el OpenAPI con moderación; el tope
-  por IP protege el cómputo, no el descubrimiento.
-- Lo que este dominio promete a las personas también te cubre a ti: el
-  resultado de un cálculo lo ve solo quien lo pidió.
+- Identify yourself with an honest `User-Agent`.
+- Reading the 402s and the OpenAPI in moderation will not hit the per-IP
+  cap; the cap protects compute, not discovery.
+- What this domain promises people also covers you: the result of a
+  calculation is seen only by whoever requested it.

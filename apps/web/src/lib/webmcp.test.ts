@@ -19,8 +19,8 @@ describe("herramientas", () => {
   it("son dos, de lectura, con nombre e inputSchema de objeto", () => {
     const lista = herramientas();
     expect(lista.map((t) => t.name)).toEqual([
-      "consultar_parametros_legales",
-      "obtener_guia_de_uso",
+      "get_colombian_legal_parameters",
+      "get_usage_guide",
     ]);
     for (const t of lista) {
       expect(t.description.length).toBeGreaterThan(60);
@@ -81,7 +81,7 @@ describe("registrarWebMcp", () => {
     expect(registrarWebMcp({ modelContext: { registerTool } })).toBe(true);
     expect(registerTool).toHaveBeenCalledTimes(2);
     const nombres = registerTool.mock.calls.map((c) => (c[0] as HerramientaWebMcp).name);
-    expect(nombres).toContain("consultar_parametros_legales");
+    expect(nombres).toContain("get_colombian_legal_parameters");
   });
 
   it("sin registerTool cae a provideContext con el lote completo", () => {

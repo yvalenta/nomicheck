@@ -53,12 +53,12 @@ export function construirServidor(): McpServer {
   servidor.registerTool(
     "nomicheck_info",
     {
-      title: "Catálogo, precios y cruce de identidad de pago",
+      title: "Catalog, prices and payment-identity cross-check",
       description:
-        "Gratis. Resume el OpenAPI del wrapper (productos, precios x402, redes aceptadas) y " +
-        "hace el cruce de seguridad: mide el `payTo` que el 402 anuncia HOY y lo compara con " +
-        "el `walletAddress` del agent card en el apex. Llamala antes de firmar cualquier pago — " +
-        "si `cruce.coinciden` no es true, no firmes.",
+        "Free. Summarizes the wrapper's OpenAPI (products, x402 prices, accepted networks) " +
+        "and performs the safety cross-check: it reads the `payTo` the 402 announces " +
+        "TODAY and compares it against the `walletAddress` of the agent card on the apex. " +
+        "Call it before signing any payment — if `cruce.coinciden` is not true, do not sign.",
       inputSchema: {},
     },
     () => protegido(async () => comoTexto(await armarInfo())),
@@ -67,13 +67,13 @@ export function construirServidor(): McpServer {
   servidor.registerTool(
     "nomicheck_ejemplo",
     {
-      title: "Ejemplo canónico input+output de un listing",
+      title: "Canonical input+output example of a listing",
       description:
-        "Gratis. Devuelve el par input+output real de un listing para copiar el contrato sin " +
-        "leer documentación. El `output` viene FIRMADO por producción, así que también sirve " +
-        "como insumo directo de `nomicheck_verificar_sobre`.",
+        "Free. Returns a listing's real input+output pair so you can copy the contract " +
+        "without reading documentation. The `output` comes SIGNED by production, so it also " +
+        "works as direct input for `nomicheck_verificar_sobre`.",
       inputSchema: {
-        ruta: z.enum(RUTAS_EJEMPLO).describe("Listing del que pedir el ejemplo."),
+        ruta: z.enum(RUTAS_EJEMPLO).describe("Route to fetch the example from."),
       },
     },
     ({ ruta }) => protegido(async () => comoTexto(await pedirEjemplo(ruta))),
@@ -82,10 +82,10 @@ export function construirServidor(): McpServer {
   servidor.registerTool(
     "nomicheck_schema",
     {
-      title: "JSON Schema del contrato de liquidación (v1)",
+      title: "JSON Schema of the settlement contract (v1)",
       description:
-        "Gratis. El JSON Schema Draft 7 del input de `/liquidar`, generado del mismo zod que " +
-        "valida en runtime — no hay una segunda fuente que pueda mentir.",
+        "Free. The JSON Schema Draft 7 of the `/liquidar` input, generated from the same zod " +
+        "that validates at runtime — there is no second source that could lie.",
       inputSchema: {},
     },
     () => protegido(async () => comoTexto(await pedirSchema())),
@@ -94,22 +94,22 @@ export function construirServidor(): McpServer {
   servidor.registerTool(
     "nomicheck_calcular",
     {
-      title: "Ejecutar un cálculo (POST con muro x402)",
+      title: "Run a calculation (POST behind the x402 paywall)",
       description:
-        "POST del body a un listing. Sin `x_payment` y con el muro encendido devuelve el 402 " +
-        "ESTRUCTURADO: el array `accepts` completo (red, token, monto, payTo, dominio EIP-712) " +
-        "más el cruce del payTo contra el agent card. El caller elige una red, firma EIP-3009 " +
-        "y reintenta pasando `x_payment`; la respuesta pagada vuelve con el resultado firmado " +
-        "y el header X-PAYMENT-RESPONSE ya decodificado.",
+        "POSTs the body to a listing. Without `x_payment` and with the paywall on, it returns " +
+        "the STRUCTURED 402: the full `accepts` array (network, token, amount, payTo, EIP-712 " +
+        "domain) plus the payTo cross-check against the agent card. The caller picks a " +
+        "network, signs EIP-3009 and retries passing `x_payment`; the paid response returns " +
+        "the signed result with the X-PAYMENT-RESPONSE header already decoded.",
       inputSchema: {
-        ruta: z.enum(RUTAS_CALCULO).describe("Listing a ejecutar."),
+        ruta: z.enum(RUTAS_CALCULO).describe("Route to run."),
         body: z
           .record(z.unknown())
-          .describe("El body JSON del contrato v1 del listing (ver nomicheck_ejemplo / nomicheck_schema)."),
+          .describe("The JSON body of the listing's v1 contract (see nomicheck_ejemplo / nomicheck_schema)."),
         x_payment: z
           .string()
           .optional()
-          .describe("Autorización EIP-3009 serializada; va como header X-PAYMENT."),
+          .describe("Serialized EIP-3009 authorization; sent as the X-PAYMENT header."),
       },
     },
     ({ ruta, body, x_payment }) => protegido(async () => comoTexto(await calcular(ruta, body, x_payment))),
@@ -118,21 +118,22 @@ export function construirServidor(): McpServer {
   servidor.registerTool(
     "nomicheck_verificar_sobre",
     {
-      title: "Verificar un sobre firmado — offline",
+      title: "Verify a signed envelope — offline",
       description:
-        "Verifica LOCALMENTE una salida firmada de NomiCheck (Ed25519 sobre el JSON canónico) " +
-        "con la copia vendorizada del verificador `sobre` — la verificación en sí no toca la " +
-        "red. Veredictos: `verificable`, `firmado_sin_procedencia` (firma válida pero sin " +
-        "reglasHash: una opinión firmada) o `invalido`. Si no se pasa la llave, se baja de " +
-        "/api/batch/publickey — mismo origen que el sobre, o sea consistencia, no identidad.",
+        "LOCALLY verifies a signed NomiCheck output (Ed25519 over the canonical JSON) with " +
+        "the vendored copy of the `sobre` verifier — the verification itself never touches " +
+        "the network. Verdicts: `verificable`, `firmado_sin_procedencia` (valid signature " +
+        "but no reglasHash: a signed opinion) or `invalido`. If no key is passed, it is " +
+        "fetched from /api/batch/publickey — same origin as the envelope, i.e. consistency, " +
+        "not identity.",
       inputSchema: {
         documento: z
           .record(z.unknown())
-          .describe("El sobre completo tal cual lo devolvió la API, con su campo `signature`."),
+          .describe("The complete envelope exactly as the API returned it, with its `signature` field."),
         llave_publica_pem: z
           .string()
           .optional()
-          .describe("Llave pública Ed25519 en PEM, pinneada por el caller. El caso fuerte."),
+          .describe("Ed25519 public key in PEM, pinned by the caller. The strong case."),
       },
     },
     ({ documento, llave_publica_pem }) =>

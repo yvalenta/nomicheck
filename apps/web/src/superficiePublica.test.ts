@@ -108,7 +108,7 @@ describe("robots.txt", () => {
 describe("agents.md", () => {
   it("dice CUÁNDO usar el servicio, no solo cómo — con los casos nombrados", () => {
     const guia = leer(resolve(PUBLICO, "agents.md"));
-    expect(guia).toContain("## Cuándo usar NomiCheck");
+    expect(guia).toContain("## When to use NomiCheck");
     // Los trabajos concretos, no marketing: cada uno con su endpoint.
     for (const endpoint of [
       "/api/batch/verificar",
@@ -120,6 +120,6 @@ describe("agents.md", () => {
       expect(guia).toContain(endpoint);
     }
     // Y el límite dicho de frente.
-    expect(guia).toMatch(/otros países/);
+    expect(guia).toMatch(/other countries/);
   });
 });

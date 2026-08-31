@@ -58,9 +58,9 @@ export interface ResumenInfo {
 }
 
 const ADVERTENCIA =
-  "Antes de firmar un pago x402, cruzá SIEMPRE el `payTo` del `accepts` contra " +
-  `el \`x-executor.walletAddress\` del agent card (${AGENT_CARD_URL}). ` +
-  "El pago es directo y final: si el payTo fue sustituido, nada más se ve roto.";
+  "Before signing an x402 payment, ALWAYS cross-check the `payTo` in `accepts` against " +
+  `the \`x-executor.walletAddress\` of the agent card (${AGENT_CARD_URL}). ` +
+  "The payment is direct and final: if the payTo was swapped, nothing else looks broken.";
 
 /**
  * La sonda: un GET a `/retencion`, que con el muro encendido contesta 402 con
@@ -95,7 +95,7 @@ async function sondearPayTo(): Promise<{ payTo: string | null; fuente: string | 
   const payTos = [...new Set(accepts.map((a) => String(campo(a, "payTo") ?? "")).filter(Boolean))];
   return {
     payTo: payTos.length > 0 ? payTos.join(", ") : null,
-    fuente: `402 de GET ${url} (sonda sin pago)`,
+    fuente: `402 from GET ${url} (unpaid probe)`,
   };
 }
 
@@ -157,13 +157,13 @@ export async function armarInfo(): Promise<ResumenInfo> {
 
   const veredicto =
     coinciden === true
-      ? "OK: el payTo de la oferta 402 es el walletAddress del agent card."
+      ? "OK: the 402 offer's payTo is the agent card's walletAddress."
       : coinciden === false
-        ? "PELIGRO: el payTo del 402 NO es la wallet del agent card. NO firmes ningún pago — " +
-          "en x402 no hay escrow ni disputa, y la plata iría a esa otra dirección."
+        ? "DANGER: the 402's payTo is NOT the agent card's wallet. Do NOT sign any payment — " +
+          "in x402 there is no escrow and no dispute, and the money would go to that other address."
         : sonda.payTo === null
-          ? "El muro x402 está apagado (la sonda no recibió 402): hoy los POST responden sin pagar."
-          : "No se pudo leer el agent card, así que el cruce quedó SIN HACER. Verificalo vos antes de firmar.";
+          ? "The x402 paywall is off (the probe got no 402): today the POSTs answer without payment."
+          : "The agent card could not be read, so the cross-check was NOT DONE. Verify it yourself before signing.";
 
   return {
     titulo: typeof campo(campo(openapi, "info"), "title") === "string"

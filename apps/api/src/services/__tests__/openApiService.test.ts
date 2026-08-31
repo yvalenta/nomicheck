@@ -121,7 +121,7 @@ describe("documento OpenAPI", () => {
       description: string;
       parameters: { name: string; in: string }[];
     };
-    expect(op.description).toContain("historia de vigencias");
+    expect(op.description).toContain("validity history");
     expect(op.parameters.some((p) => p.name === "fecha" && p.in === "query")).toBe(true);
     // Y que las claves ausentes se nombran en vez de desaparecer.
     expect(op.description).toContain("noVigentes");
@@ -148,7 +148,7 @@ describe("el muro en el documento servido", () => {
 
   it("apagado, dice que responde sin pago y ninguna operación exige x402", () => {
     const d = conMuro(false);
-    expect(d.components.securitySchemes.x402.description).toContain("apagado");
+    expect(d.components.securitySchemes.x402.description).toContain("currently off");
     expect(JSON.stringify(d.paths)).not.toContain('"security"');
   });
 
@@ -161,7 +161,7 @@ describe("el muro en el documento servido", () => {
     expect(post.security).toEqual([{ x402: [] }]);
     // El precio sale de PRECIOS_USD, no de un literal escrito acá al lado.
     expect(post.responses["402"].description).toContain(PRECIOS_USD["/verificar"].toFixed(2));
-    expect(d.components.securitySchemes.x402.description).not.toContain("apagado");
+    expect(d.components.securitySchemes.x402.description).not.toContain("currently off");
   });
 
   it("el /csv cobra igual que su ruta base, y lo documenta", () => {

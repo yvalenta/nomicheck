@@ -15,6 +15,14 @@
 // El módulo NO falla si el API no existe (hoy es experimental): registrar es
 // oportunista y silencioso. Y no toca React ni el DOM — se llama desde
 // main.tsx antes del render y termina.
+//
+// ── En INGLÉS, nombres de tool incluidos (2026-08-31, pedido de Yonatan) ──
+//
+// `consultar_parametros_legales` y `obtener_guia_de_uso` pasaron a
+// `get_colombian_legal_parameters` y `get_usage_guide` A PROPÓSITO: el API es
+// experimental, los agentes del navegador descubren las tools en vivo (no hay
+// integraciones que romper, a diferencia del MCP de apps/mcp, cuyos nombres
+// NO se tocaron), y el que las lee opera en inglés.
 
 interface RespuestaTool {
   content: Array<{ type: "text"; text: string }>;
@@ -40,19 +48,19 @@ const comoTexto = (dato: unknown): RespuestaTool => ({
 export function herramientas(base = ""): HerramientaWebMcp[] {
   return [
     {
-      name: "consultar_parametros_legales",
+      name: "get_colombian_legal_parameters",
       description:
-        "Parámetros legales colombianos de nómina (SMLMV, auxilio de transporte, UVT, " +
-        "recargos, topes de retención), resueltos a una fecha y firmados. Sin fecha " +
-        "devuelve los vigentes hoy; con fecha (YYYY-MM-DD, desde 2020) los que regían " +
-        "ese día — lo que necesita una liquidación retroactiva.",
+        "Colombian statutory payroll parameters (minimum wage, transport allowance, UVT, " +
+        "surcharges, withholding caps), resolved at a date and signed. Without a date it " +
+        "returns the ones in force today; with a date (YYYY-MM-DD, since 2020) the ones " +
+        "that governed that day — what a retroactive settlement needs.",
       inputSchema: {
         type: "object",
         properties: {
           fecha: {
             type: "string",
             format: "date",
-            description: "Día al que resolver los valores (YYYY-MM-DD). Omitida = hoy.",
+            description: "Day to resolve the values at (YYYY-MM-DD). Omitted = today.",
           },
         },
         additionalProperties: false,
@@ -62,25 +70,25 @@ export function herramientas(base = ""): HerramientaWebMcp[] {
         const url = `${base}/api/batch/parametros${fecha ? `?fecha=${encodeURIComponent(fecha)}` : ""}`;
         const res = await fetch(url, { headers: { Accept: "application/json" } });
         if (!res.ok) {
-          return comoTexto({ error: `El servidor respondió ${res.status}`, url });
+          return comoTexto({ error: `The server answered ${res.status}`, url });
         }
         return comoTexto(await res.json());
       },
     },
     {
-      name: "obtener_guia_de_uso",
+      name: "get_usage_guide",
       description:
-        "La guía completa para usar NomiCheck como agente, en una llamada: qué hace, " +
-        "qué es gratis (pre-chequeo de comprobantes incluido), qué cuesta el informe " +
-        "pagado y cómo se paga por llamada (x402), dónde están los contratos de " +
-        "entrada, y cómo verificar cualquier salida sin confiar en este servidor.",
+        "The full guide to using NomiCheck as an agent, in one call: what it does, what " +
+        "is free (payslip pre-check included), what the paid report costs and how to pay " +
+        "per call (x402), where the input contracts live, and how to verify any output " +
+        "without trusting this server.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       async execute() {
         const res = await fetch(`${base}/api/batch/quickstart`, {
           headers: { Accept: "application/json" },
         });
         if (!res.ok) {
-          return comoTexto({ error: `El servidor respondió ${res.status}` });
+          return comoTexto({ error: `The server answered ${res.status}` });
         }
         return comoTexto(await res.json());
       },

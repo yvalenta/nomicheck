@@ -48,72 +48,72 @@ const OPERACIONES = [
   {
     ruta: "/liquidar",
     id: "payroll-settlement",
-    resumen: "Liquidar una nómina completa de un periodo",
+    resumen: "Settle a full payroll period",
     schema: batchLiquidarSchema,
     nombre: "BatchLiquidarInput",
     descripcion:
-      "Liquida un periodo para N empleados y contratistas: devengos, recargos, horas extra, " +
-      "deducciones de ley y provisiones. Cada línea cita su norma. Los recargos y el divisor " +
-      "de la hora ordinaria se resuelven POR LA FECHA DEL PERIODO, no por la de hoy, así que " +
-      "un periodo retroactivo se liquida con los valores que estaban vigentes entonces.",
+      "Settles a period for N employees and contractors: accruals, surcharges, overtime, " +
+      "statutory deductions and provisions. Every line cites its norm. Surcharges and the " +
+      "ordinary-hour divisor resolve BY THE PERIOD'S DATE, not today's, so a retroactive " +
+      "period is settled with the values that were in force back then.",
   },
   {
     ruta: "/retencion",
     id: "withholding-tax",
-    resumen: "Calcular retención en la fuente por salarios",
+    resumen: "Compute withholding tax on salaries (retención en la fuente)",
     schema: batchRetencionSchema,
     nombre: "BatchRetencionInput",
     descripcion:
-      "Depuración del art. 383/388 del Estatuto Tributario a partir de parámetros numéricos. " +
-      "El input es anónimo por diseño: no pide nombre ni documento. Piso de 2023 — antes de " +
-      "esa fecha lanza en vez de devolver un número plausible y falso, porque la Ley 2277 de " +
-      "2022 cambió los topes y unificó la tabla de tarifas.",
+      "The art. 383/388 (Estatuto Tributario) base adjustment from numeric parameters only. The " +
+      "input is anonymous by design: no name, no national ID. Floor at 2023 — before that " +
+      "date it throws instead of returning a plausible, wrong number, because Law 2277 of " +
+      "2022 changed the caps and unified the bracket table.",
   },
   {
     ruta: "/verificar",
     id: "payslip-verification",
-    resumen: "Verificar si un comprobante de nómina está bien liquidado",
+    resumen: "Verify whether a payslip is correctly settled",
     schema: batchVerificacionSchema,
     nombre: "BatchVerificacionInput",
     descripcion:
-      "Recalcula de forma independiente las líneas de ley de un comprobante transcrito y las " +
-      "compara contra lo declarado, marcando faltantes y discrepancias con su norma.",
+      "Independently recomputes the statutory lines of a transcribed payslip and compares " +
+      "them against what it declares, flagging missing lines and discrepancies with their norm.",
   },
   {
     ruta: "/liquidacion-final",
     id: "final-settlement",
-    resumen: "Liquidar un contrato terminado",
+    resumen: "Settle a terminated contract (final settlement)",
     schema: batchLiquidacionFinalSchema,
     nombre: "BatchLiquidacionFinalInput",
     descripcion:
-      "Cesantías, sus intereses, prima y vacaciones pendientes al retiro, más la indemnización " +
-      "si se pide. Cada concepto se liquida desde SU propio corte, porque no se pagan en el " +
-      "mismo ciclo: liquidarlos todos desde la fecha de ingreso paga otra vez lo ya pagado. El " +
-      "historial lo declara quien llama; lo que no declare se asume en el caso simple y el " +
-      "supuesto vuelve explícito en `supuestos`. Ojo con dos ausencias que NO son ceros: omitir " +
-      "`indemnizacion` significa que no se pidió (y la respuesta lo dice en `noSolicitado`), y " +
-      "`auxilioTransporte` es un booleano — el monto lo resuelve el servidor contra el catálogo " +
-      "firmado a la fecha de retiro.",
+      "Severance (cesantías), its interest, prima and pending vacation at termination, plus " +
+      "the indemnity if requested. Each concept settles from ITS own cutoff, because they are " +
+      "not paid on the same cycle: settling them all from the hire date pays again what was " +
+      "already paid. The caller declares the history; whatever it omits is assumed as the " +
+      "simple case and the assumption comes back explicit in `supuestos`. Mind two absences " +
+      "that are NOT zeros: omitting `indemnizacion` means it was not requested (and the " +
+      "response says so in `noSolicitado`), and `auxilioTransporte` is a boolean — the amount " +
+      "is resolved by the server against the signed catalog at the termination date.",
   },
   {
     ruta: "/pago-onchain",
     id: "usdc-contractor-payout",
-    resumen: "Armar un lote de pago en USDC sobre Base",
+    resumen: "Build a USDC payout batch on Base",
     schema: batchPagoOnchainSchema,
     nombre: "BatchPagoOnchainInput",
     descripcion:
-      "Convierte montos en COP a USDC con una tasa congelada y arma los links de pago. NO " +
-      "custodia ni firma: el servidor nunca mueve fondos, solo produce el lote que el pagador " +
-      "firma con su propia wallet.",
+      "Converts COP amounts to USDC with a frozen rate and builds the payment links. It does " +
+      "NOT custody or sign: the server never moves funds — it only produces the batch the " +
+      "payer signs with their own wallet.",
   },
 ] as const;
 
 const SOBRE_DESC =
-  "Todas las respuestas viajan en el mismo sobre verificable: `reglasHash` (sha256 del " +
-  "catálogo legal que produjo el resultado), `reglasVerificadasAl`, `disclaimer`, constancia " +
-  "de habeas data y una firma Ed25519 sobre el payload. La llave pública está en " +
-  "`/publickey`, así que un tercero puede verificar el resultado sin volver a llamar al " +
-  "servidor y sin confiar en él.";
+  "Every response travels in the same verifiable envelope: `reglasHash` (sha256 of the " +
+  "legal catalog that produced the result), `reglasVerificadasAl`, `disclaimer`, a habeas " +
+  "data notice and an Ed25519 signature over the payload. The public key is at " +
+  "`/publickey`, so a third party can verify the result without calling the server again " +
+  "and without trusting it.";
 
 export function construirOpenApi(): Record<string, unknown> {
   const paths: Record<string, unknown> = {};
@@ -137,17 +137,17 @@ export function construirOpenApi(): Record<string, unknown> {
       content: { "application/json": { schema: refA(op.nombre) } },
     };
     const respuestas = {
-      "200": { description: "Resultado firmado." },
-      "400": { description: "`invalid_input` — el body no cumple el contrato v1." },
+      "200": { description: "Signed result." },
+      "400": { description: "`invalid_input` — the body does not meet the v1 contract." },
       "402": {
         description: cobra(op.ruta)
-          ? `Pago requerido (x402): USD ${precioDe(op.ruta)?.toFixed(2)} por llamada en ` +
-            `${muro.redes.map((r) => `\`${r.caip2}\``).join(" o ")}. El 402 trae \`accepts\` con ` +
-            "una entrada por red —el token, el monto y el dominio EIP-712 con el que se " +
-            "firma—; el comprador elige una. Ver `securitySchemes.x402`."
-          : "Pago requerido (x402). Solo cuando el muro está encendido; ahora está apagado y " +
-            "estas operaciones responden sin pagar. El cuerpo del 402 trae `accepts` con la " +
-            "red, el token y el monto — ver `securitySchemes.x402`.",
+          ? `Payment required (x402): USD ${precioDe(op.ruta)?.toFixed(2)} per call on ` +
+            `${muro.redes.map((r) => `\`${r.caip2}\``).join(" or ")}. The 402 carries \`accepts\` with ` +
+            "one entry per network — the token, the amount and the EIP-712 domain to sign " +
+            "with; the buyer picks one. See `securitySchemes.x402`."
+          : "Payment required (x402). Only while the paywall is on; it is currently off and " +
+            "these operations answer without payment. The 402 body carries `accepts` with the " +
+            "network, token and amount — see `securitySchemes.x402`.",
       },
       "500": { description: "`internal_error`." },
     };
@@ -159,7 +159,7 @@ export function construirOpenApi(): Record<string, unknown> {
 
     // Extensión `x-` con el precio EN NÚMERO. La descripción del 402 ya lo dice
     // en prosa, y esa prosa es para humanos: un cliente que quiera pintar
-    // "gratis" o "US$0,02" tendría que parsear una frase en español, que es la
+    // "free" o "US$0,02" tendría que parsear una frase en prosa, que es la
     // clase de acoplamiento que se rompe al reescribir una palabra. Sale de
     // `PRECIOS_USD`, así que sigue habiendo un solo sitio donde vive el precio.
     const x402 = {
@@ -196,11 +196,11 @@ export function construirOpenApi(): Record<string, unknown> {
     paths[`${op.ruta}/csv`] = {
       post: {
         operationId: `${op.id}-csv`,
-        summary: `${op.resumen} (salida CSV)`,
+        summary: `${op.resumen} (CSV output)`,
         description:
-          "Mismo input y mismo cálculo que la operación JSON; devuelve `text/csv` con el hash, " +
-          "la firma y el disclaimer como comentarios `#` al inicio, para que la trazabilidad no " +
-          "se pierda al pegarlo en un correo o adjuntarlo a una liquidación.",
+          "Same input and same calculation as the JSON operation; returns `text/csv` with the " +
+          "hash, the signature and the disclaimer as leading `#` comments, so traceability is " +
+          "not lost when pasted into an email or attached to a settlement.",
         tags: ["listings"],
         requestBody: cuerpo,
         // El `/csv` tiene el MISMO muro y el MISMO precio que su ruta base: si
@@ -216,20 +216,21 @@ export function construirOpenApi(): Record<string, unknown> {
   paths["/parametros"] = {
     get: {
       operationId: "legal-parameters",
-      summary: "Snapshot firmado de los parámetros legales vigentes",
+      summary: "Signed snapshot of the statutory parameters in force",
       description:
-        "Los 25 parámetros que el motor resuelve, cada uno con su unidad, su descripción y su " +
-        "referencia legal, firmados y con el hash del catálogo.\n\n" +
-        "Con `?fecha=YYYY-MM-DD` resuelve contra la **historia de vigencias**, sembrada desde " +
-        "2020: pedir `2024-03-15` devuelve el SMLMV y el auxilio que regían ese día, no los de " +
-        "hoy. Es lo que necesita una liquidación retroactiva — y sobre todo quien AUDITA una " +
-        "liquidación retroactiva que calculó otro. Sin el parámetro, hoy.\n\n" +
-        "Las claves sin valor en la fecha pedida no se omiten en silencio: vuelven en " +
-        "`noVigentes` con el motivo. Pedir 2021 devuelve 22 parámetros y no 25, porque los " +
-        "topes de retención arrancan en 2023 (Ley 2277 de 2022), y una lista más corta no se " +
-        "nota si nadie la nombra.\n\n" +
+        "The 25 parameters the engine resolves, each with its unit, its description and its " +
+        "legal reference, signed and carrying the catalog hash.\n\n" +
+        "With `?fecha=YYYY-MM-DD` it resolves against the **validity history**, seeded from " +
+        "2020: asking for `2024-03-15` returns the minimum wage and allowance that governed " +
+        "that day, not today's. It is what a retroactive settlement needs — and above all " +
+        "whoever AUDITS a retroactive settlement someone else computed. Without the " +
+        "parameter, today.\n\n" +
+        "Keys with no value on the requested date are not silently omitted: they come back " +
+        "in `noVigentes` with the reason. Asking for 2021 returns 22 parameters and not 25, " +
+        "because the withholding caps start in 2023 (Law 2277 of 2022), and a shorter list " +
+        "goes unnoticed if nobody names it.\n\n" +
         SOBRE_DESC,
-      tags: ["catálogo"],
+      tags: ["catalog"],
       parameters: [
         {
           name: "fecha",
@@ -237,14 +238,14 @@ export function construirOpenApi(): Record<string, unknown> {
           required: false,
           schema: { type: "string", format: "date" },
           description:
-            "Día al que resolver los valores (YYYY-MM-DD). Omitido = hoy. La fecha viaja " +
-            "firmada en `vigenteDesde`, así que un snapshot de 2024 no se puede hacer pasar " +
-            "por uno de hoy.",
+            "Day to resolve the values at (YYYY-MM-DD). Omitted = today. The date travels " +
+            "signed in `vigenteDesde`, so a 2024 snapshot cannot pass itself off as " +
+            "today's.",
         },
       ],
       responses: {
-        "200": { description: "Snapshot firmado, resuelto a `vigenteDesde`." },
-        "400": { description: "`invalid_input` — `fecha` no es YYYY-MM-DD." },
+        "200": { description: "Signed snapshot, resolved to `vigenteDesde`." },
+        "400": { description: "`invalid_input` — `fecha` is not YYYY-MM-DD." },
         "500": { description: "`parametros_no_disponibles`." },
       },
     },
@@ -253,18 +254,18 @@ export function construirOpenApi(): Record<string, unknown> {
   paths["/publickey"] = {
     get: {
       operationId: "public-key",
-      summary: "Llave pública Ed25519 con la que se verifican las respuestas",
+      summary: "Ed25519 public key that verifies every response",
       description:
-        "Devuelve el PEM de la llave pública y su `publicKeyId` (los primeros 16 bytes del " +
-        "sha256 del DER, en hex). Con ella cualquier tercero verifica offline la firma de " +
-        "todo lo que este wrapper emite — sin volver a llamar al servidor y sin confiar en " +
-        "él. La misma llave está declarada en el agent card de " +
-        "`https://ynt.codes/.well-known/agent-card.json`, que es el cruce out-of-band: si " +
-        "esta ruta y el card no coinciden, no verifiques nada.",
-      tags: ["catálogo"],
+        "Returns the public key PEM and its `publicKeyId` (first 16 bytes of the DER's " +
+        "sha256, hex). With it any third party verifies offline the signature of everything " +
+        "this wrapper emits — without calling the server again and without trusting it. The " +
+        "same key is declared in the agent card at " +
+        "`https://ynt.codes/.well-known/agent-card.json`, which is the out-of-band cross-" +
+        "check: if this route and the card do not match, verify nothing.",
+      tags: ["catalog"],
       responses: {
-        "200": { description: "PEM y `publicKeyId`." },
-        "404": { description: "Ruta inexistente." },
+        "200": { description: "PEM and `publicKeyId`." },
+        "404": { description: "Nonexistent route." },
       },
     },
   };
@@ -272,17 +273,17 @@ export function construirOpenApi(): Record<string, unknown> {
   paths["/health"] = {
     get: {
       operationId: "health",
-      summary: "Estado del wrapper, ledger de reglas y guards activos",
+      summary: "Wrapper status, rules ledger and active guards",
       description:
-        "Consulta el ledger de reglas de verdad —no un ping—: responde el `reglasHash` " +
-        "vigente, `reglasVerificadasAl` y qué guards están activos. Es el GET gratis que un " +
-        "comprador hace antes de pagar, porque le da el hash contra el que después va a " +
-        "auditar la respuesta; si esta ruta responde 503, el catálogo legal no se pudo leer " +
-        "y pagar una llamada no tiene sentido.",
-      tags: ["catálogo"],
+        "Actually queries the rules ledger — not a ping: it answers the current " +
+        "`reglasHash`, `reglasVerificadasAl` and which guards are active. It is the free GET " +
+        "a buyer makes before paying, because it hands the hash the response will later be " +
+        "audited against; if this route answers 503, the legal catalog could not be read and " +
+        "paying for a call makes no sense.",
+      tags: ["catalog"],
       responses: {
-        "200": { description: "Estado." },
-        "503": { description: "`unavailable` — el catálogo legal no se pudo leer." },
+        "200": { description: "Status." },
+        "503": { description: "`unavailable` — the legal catalog could not be read." },
       },
     },
   };
@@ -290,26 +291,27 @@ export function construirOpenApi(): Record<string, unknown> {
   return {
     openapi: "3.0.3",
     info: {
-      title: "NomiCheck — motor de nómina colombiana verificable",
+      title: "NomiCheck — verifiable Colombian payroll engine",
       version: "1.0.0",
       description:
-        "La ley laboral colombiana como catálogo fechado y verificable, más el motor que la " +
-        "aplica.\n\n" +
-        "**El catálogo es el sustrato.** Cualquier parámetro legal resoluble a cualquier fecha " +
-        "desde 2020 —salario mínimo, auxilio, UVT, recargos, divisor de jornada, topes—, cada " +
-        "uno con la norma que lo fijó y la ventana en que rigió. Los números son públicos; la " +
-        "historia fechada, con fuente, mantenida y firmada, no lo es.\n\n" +
-        "Encima de él, cinco cálculos determinísticos: cada línea cita su norma, cada respuesta " +
-        "lleva el hash del catálogo que la produjo y va firmada con Ed25519.\n\n" +
-        "**Sin estado.** Entra JSON, sale JSON: el input se procesa en memoria y se descarta, " +
-        "nunca se escribe en una base (Ley 1581 de 2012, habeas data).\n\n" +
-        `Catálogo legal verificado al ${REGLAS_VERIFICADAS_AL}. El spec humano de cada regla ` +
-        "vive en `sdd/vault/` del repositorio, y el mapa de qué archivo respalda cada línea " +
-        "está en `07_Trazabilidad_Codigo.md`.",
+        "Colombian labor law as a dated, verifiable catalog — plus the engine that applies " +
+        "it.\n\n" +
+        "**The catalog is the substrate.** Any statutory parameter resolvable at any date " +
+        "since 2020 — minimum wage, transport allowance, UVT, surcharges, workday divisor, " +
+        "caps — each with the norm that set it and the window in which it applied. The " +
+        "numbers are public; the dated, sourced, maintained and signed history is not.\n\n" +
+        "On top of it, five deterministic calculations: every line cites its norm, every " +
+        "response carries the hash of the catalog that produced it and ships Ed25519-" +
+        "signed.\n\n" +
+        "**Stateless.** JSON in, JSON out: the input is processed in memory and discarded, " +
+        "never written to a database (Colombian Law 1581 of 2012, habeas data).\n\n" +
+        `Legal catalog verified as of ${REGLAS_VERIFICADAS_AL}. The human spec of every rule ` +
+        "lives in the repository's `sdd/vault/`, and the map of which file backs each line " +
+        "is in `07_Trazabilidad_Codigo.md`.",
       // De lib/contacto.ts, que es la fuente única: /contact cita el mismo
       // correo, y dos copias a mano son dos lugares donde desincronizarse.
       contact: { name: CONTACTO.nombre, url: CONTACTO.url, email: CONTACTO.email },
-      license: { name: "Propietario — uso permitido bajo los términos del listing" },
+      license: { name: "Proprietary — use permitted under the listing terms" },
     },
     servers: [{ url: BASE_URL }],
     components: {
@@ -324,26 +326,27 @@ export function construirOpenApi(): Record<string, unknown> {
           scheme: "bearer",
           bearerFormat: "x402-payment",
           description:
-            "Pago por llamada sobre HTTP 402 (x402). El servidor responde 402 con `accepts` " +
-            "—red, token, monto y el dominio EIP-712 del token en `extra`—, el cliente firma " +
-            "una autorización EIP-3009 y reintenta adjuntándola. El pago es inmediato y final: " +
-            "no hay escrow ni disputa, y por eso toda salida viaja firmada.\n\n" +
+            "Pay per call over HTTP 402 (x402). The server answers 402 with `accepts` — " +
+            "network, token, amount and the token's EIP-712 domain in `extra` —, the client " +
+            "signs an EIP-3009 authorization and retries attaching it. The payment is " +
+            "immediate and final: no escrow, no dispute — which is why every output ships " +
+            "signed.\n\n" +
             // La línea del payTo "anclado" existe porque el pago es final: un 402
             // interceptado que cambie el payTo se lleva la plata sin dejar rastro
             // del lado del comprador. El cruce contra el agent card —servido desde
             // otro dominio y anclado on-chain por el tokenURI del NFT— es la única
             // verificación out-of-band que un comprador puede hacer en un paso.
-            "**Antes de firmar, cruzá el `payTo` de cada entrada del `accepts` contra el " +
-            "`walletAddress` de `https://ynt.codes/.well-known/agent-card.json`.** El pago " +
-            "x402 es final; un 402 interceptado se delata exactamente ahí.\n\n" +
+            "**Before signing, cross-check the `payTo` of every `accepts` entry against " +
+            "the `walletAddress` in `https://ynt.codes/.well-known/agent-card.json`.** An " +
+            "x402 payment is final; an intercepted 402 gives itself away exactly there.\n\n" +
             (muro.activo
-              ? `Muro **encendido** en ${muro.redes
+              ? `Paywall **on** at ${muro.redes
                   .map((r) => `\`${r.caip2}\` (token \`${r.asset}\`)`)
-                  .join(" y ")}. Las ` +
-                "operaciones marcadas con este esquema cobran; el resto sigue siendo gratis."
-              : "**Ahora el muro está apagado**, así que estas operaciones responden sin pago; " +
-                "el esquema queda declarado para que un cliente sepa qué esperar cuando se " +
-                "encienda."),
+                  .join(" and ")}. The ` +
+                "operations marked with this scheme charge; everything else stays free."
+              : "**The paywall is currently off**, so these operations answer without " +
+                "payment; the scheme stays declared so a client knows what to expect when " +
+                "it turns on."),
         },
       },
     },
@@ -356,12 +359,12 @@ export function construirOpenApi(): Record<string, unknown> {
     // El catálogo va primero: no es metadata de los cálculos, es de donde salen.
     tags: [
       {
-        name: "catálogo",
+        name: "catalog",
         description:
-          "Los parámetros legales fechados y firmados, y lo necesario para verificar cualquier " +
-          "respuesta sin volver a llamar al servidor.",
+          "The dated, signed legal parameters, and everything needed to verify any response " +
+          "without calling the server again.",
       },
-      { name: "listings", description: "Los cinco cálculos construidos sobre ese catálogo." },
+      { name: "listings", description: "The five calculations built on that catalog." },
     ],
     paths,
   };

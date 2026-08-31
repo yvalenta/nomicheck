@@ -74,7 +74,7 @@ function responderNegociado(
   if (formato === null) {
     res.status(406).json({
       error: "not_acceptable",
-      mensaje: "Esta ruta se sirve como text/html o text/markdown.",
+      mensaje: "This route is served as text/html or text/markdown.",
       soportados: ["text/html", "text/markdown"],
     });
     return;

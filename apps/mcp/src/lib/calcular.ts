@@ -44,12 +44,12 @@ export interface ResultadoFallo {
 export type ResultadoCalculo = Resultado402 | ResultadoOk | ResultadoFallo;
 
 const NOTA_402 =
-  "Pago requerido. Elegí UNA entrada de `accepts`, firmá un `transferWithAuthorization` " +
-  "(EIP-3009) usando el dominio EIP-712 que viene en su `extra` — `name` y `version` " +
-  "cambian ENTRE redes, copiar el de otra entrada produce una firma que el token " +
-  "rechaza sin decir por qué — y reintentá esta misma llamada pasando la autorización " +
-  "serializada en `x_payment`. Antes de firmar, confirmá que `crucePayTo.coinciden` " +
-  "sea true, o hacé el cruce vos con `nomicheck_info`.";
+  "Payment required. Pick ONE `accepts` entry, sign a `transferWithAuthorization` " +
+  "(EIP-3009) using the EIP-712 domain that comes in its `extra` — `name` and `version` " +
+  "change BETWEEN networks; copying another entry's produces a signature the token " +
+  "rejects without saying why — and retry this same call passing the serialized " +
+  "authorization in `x_payment`. Before signing, confirm `crucePayTo.coinciden` is " +
+  "true, or do the cross-check yourself with `nomicheck_info`.";
 
 /**
  * El mismo cruce payTo↔agent card de `nomicheck_info`, repetido acá adrede:
@@ -80,10 +80,10 @@ async function cruzarAccepts(accepts: unknown[]): Promise<Resultado402["crucePay
     coinciden,
     detalle:
       coinciden === true
-        ? "El payTo de la oferta es el walletAddress del agent card."
+        ? "The offer's payTo is the agent card's walletAddress."
         : coinciden === false
-          ? "PELIGRO: el payTo NO es la wallet del agent card. No firmes este pago."
-          : "No se pudo cruzar (agent card no disponible o accepts sin payTo). Verificalo antes de firmar.",
+          ? "DANGER: the payTo is NOT the agent card's wallet. Do not sign this payment."
+          : "Could not cross-check (agent card unavailable or accepts without payTo). Verify it before signing.",
   };
 }
 
@@ -100,7 +100,7 @@ function decodificarXPaymentResponse(header: string | null): unknown {
   } catch {
     // Ilegible ≠ ausente: el caller pagó y le deben una constancia, así que el
     // crudo se conserva para que pueda reclamarla con evidencia.
-    return { advertencia: "X-PAYMENT-RESPONSE vino pero no decodifica como base64(JSON)", crudo: header };
+    return { advertencia: "X-PAYMENT-RESPONSE was present but does not decode as base64(JSON)", crudo: header };
   }
 }
 

@@ -42,7 +42,7 @@ describe("verificarSobre con llave pinneada", () => {
     const r = await verificarSobre(clonar(SOBRE), PEM);
     expect(r.veredicto).toBe("verificable");
     expect(r.checks.every((c) => c.ok)).toBe(true);
-    expect(r.fuenteLlave).toContain("pinneada");
+    expect(r.fuenteLlave).toContain("pinned");
   });
 
   it("alterar UNA cifra del resultado vuelve el sobre `invalido`", async () => {
@@ -80,7 +80,7 @@ describe("verificarSobre con llave pinneada", () => {
 
     const r = await verificarSobre(opinion, pemPublico);
     expect(r.veredicto).toBe("firmado_sin_procedencia");
-    expect(r.explicacion).toContain("opinión firmada");
+    expect(r.explicacion).toContain("signed opinion");
     // Los checks críticos pasaron todos; lo que falta es no-crítico.
     expect(r.checks.filter((c) => c.critico).every((c) => c.ok)).toBe(true);
   });
@@ -108,7 +108,7 @@ describe("verificarSobre sin llave: la baja de /publickey y lo dice", () => {
     expect(r.veredicto).toBe("verificable");
     // La honestidad epistémica es parte del contrato: llave del mismo origen
     // que el sobre = consistencia, no identidad. El caller tiene que verlo.
-    expect(r.fuenteLlave).toContain("consistencia, no identidad");
+    expect(r.fuenteLlave).toContain("consistency, not identity");
   });
 
   it("si /publickey no trae la llave, revienta con la URL en la mano en vez de verificar contra nada", async () => {

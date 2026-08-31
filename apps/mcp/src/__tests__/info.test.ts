@@ -137,7 +137,7 @@ describe("armarInfo", () => {
     expect(r.cruce.coinciden).toBe(true);
     expect(r.cruce.payToOferta).toBe(WALLET);
     expect(r.cruce.walletAgentCard).toBe(WALLET);
-    expect(r.cruce.fuentePayTo).toContain("sonda sin pago");
+    expect(r.cruce.fuentePayTo).toContain("unpaid probe");
   });
 
   it("un payTo sustituido se declara PELIGRO, aunque todo lo demás se vea sano", async () => {
@@ -153,8 +153,8 @@ describe("armarInfo", () => {
 
     const r = await armarInfo();
     expect(r.cruce.coinciden).toBe(false);
-    expect(r.cruce.veredicto).toContain("PELIGRO");
-    expect(r.cruce.veredicto).toContain("NO firmes");
+    expect(r.cruce.veredicto).toContain("DANGER");
+    expect(r.cruce.veredicto).toContain("Do NOT sign");
   });
 
   it("compara direcciones sin distinguir mayúsculas: EIP-55 escribe la misma wallet de dos formas", async () => {
@@ -184,7 +184,7 @@ describe("armarInfo", () => {
     const r = await armarInfo();
     expect(r.cruce.payToOferta).toBeNull();
     expect(r.cruce.coinciden).toBeNull();
-    expect(r.cruce.veredicto).toContain("apagado");
+    expect(r.cruce.veredicto).toContain("off");
   });
 
   it("la sonda pregunta con GET: un POST {} recibe el 400 del rechazo previo y leería «apagado» con el muro cobrando", async () => {
@@ -217,7 +217,7 @@ describe("armarInfo", () => {
 
     const r = await armarInfo();
     expect(r.cruce.coinciden).toBeNull();
-    expect(r.cruce.veredicto).toContain("SIN HACER");
+    expect(r.cruce.veredicto).toContain("NOT DONE");
     // El payTo medido se conserva: el caller puede cruzarlo a mano.
     expect(r.cruce.payToOferta).toBe(WALLET);
   });

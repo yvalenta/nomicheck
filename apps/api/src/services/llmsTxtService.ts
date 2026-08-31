@@ -16,6 +16,12 @@
 // Un `llms.txt` estático miente el día que cambia un precio o una ruta. Este
 // sale de las mismas constantes que sirven el producto: si el muro cobra otra
 // cosa, este texto cambia solo.
+//
+// ── En INGLÉS a propósito (2026-08-31, pedido de Yonatan) ──────────────────
+//
+// La audiencia medida de esta superficie son máquinas que operan en inglés
+// (ver nomicheck_ops/docs/estado/mercado.md). El español del producto vive en
+// la web para humanos, no acá.
 import { origenPublico } from "../lib/pagosConfig.js";
 import { PRECIOS_USD } from "../lib/x402Config.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
@@ -26,105 +32,108 @@ export function construirLlmsTxt(): string {
 
   return `# NomiCheck
 
-> Verificación determinística de comprobantes de pago (nómina) de Colombia.
-> Recalcula las líneas de origen legal de forma independiente al comprobante y
-> las compara con lo declarado. Sin IA en el cálculo: mismo input, mismo output.
-> Cada salida viene firmada Ed25519 y se comprueba sin hablar con este servidor.
+> Deterministic verification of Colombian payslips (nómina). It independently
+> recomputes the statutory lines of a payslip and compares them against what
+> the payslip declares. No AI in the calculation: same input, same output.
+> Every output ships Ed25519-signed and can be verified without talking to
+> this server.
 
-Empezá por acá si sos un agente: ${base}/api/batch/quickstart
-Ese único GET responde qué es, qué es gratis, cuánto cuesta lo pagado, cómo se
-paga, cómo verificar la salida sin confiar en nosotros, y qué NO hace.
+If you are an agent, start here: GET ${base}/api/batch/quickstart
+That single GET answers what this is, what is free, what the paid report
+costs, how payment works, how to verify the output without trusting us, and
+what it does NOT do.
 
-## Cuándo usar NomiCheck
+## When to use NomiCheck
 
-Usá este servicio cuando tu tarea sea alguna de estas, sobre nómina de
-**Colombia**:
+Use this service when your task is one of these, about **Colombian** payroll:
 
-- Verificar si un comprobante de pago está bien liquidado, línea por línea y
-  con la norma que rige cada una (\`POST /api/batch/verificar\`).
-- Calcular retención en la fuente por salarios, art. 383/388 del Estatuto
-  Tributario, desde 2023 (\`POST /api/batch/retencion\`).
-- Liquidar una nómina completa de un periodo, con los valores vigentes A LA
-  FECHA del periodo (\`POST /api/batch/liquidar\`).
-- Liquidar un contrato terminado: cesantías, intereses, prima, vacaciones e
-  indemnización (\`POST /api/batch/liquidacion-final\`).
-- Resolver parámetros legales fechados —SMLMV, auxilio, UVT, recargos— a
-  cualquier fecha desde 2020, firmados (\`GET /api/batch/parametros?fecha=\`).
-- Armar un lote de pago en USDC sobre Base sin custodia
+- Verify whether a payslip is correctly settled, line by line and with the
+  norm that governs each one (\`POST /api/batch/verificar\`).
+- Compute withholding tax on salaries (retención en la fuente), art. 383/388
+  of the Estatuto Tributario, from 2023 on (\`POST /api/batch/retencion\`).
+- Settle a full payroll period, with the values in force ON THE PERIOD'S
+  DATE (\`POST /api/batch/liquidar\`).
+- Settle a terminated contract: severance (cesantías), its interest, prima,
+  vacation and indemnity (\`POST /api/batch/liquidacion-final\`).
+- Resolve dated legal parameters — minimum wage, transport allowance, UVT,
+  surcharges — for any date since 2020, signed
+  (\`GET /api/batch/parametros?fecha=\`).
+- Build a non-custodial USDC payout batch on Base
   (\`POST /api/batch/pago-onchain\`).
 
-Cómo llamar: empezá por el quickstart de arriba; lo pagado responde 402 con
-los requisitos exactos de pago (x402) y se paga por llamada, sin cuenta. NO
-uses este servicio para nómina de otros países ni como asesoría legal.
+How to call: start with the quickstart above; paid routes answer 402 with the
+exact payment requirements (x402) and are paid per call, no account. Do NOT
+use this service for other countries' payroll or as legal advice.
 
-## Gratis, sin registro
+## Free, no sign-up
 
-- [Pre-chequeo](${base}/api/batch/verificar/prechequeo): POST con tus
-  comprobantes; devuelve cuántos traen discrepancias y cuánto pesan en neto.
-  Nunca qué línea ni qué norma. **Si tu comprobante está limpio, te enterás
-  gratis y no pagás nunca.** Mismo motor que el informe: si dice N, el informe
-  encuentra N.
-- [Ejemplo](${base}/api/batch/verificar/ejemplo): un input real y su output
-  exacto, para contrastar antes de pagar.
-- [Esquema](${base}/api/batch/verificar/schema/v1.json): el contrato de entrada.
-- [OpenAPI](${base}/api/batch/openapi.json): todos los endpoints.
-- [Llave pública](${base}/api/batch/publickey): con la que se verifica todo.
-- [Salud](${base}/api/batch/health): hash del catálogo legal y fecha de revisión.
-- [Parámetros](${base}/api/batch/parametros): los valores legales vigentes.
+- [Pre-check](${base}/api/batch/verificar/prechequeo): POST your payslips;
+  it returns how many carry discrepancies and their net effect in COP.
+  Never which
+  line or which norm. **If your payslip is clean, you find out for free and
+  never pay.** Same engine as the report: if it says N, the report finds N.
+- [Example](${base}/api/batch/verificar/ejemplo): a real input and its exact
+  output, to compare against before paying.
+- [Schema](${base}/api/batch/verificar/schema/v1.json): the input contract.
+- [OpenAPI](${base}/api/batch/openapi.json): every endpoint.
+- [Public key](${base}/api/batch/publickey): the one that verifies everything.
+- [Health](${base}/api/batch/health): legal catalog hash and review date.
+- [Legal parameters](${base}/api/batch/parametros): the statutory values in force.
 
-## Pagado
+## Paid
 
-- [Informe línea por línea](${base}/api/batch/verificar): POST, **${precio} USD
-  por lote, precio fijo**. Veredicto por línea, el valor que manda la ley, la
-  norma que lo rige y el efecto neto. Todo dentro de un sobre firmado.
-  Se paga con x402 (HTTP 402 + EIP-3009) en Base o Avalanche, en USDC, sin
-  cuenta ni API key.
+- [Line-by-line report](${base}/api/batch/verificar): POST, **${precio} USD
+  per batch, flat price**. A verdict per line, the value the law mandates,
+  the norm that governs it, and the net effect. All inside a signed envelope.
+  Paid with x402 (HTTP 402 + EIP-3009) in USDC on Base or Avalanche, no
+  account and no API key.
 
-**Jamás cobramos según lo que encontremos.** El precio es el mismo con un
-hallazgo o con veinte. Cobrar por hallazgo es el incentivo que un verificador
-no puede tener.
+**We never charge based on what we find.** The price is the same with one
+finding or with twenty. Charging per finding is the incentive a verifier
+must not have.
 
-## Cómo comprobar la salida sin confiar en nosotros
+## How to check the output without trusting us
 
-La salida es un "sobre": un JSON canónico con firma Ed25519 que cubre el
-documento entero. Se verifica offline, con la llave pública, sin este servidor.
+The output is a "sobre" — a signed envelope: canonical JSON with an Ed25519
+signature covering the whole document. It verifies offline, with the public
+key, without this server.
 
-- De un clic: https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo
-- El formato, libre y de dominio público: https://github.com/yvalenta/sobre
-- Hay cuatro implementaciones independientes (Ruby, Node, navegador, y una
-  escrita por un tercero leyendo solo la especificación) que producen los
-  mismos bytes.
+- One click: https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo
+- The format, free and in the public domain: https://github.com/yvalenta/sobre
+- Four independent implementations (Ruby, Node, browser, and one written by
+  a third party from the specification alone) produce the same bytes.
 
-## Qué NO hace
+## What it does NOT do
 
-- No es dictamen contable ni asesoría legal (Ley 43/1990).
-- No verifica bonos, comisiones ni otros conceptos extralegales: sin base legal
-  para derivarlos, salen marcados \`no_verificable_extralegal\`.
-- Un veredicto \`correcto\` dice que la línea es derivable del catálogo
-  declarado, no que ese catálogo sea el vigente hoy. Para eso está
-  \`reglasVerificadasAl\` (hoy: ${REGLAS_VERIFICADAS_AL}).
-- No persiste los datos del batch (Ley 1581/2012, habeas data): no hay
-  historial que consultar después.
-- No calcula la nómina — verifica una que ya existe.
+- It is not an accounting opinion or legal advice (Colombian Law 43/1990).
+- It does not verify bonuses, commissions or other extralegal concepts: with
+  no legal basis to derive them, they come back marked
+  \`no_verificable_extralegal\`.
+- A \`correcto\` verdict says the line is derivable from the declared
+  catalog, not that that catalog is the one in force today. That is what
+  \`reglasVerificadasAl\` is for (today: ${REGLAS_VERIFICADAS_AL}).
+- It does not persist batch data (Colombian Law 1581/2012, habeas data):
+  there is no history to query afterwards.
+- It does not compute the payroll — it verifies one that already exists.
 
-## Identidad
+## Identity
 
-Agente ERC-8004 con identidad on-chain y agent card A2A en
+ERC-8004 agent with an on-chain identity and an A2A agent card at
 https://ynt.codes/.well-known/agent-card.json
 
-## Más superficie para agentes
+## More agent surface
 
-- Guía de integración: ${base}/agents.md
-- Autenticación (spoiler: no hay, y por qué): ${base}/auth.md
-- Catálogo de APIs (RFC 9727): ${base}/.well-known/api-catalog
-- Manifiesto ARD: ${base}/.well-known/ai-catalog.json
-- Skills para agentes: ${base}/.well-known/agent-skills/index.json
-- Servidor MCP por HTTP: ${base}/api/mcp (card: ${base}/.well-known/mcp/server-card.json)
-- Mapa del sitio: ${base}/sitemap.xml
-- Precios, con el porqué de cada uno: ${base}/pricing
-- Sobre nosotros: ${base}/about · Contacto: ${base}/contact · Privacidad: ${base}/privacy
-- La portada ${base}/, ${base}/servicios y ${base}/lanzamiento también
-  responden \`text/markdown\` por content negotiation (\`Accept:
-  text/markdown\`, con \`Vary: Accept\`).
+- [Integration guide](${base}/agents.md)
+- [Authentication](${base}/auth.md): spoiler — there is none, and why
+- [API catalog](${base}/.well-known/api-catalog) (RFC 9727)
+- [ARD manifest](${base}/.well-known/ai-catalog.json)
+- [Agent skills](${base}/.well-known/agent-skills/index.json)
+- MCP server over HTTP: ${base}/api/mcp (card: ${base}/.well-known/mcp/server-card.json)
+- Sitemap: ${base}/sitemap.xml
+- Pricing, with the why of every price: ${base}/pricing
+- About: ${base}/about · Contact: ${base}/contact · Privacy: ${base}/privacy
+- The home page ${base}/, ${base}/servicios and ${base}/lanzamiento also
+  answer \`text/markdown\` via content negotiation (\`Accept:
+  text/markdown\`, with \`Vary: Accept\`).
 `;
 }

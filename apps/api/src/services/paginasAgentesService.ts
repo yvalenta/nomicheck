@@ -12,6 +12,25 @@
 //
 // Se generan del código —el contacto sale de lib/contacto.ts, las URLs de
 // origenPublico()— para que no puedan desincronizarse de lo que sirven.
+//
+// ── Los dos idiomas, y por qué (2026-08-31, pedido de Yonatan) ─────────────
+//
+// La superficie que lee una MÁQUINA va en inglés: la audiencia medida son
+// indexadores y agentes que operan en inglés (nomicheck_ops/estado/mercado).
+// La web para HUMANOS sigue en español: el producto es colombiano.
+//
+// Eso parte las páginas en dos clases:
+//
+//   - Solo-agente (portada/servicios/lanzamiento en markdown, el 404, y
+//     /pricing —nació para el lector sin JavaScript, que es un agente—):
+//     UNA redacción, en inglés.
+//   - Doble audiencia (/about, /contact, /privacy): el HTML humano en
+//     español y el markdown de agente en inglés — DOS redacciones, que es
+//     exactamente lo que la versión anterior evitaba. El costo está pagado
+//     con guarda: textos en idiomas distintos no se pueden diffear, así que
+//     la prueba compara los HECHOS de ambas (URLs, correos, leyes citadas),
+//     igual que la spec bilingüe del sobre compara cifras contra vectores.
+//     Los builders `…MdEs` se exportan para esa prueba.
 import { CONTACTO } from "../lib/contacto.js";
 import { origenPublico } from "../lib/pagosConfig.js";
 import { construirPricing } from "./pricingService.js";
@@ -56,15 +75,23 @@ export function construirSitemapXml(): string {
 // Autocontenido a propósito: nada de CSS del bundle, nada de JavaScript.
 // Los colores son los de la marca (midnight/indigo de apps/web/src/index.css)
 // para que un humano que caiga acá no sienta que salió del sitio.
+// `lang` decide el idioma del documento y de la navegación: las páginas de
+// confianza son humanas (es) y las de máquina (pricing, 404) van en inglés.
 function envolverHtml(opts: {
   titulo: string;
   descripcion: string;
   ruta: string;
   cuerpo: string;
+  lang?: "es" | "en";
 }): string {
   const base = origenPublico();
+  const lang = opts.lang ?? "es";
+  const nav =
+    lang === "es"
+      ? '<nav><a href="/">NomiCheck</a><a href="/about">Sobre</a><a href="/contact">Contacto</a><a href="/privacy">Privacidad</a><a href="/docs/">API</a></nav>'
+      : '<nav><a href="/">NomiCheck</a><a href="/about">About</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/docs/">API</a></nav>';
   return `<!doctype html>
-<html lang="es">
+<html lang="${lang}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -86,7 +113,7 @@ function envolverHtml(opts: {
   </head>
   <body>
     <main>
-      <nav><a href="/">NomiCheck</a><a href="/about">Sobre</a><a href="/contact">Contacto</a><a href="/privacy">Privacidad</a><a href="/docs/">API</a></nav>
+      ${nav}
 ${opts.cuerpo}
       <footer>NomiCheck · ${CONTACTO.nombre} · <a href="/sitemap.xml">sitemap</a> · <a href="/llms.txt">llms.txt</a> · <a href="/agents.md">agents.md</a></footer>
     </main>
@@ -96,62 +123,96 @@ ${opts.cuerpo}
 }
 
 // ── Portada en markdown (Accept: text/markdown sobre `/`) ─────────────────
+// Solo la ve quien pide markdown — un agente. El navegador recibe el shell
+// del SPA (español). Por eso va en inglés, sin gemela.
 
 export function construirHomeMd(): string {
   const base = origenPublico();
-  return `# NomiCheck — ¿Te pagaron bien?
+  return `# NomiCheck — were you paid correctly?
 
-Motor determinístico de nómina y retención en la fuente de Colombia. Recalcula
-lo que la ley manda pagar —salario, recargos, horas extra, prima, cesantías,
-retención— y lo compara con lo que llegó. Cada línea cita su norma, cada
-respuesta lleva el hash del catálogo legal que la produjo (verificado al
-${REGLAS_VERIFICADAS_AL}) y va firmada con Ed25519: un tercero la comprueba
-sin confiar en nosotros y sin volver a llamar a este servidor.
+Deterministic engine for Colombian payroll and withholding tax. It recomputes
+what the law mandates — salary, surcharges, overtime, prima, severance,
+withholding — and compares it against what was actually paid. Every line
+cites its norm, every response carries the hash of the legal catalog that
+produced it (verified as of ${REGLAS_VERIFICADAS_AL}) and ships Ed25519-signed:
+a third party checks it without trusting us and without calling this server
+again.
 
-## Cuándo usar NomiCheck
+## When to use NomiCheck
 
-- Verificar si un comprobante de pago colombiano está bien liquidado, línea
-  por línea y con la norma que rige cada una.
-- Calcular retención en la fuente por salarios (art. 383/388 del Estatuto
-  Tributario, desde 2023).
-- Liquidar una nómina completa o la liquidación final de un contrato
-  terminado, con valores vigentes A LA FECHA del periodo.
-- Resolver parámetros legales fechados (SMLMV, auxilio, UVT, recargos) a
-  cualquier fecha desde 2020, firmados.
-- Armar un lote de pago en USDC sobre Base sin custodia: el servidor nunca
-  firma ni mueve fondos.
+- Verify whether a Colombian payslip is correctly settled, line by line and
+  with the norm that governs each one.
+- Compute withholding tax on salaries (art. 383/388 of the Estatuto
+  Tributario, from 2023 on).
+- Settle a full payroll period or the final settlement of a terminated
+  contract, with the values in force ON THE PERIOD'S DATE.
+- Resolve dated legal parameters (minimum wage, transport allowance, UVT,
+  surcharges) for any date since 2020, signed.
+- Build a non-custodial USDC payout batch on Base: the server never signs
+  or moves funds.
 
-**No sirve para:** nómina de otros países, asesoría legal o dictamen contable
-(Ley 43/1990), ni conceptos extralegales sin base normativa.
+**Not for:** other countries' payroll, legal advice or accounting opinions
+(Colombian Law 43/1990), or extralegal concepts with no statutory basis.
 
-## Cómo llamar, si sos un agente
+## How to call, if you are an agent
 
-Un solo GET responde qué es, qué es gratis, cuánto cuesta lo pagado y cómo se
-verifica la salida: ${base}/api/batch/quickstart
+One GET answers what this is, what is free, what the paid report costs and
+how to verify the output: GET ${base}/api/batch/quickstart
 
-Lo pagado se paga por llamada con x402 (HTTP 402 + EIP-3009, USDC en Base o
-Avalanche), sin cuenta ni API key: el 402 servido trae los requisitos exactos.
-El pre-chequeo es gratis y sin registro — si tu comprobante está limpio, te
-enterás gratis y no pagás nunca.
+Paid routes are paid per call with x402 (HTTP 402 + EIP-3009, USDC on Base
+or Avalanche), no account and no API key: the served 402 carries the exact
+requirements. The pre-check is free and needs no sign-up — if your payslip
+is clean, you find out for free and never pay.
 
-## Enlaces
+## Links
 
-- Guía para agentes: ${base}/agents.md · ${base}/llms.txt
-- Documentación navegable: ${base}/docs/
+- Agent guide: ${base}/agents.md · ${base}/llms.txt
+- Browsable docs: ${base}/docs/
 - OpenAPI: ${base}/api/batch/openapi.json
-- Servicios: ${base}/servicios · Precios, con su porqué: ${base}/pricing
-- Sobre nosotros: ${base}/about · Contacto: ${base}/contact · Privacidad: ${base}/privacy
-- Mapa del sitio: ${base}/sitemap.xml
-- Identidad on-chain (ERC-8004) y agent card: https://ynt.codes/.well-known/agent-card.json
+- Services: ${base}/servicios · Pricing, with the why of every price: ${base}/pricing
+- About: ${base}/about · Contact: ${base}/contact · Privacy: ${base}/privacy
+- Sitemap: ${base}/sitemap.xml
+- On-chain identity (ERC-8004) and agent card: https://ynt.codes/.well-known/agent-card.json
 `;
 }
 
 // ── Las tres páginas de confianza ──────────────────────────────────────────
-// Cada una en dos formas. El texto es el mismo contenido, no dos redacciones:
-// el markdown se escribe una vez y el HTML lo envuelve párrafo a párrafo, para
-// que no puedan contarse historias distintas.
+// Doble audiencia, dos redacciones: `…Md` (inglés) para el agente que negocia
+// markdown, `…MdEs` (español) como fuente del HTML humano. La prueba de
+// paridad compara los hechos de ambas — ver el comentario de cabecera.
 
 export function construirAboutMd(): string {
+  const base = origenPublico();
+  return `# About NomiCheck
+
+NomiCheck is a deterministic Colombian payroll engine built on one thesis:
+**compute is a commodity; proof is not.** What is sold is not the number —
+it is that a third party can check it without trusting the issuer.
+
+The engine uses no AI to calculate: same input, same output, always. Under
+it sits a dated catalog of legal rules — minimum wage, transport allowance,
+UVT, surcharges, withholding caps — where every value carries the norm that
+set it and the window in which it applied, verified as of
+${REGLAS_VERIFICADAS_AL}. Every response travels inside an Ed25519-signed
+envelope that includes the sha256 of that catalog, so anyone can verify the
+result offline with the published public key: the envelope format is free
+and in the public domain (https://github.com/yvalenta/sobre).
+
+It is operated by ${CONTACTO.nombre} (${CONTACTO.url}) from
+${CONTACTO.ciudad}, Colombia. The service also has an on-chain agent
+identity (ERC-8004 on Base) with an A2A agent card at
+https://ynt.codes/.well-known/agent-card.json, and the API takes per-call
+payments via x402 — built to be used by people and by software agents alike.
+
+- For people: free verification at ${base}/
+- For companies: ${base}/servicios
+- For agents: ${base}/agents.md
+`;
+}
+
+/** La redacción humana (es) — la fuente del HTML. Exportada para la prueba
+ * de paridad de hechos contra la inglesa. */
+export function construirAboutMdEs(): string {
   const base = origenPublico();
   return `# Sobre NomiCheck
 
@@ -186,11 +247,41 @@ export function construirAboutHtml(): string {
     descripcion:
       "NomiCheck: motor determinístico de nómina colombiana con catálogo legal fechado y salida firmada Ed25519, operado por Ynt-labs desde Medellín.",
     ruta: "/about",
-    cuerpo: mdACuerpoHtml(construirAboutMd()),
+    cuerpo: mdACuerpoHtml(construirAboutMdEs()),
   });
 }
 
 export function construirContactMd(): string {
+  const base = origenPublico();
+  return `# Contact
+
+The most direct way to reach us is email: **${CONTACTO.email}**.
+We answer in English or Spanish.
+
+If you are reporting an API error, include the \`id\` that came in the
+response (500 errors carry one): it points at the exact server log line
+without you having to tell us anything else. Request bodies never reach the
+logs, so the id is the only way to find it.
+
+If you found a security issue, write to the same address with the subject
+"seguridad" — we would rather hear it from you than from a third party, and
+there is no retaliation for good-faith reports.
+
+Other channels:
+
+- Public code and issue reports: ${CONTACTO.github}
+- The operator's identity: ${CONTACTO.url}
+- The agent's on-chain identity (ERC-8004) and its agent card:
+  https://ynt.codes/.well-known/agent-card.json
+
+${CONTACTO.nombre} operates from ${CONTACTO.ciudad}, ${CONTACTO.region}
+(Colombia). There is no walk-in office: the service is the API and this
+website (${base}).
+`;
+}
+
+/** La redacción humana (es) — la fuente del HTML. */
+export function construirContactMdEs(): string {
   const base = origenPublico();
   return `# Contacto
 
@@ -224,11 +315,44 @@ export function construirContactHtml(): string {
     titulo: "Contacto — NomiCheck",
     descripcion: `Cómo escribirle al equipo de NomiCheck: correo ${CONTACTO.email}, reportes de errores y de seguridad, y los canales públicos.`,
     ruta: "/contact",
-    cuerpo: mdACuerpoHtml(construirContactMd()),
+    cuerpo: mdACuerpoHtml(construirContactMdEs()),
   });
 }
 
 export function construirPrivacyMd(): string {
+  return `# Privacy
+
+The house rule is to not store what is not needed — and to be able to prove
+it.
+
+**The anonymous verifier asks for no account and keeps no result.** Tell it
+your salary and your schedule, it does the math, and only you see the
+outcome: the calculation is not persisted to any database unless you create
+an account and choose to save it.
+
+**The batch API does not persist the data it processes.** JSON comes in, is
+processed in memory and discarded (Colombian Law 1581 of 2012, habeas data):
+no queryable history exists afterwards, and every signed envelope declares
+it in its habeas data notice. Server logs keep method, route, status code
+and duration — **never** the body, the query string or the headers, which is
+where the payroll would live.
+
+**No third-party analytics.** This site loads no trackers or ad pixels;
+there are no behavioral analytics scripts.
+
+**What does exist, said plainly:** the portal accounts (company and
+employee) authenticate with Supabase Auth, which stores the email and the
+session; traffic goes through Cloudflare like any CDN; and server errors are
+logged with a random id so they can be debugged — with no personal data
+inside.
+
+To exercise your habeas data rights (access, update, correct or delete your
+account data), write to **${CONTACTO.email}**.
+`;
+}
+
+/** La redacción humana (es) — la fuente del HTML. */
+export function construirPrivacyMdEs(): string {
   return `# Privacidad
 
 La regla de la casa es no guardar lo que no hace falta, y poder probarlo.
@@ -265,7 +389,7 @@ export function construirPrivacyHtml(): string {
     descripcion:
       "Qué guarda NomiCheck y qué no: cálculo sin persistencia (habeas data, Ley 1581 de 2012), logs sin cuerpos, sin rastreadores de terceros.",
     ruta: "/privacy",
-    cuerpo: mdACuerpoHtml(construirPrivacyMd()),
+    cuerpo: mdACuerpoHtml(construirPrivacyMdEs()),
   });
 }
 
@@ -275,38 +399,39 @@ export function construirPrivacyHtml(): string {
 // a su vez sale de PRECIOS_USD — la constante con la que el muro cobra. El
 // evaluador de is-agentic (2026-08-26) recorrió el sitio sin JavaScript y la
 // matriz de precios le quedó opaca: existía para un cliente de API y no para
-// un lector. Esta página es esa lectura.
+// un lector. Esta página es esa lectura — y ese lector es un agente, por eso
+// va entera en inglés, HTML incluido.
 
 export function construirPricingMd(): string {
   const p = construirPricing();
-  const gratis = p.gratis
-    .map((g) => `- \`${g.ruta}\` — **gratis** — ${g.porque}`)
+  const gratis = p.free
+    .map((g) => `- \`${g.route}\` — **free** — ${g.why}`)
     .join("\n");
-  const pagado = p.pagado
+  const pagado = p.paid
     .map(
       (r) =>
-        `- \`${r.ruta}\` (${r.metodo}) — **${r.precioUsd} ${p.moneda}** por llamada — ${r.porque}`,
+        `- \`${r.route}\` (${r.method}) — **${r.priceUsd} ${p.currency}** per call — ${r.why}`,
     )
     .join("\n");
-  return `# Precios de NomiCheck
+  return `# NomiCheck pricing
 
-Cada tarifa con su porqué. Esta página se genera de la misma constante con la
-que el muro cobra: no puede decir un precio y cobrar otro. La versión para
-máquinas es ${p.canonical} (JSON, \`${p.pricingVersion}\`).
+Every price with its why. This page is generated from the same constant the
+paywall charges with: it cannot state one price and charge another. The
+machine version is ${p.canonical} (JSON, \`${p.pricingVersion}\`).
 
-**La regla que ordena toda la tabla:** ${p.reglaDeIncentivos}
+**The rule that orders the whole table:** ${p.incentiveRule}
 
-**Validar no se cobra:** ${p.validarNoSeCobra}
+**Validation is never charged:** ${p.validationIsFree}
 
-## Cómo se paga
+## How payment works
 
-${p.comoSePaga} Moneda: ${p.moneda}. Redes: ${p.redes.join(" y ")}.
+${p.howToPay} Currency: ${p.currency}. Networks: ${p.networks.join(" and ")}.
 
-## Lo gratis, y por qué lo es
+## What is free, and why
 
 ${gratis}
 
-## Lo pagado, y por qué cuesta lo que cuesta
+## What is paid, and why it costs what it costs
 
 ${pagado}
 `;
@@ -314,11 +439,12 @@ ${pagado}
 
 export function construirPricingHtml(): string {
   return envolverHtml({
-    titulo: "Precios — NomiCheck",
+    titulo: "Pricing — NomiCheck",
     descripcion:
-      "Qué cuesta cada llamada de NomiCheck y por qué: precios en USDC vía x402, generados de la misma constante con la que cobra el muro.",
+      "What every NomiCheck call costs and why: USDC prices via x402, generated from the same constant the paywall charges with.",
     ruta: "/pricing",
     cuerpo: mdACuerpoHtml(construirPricingMd()),
+    lang: "en",
   });
 }
 
@@ -328,86 +454,88 @@ export function construirPricingHtml(): string {
 // blanco — las únicas indexables opacas del sitio (lo midió el evaluador de
 // is-agentic, 2026-08-26). Estas variantes dicen lo que cada página comunica;
 // los NÚMEROS no viven acá — se enlazan a sus fuentes derivadas, que es donde
-// no pueden mentir. La prosa sigue el mismo posicionamiento que la copia de
-// la web (sdd/marketing/posicionamiento.md).
+// no pueden mentir. Solo las ve quien negocia markdown (un agente): inglés.
 
 export function construirServiciosMd(): string {
   const base = origenPublico();
-  return `# Servicios de NomiCheck
+  return `# NomiCheck services
 
-El mismo motor determinístico de nómina colombiana, visto desde las tres
-formas de usarlo:
+The same deterministic Colombian payroll engine, and the three ways to use
+it:
 
-- **Para una persona** — la calculadora gratuita de liquidación (interactiva,
-  en esta página con navegador) y el verificador de comprobantes de la
-  portada (${base}/): sin registro, y el resultado no se persiste.
-- **Para una empresa** — el portal de nómina en ${base}/empresa (registro con
-  NIT): liquidación completa, retención en la fuente y evidencia firmada de
-  cada cierre.
-- **Para un agente de software** — la API con pagos por llamada vía x402.
-  Empezá por ${base}/api/batch/quickstart: un solo GET dice qué es, qué es
-  gratis, cuánto cuesta lo pagado y cómo se verifica la salida.
+- **For a person** — the free settlement calculator (interactive, on this
+  page with a browser) and the payslip verifier on the home page (${base}/):
+  no sign-up, and the result is not persisted.
+- **For a company** — the payroll portal at ${base}/empresa (sign-up with
+  NIT): full settlement, withholding tax and signed evidence of every close.
+- **For a software agent** — the API with per-call payments via x402. Start
+  with GET ${base}/api/batch/quickstart: one GET says what this is, what is
+  free, what the paid report costs and how to verify the output.
 
-La página muestra una franja de datos vivos (operaciones, parámetros legales,
-fecha de verificación del catálogo, llave pública) leídos del servidor al
-cargar. Las mismas fuentes están servidas para vos:
+The page shows a strip of live data (operations, legal parameters, catalog
+verification date, public key) read from the server on load. You can read
+the same sources directly:
 
-- Precios, con el porqué de cada uno: ${base}/pricing (JSON: ${base}/api/batch/pricing)
-- Catálogo completo (OpenAPI): ${base}/api/batch/openapi.json · navegable: ${base}/docs/
-- Parámetros legales vigentes, firmados: ${base}/api/batch/parametros
-- La llave con la que se comprueba todo: ${base}/api/batch/publickey
-- Verificá una salida de ejemplo sin confiar en nosotros:
+- Pricing, with the why of every price: ${base}/pricing (JSON: ${base}/api/batch/pricing)
+- Full catalog (OpenAPI): ${base}/api/batch/openapi.json · browsable: ${base}/docs/
+- Legal parameters in force, signed: ${base}/api/batch/parametros
+- The key that verifies everything: ${base}/api/batch/publickey
+- Verify an example output without trusting us:
   https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo
 `;
 }
 
 export function construirLanzamientoMd(): string {
   const base = origenPublico();
-  return `# NomiCheck — ¿Te pagaron bien?
+  return `# NomiCheck — were you paid correctly?
 
-Landing de la verificación gratuita de comprobantes de pago colombianos. Lo
-que promete, en tres pilares:
+Landing page for the free verification of Colombian payslips. What it
+promises, in three pillars:
 
-- **Gratis y sin registro** — subís tu comprobante o contás tu horario y ves
-  el resultado en minutos; sin correo, sin tarjeta, sin nombre.
-- **Cada cifra cita la ley** — cada peso trae el artículo del CST o el
-  decreto que lo respalda, y el catálogo legal está fechado por vigencia: un
-  periodo de julio se liquida con las normas que regían en julio.
-- **El motor que usan las empresas** — el mismo cálculo determinístico y
-  versionado con el que las pymes liquidan su nómina completa.
+- **Free and no sign-up** — upload your payslip or describe your schedule
+  and see the result in minutes; no email, no card, no name.
+- **Every figure cites the law** — every peso carries the article of the CST
+  or the decree behind it, and the legal catalog is dated by validity
+  window: a July period is settled with the norms that governed in July.
+- **The same engine companies use** — the same deterministic, versioned
+  calculation small businesses settle their full payroll with.
 
-La verificación interactiva corre en ${base}/ (requiere navegador). Si sos un
-agente, tu puerta es la API: ${base}/api/batch/quickstart — el pre-chequeo es
-gratis y, si el comprobante está limpio, te enterás gratis y no pagás nunca.
+The interactive verification runs at ${base}/ (requires a browser). If you
+are an agent, your door is the API: GET ${base}/api/batch/quickstart — the
+pre-check is free and, if the payslip is clean, you find out for free and
+never pay.
 
-Más: precios en ${base}/pricing · guía para agentes en ${base}/agents.md ·
-privacidad en ${base}/privacy (el cálculo no se persiste).
+More: pricing at ${base}/pricing · agent guide at ${base}/agents.md ·
+privacy at ${base}/privacy (the calculation is not persisted).
 `;
 }
 
 // ── El 404 de verdad ───────────────────────────────────────────────────────
+// Quien sondea rutas es una máquina; el humano perdido también entiende un
+// mapa corto. Inglés, HTML incluido.
 
 export function construirNoEncontradoMd(ruta: string): string {
   const base = origenPublico();
-  return `# 404 — esta ruta no existe
+  return `# 404 — this route does not exist
 
-\`${ruta}\` no corresponde a ninguna página ni endpoint de este sitio.
+\`${ruta}\` does not correspond to any page or endpoint of this site.
 
-Para orientarte:
+To find your way:
 
-- Mapa del sitio: ${base}/sitemap.xml
-- Guía para agentes: ${base}/llms.txt y ${base}/agents.md
-- Documentación de la API: ${base}/docs/ (OpenAPI: ${base}/api/batch/openapi.json)
-- Portada: ${base}/
+- Sitemap: ${base}/sitemap.xml
+- Agent guide: ${base}/llms.txt and ${base}/agents.md
+- API documentation: ${base}/docs/ (OpenAPI: ${base}/api/batch/openapi.json)
+- Home: ${base}/
 `;
 }
 
 export function construirNoEncontradoHtml(ruta: string): string {
   return envolverHtml({
     titulo: "404 — NomiCheck",
-    descripcion: "Esta ruta no existe. El mapa del sitio y la guía para agentes indican qué sí.",
+    descripcion: "This route does not exist. The sitemap and the agent guide say what does.",
     ruta: "/404",
     cuerpo: mdACuerpoHtml(construirNoEncontradoMd(ruta)),
+    lang: "en",
   });
 }
 

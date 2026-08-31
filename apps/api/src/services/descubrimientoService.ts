@@ -76,8 +76,8 @@ export function construirArd(): Record<string, unknown> {
         url: `${base}/api/batch/openapi.json`,
         representativeQueries: [
           "verify a Colombian payslip line by line",
-          "calcular retención en la fuente por salarios en Colombia",
-          "liquidación final de contrato laboral colombiano",
+          "compute Colombian withholding tax on salaries",
+          "final settlement of a Colombian labor contract",
         ],
       },
       {
@@ -87,16 +87,16 @@ export function construirArd(): Record<string, unknown> {
         url: `${base}/api/batch/quickstart`,
         representativeQueries: [
           "how do I pay NomiCheck per call with x402",
-          "qué es gratis en NomiCheck y qué se paga",
+          "what is free on NomiCheck and what is paid",
         ],
       },
       {
         identifier: urn("guia", "agents"),
-        displayName: "Guía de integración para agentes",
+        displayName: "Agent integration guide",
         type: "text/markdown",
         url: `${base}/agents.md`,
         representativeQueries: [
-          "cuándo usar NomiCheck",
+          "when to use NomiCheck",
           "when should an agent call NomiCheck",
         ],
       },
@@ -107,7 +107,7 @@ export function construirArd(): Record<string, unknown> {
         url: `${base}/.well-known/agent-skills/nomicheck-payroll/SKILL.md`,
         representativeQueries: [
           "skill for verifying Colombian payroll",
-          "cómo verifica un agente una nómina colombiana sin confiar en el emisor",
+          "how an agent verifies a Colombian payslip without trusting the issuer",
         ],
       },
       {
@@ -117,7 +117,7 @@ export function construirArd(): Record<string, unknown> {
         url: `${base}/.well-known/mcp/server-card.json`,
         representativeQueries: [
           "MCP server for Colombian payroll verification",
-          "conectar un cliente MCP a NomiCheck",
+          "connect an MCP client to NomiCheck",
         ],
       },
       {
@@ -145,11 +145,11 @@ export function construirServerCardMcp(): Record<string, unknown> {
     serverInfo: {
       name: INFO_SERVIDOR.name,
       version: INFO_SERVIDOR.version,
-      title: "NomiCheck — nómina colombiana verificable",
+      title: "NomiCheck — verifiable Colombian payroll",
       description:
-        "Cinco herramientas sobre el wrapper batch: catálogo y cruce de identidad de pago, " +
-        "ejemplos firmados, schema del contrato, ejecución con muro x402 (el 402 se expone, " +
-        "no se evita), y verificación offline del sobre firmado.",
+        "Five tools over the batch wrapper: catalog and payment-identity cross-check, " +
+        "signed examples, contract schema, execution behind the x402 paywall (the 402 is " +
+        "exposed, not bypassed), and offline verification of the signed envelope.",
     },
     transport: { type: "streamable-http", url: `${base}/api/mcp` },
     capabilities: { tools: { listChanged: false } },
@@ -187,9 +187,9 @@ export function construirAgentCardA2a(): Record<string, unknown> {
     protocolVersion: "0.3.0",
     name: "NomiCheck",
     description:
-      "Nómina colombiana verificable: motor determinístico con catálogo legal fechado, " +
-      "pre-chequeo gratis, informe pago por llamada (x402, USDC) y salida firmada Ed25519 " +
-      "verificable offline.",
+      "Verifiable Colombian payroll: a deterministic engine over a dated legal catalog, " +
+      "with a free pre-check, a pay-per-call report (x402, USDC) and Ed25519-signed " +
+      "output verifiable offline.",
     url: `${base}/api/batch`,
     version: "1.0.0",
     preferredTransport: "HTTP+JSON",
@@ -207,29 +207,29 @@ export function construirAgentCardA2a(): Record<string, unknown> {
     skills: [
       {
         id: "legal-parameters",
-        name: "Parámetros legales colombianos",
+        name: "Colombian legal parameters",
         description:
-          "Lee el catálogo legal fechado (salario mínimo, auxilio, topes, UVT) que usa el motor. Gratis, sin credencial.",
+          "Reads the dated legal catalog (minimum wage, transport allowance, caps, UVT) the engine uses. Free, no credential.",
         tags: ["free", "colombia", "payroll"],
       },
       {
         id: "payslip-precheck",
-        name: "Pre-chequeo de comprobante",
+        name: "Payslip pre-check",
         description:
-          "Si el comprobante está limpio te enterás gratis y no pagás nunca; jamás cobramos según lo que encontremos.",
+          "If your payslip is clean you find out for free and never pay; we never charge based on what we find.",
         tags: ["free", "no-signup", "triage"],
       },
       {
         id: "payslip-verification",
-        name: "Verificación completa de nómina",
-        description: `Informe línea por línea con ley citada y sobre firmado, ${precio} USD por lote vía x402.`,
+        name: "Full payslip verification",
+        description: `Line-by-line report with the law cited and a signed envelope, ${precio} USD per batch via x402.`,
         tags: ["x402", "paid", "signed-output"],
       },
       {
         id: "payroll-settlement",
-        name: "Liquidación de nómina",
+        name: "Payroll settlement",
         description:
-          "Liquida un periodo completo con el mismo motor y la misma firma; el 402 publica el precio exacto.",
+          "Settles a full period with the same engine and the same signature; the 402 publishes the exact price.",
         tags: ["x402", "paid", "signed-output"],
       },
     ],
@@ -246,48 +246,51 @@ export function construirAuthMd(): string {
   const precio = PRECIOS_USD["/verificar"];
   return `# auth.md
 
-Cómo se autentica un agente en NomiCheck — y por qué casi no hace falta.
+How an agent authenticates with NomiCheck — and why it barely needs to.
 
-## Audiencia
+## Audience
 
-Agentes de software que consumen la API pública de ${base} (verificación de
-nómina colombiana, catálogo legal fechado al ${REGLAS_VERIFICADAS_AL}).
+Software agents consuming the public API at ${base} (Colombian payslip
+verification, legal catalog verified as of ${REGLAS_VERIFICADAS_AL}).
 
-## Registro: NO HAY
+## Registration: NONE
 
-No emitimos API keys, no hay cuentas de agente ni endpoint de registro. Es
-diseño, no una omisión: la API se usa sin identidad y lo pagado se paga **por
-llamada**.
+We issue no API keys, there are no agent accounts and no registration
+endpoint. This is by design, not an omission: the API is used without an
+identity, and paid operations are paid **per call**.
 
-## Métodos soportados
+## Supported methods
 
-- **Lecturas de integración** (OpenAPI, esquemas, ejemplos firmados, llave
-  pública, parámetros legales, salud): **sin credencial ninguna.**
-- **Operaciones pagadas** (p. ej. el informe de verificación, ${precio} USD
-  por lote): **x402** — el servidor responde \`HTTP 402\` con los requisitos
-  exactos (\`accepts\`: red, token, monto, \`payTo\` y el dominio EIP-712);
-  el agente firma una autorización **EIP-3009** (USDC, el gas lo pone el
-  facilitador) y reintenta con el pago adjunto. Sin cuenta, sin API key.
-- Antes de firmar, cruzá el \`payTo\` contra el \`walletAddress\` de
-  https://ynt.codes/.well-known/agent-card.json — el pago x402 es final.
+- **Integration reads** (OpenAPI, schemas, signed examples, public key,
+  legal parameters, health): **no credential at all.**
+- **Paid operations** (e.g. the verification report, ${precio} USD per
+  batch): **x402** — the server answers \`HTTP 402\` with the exact
+  requirements (\`accepts\`: network, token, amount, \`payTo\` and the
+  EIP-712 domain); the agent signs an **EIP-3009** authorization (USDC; the
+  facilitator pays the gas) and retries with the payment attached. No
+  account, no API key.
+- Before signing, cross-check the \`payTo\` against the
+  \`x-executor.walletAddress\` in
+  https://ynt.codes/.well-known/agent-card.json — an x402 payment is final.
 
-## Uso de credenciales
+## Credential use
 
-Ninguna credencial se emite ni se acepta en la API pública (no API keys, no
+No credential is issued or accepted on the public API (no API keys, no
 tokens, no client registration). \`/.well-known/oauth-protected-resource\`
-existe con \`authorization_servers\` **vacío** — que es la verdad: ningún
-issuer emite tokens para este recurso. Lo que este dominio **no publica** es
-\`/.well-known/openid-configuration\` ni \`oauth-authorization-server\`: eso
-declararía un issuer inexistente, y sería mentirle a quien lo lea.
+exists with \`authorization_servers\` **empty** — which is the truth: no
+issuer emits tokens for this resource. What this domain does **not** publish
+is \`/.well-known/openid-configuration\` or \`oauth-authorization-server\`:
+that would declare
+an issuer that does not exist, and it would be lying to whoever reads it.
 
-Los portales con sesión (\`/empresa\`, \`/colaborador\`, \`/admin\`) son para
-personas, usan Supabase Auth, y **no son superficie para agentes** — están
-excluidos en robots.txt.
+The session portals (\`/empresa\`, \`/colaborador\`, \`/admin\`) are for
+people, use Supabase Auth, and are **not agent surface** — robots.txt
+excludes them.
 
-## Empezar
+## Getting started
 
-Un solo GET responde qué es, qué es gratis y cómo verificar la salida sin
-confiar en nosotros: ${base}/api/batch/quickstart
+One GET answers what this is, what is free and how to verify the output
+without trusting us: GET ${base}/api/batch/quickstart
 `;
 }
 
@@ -325,7 +328,7 @@ Do NOT use it for other countries' payroll, or as legal/accounting advice.
    exact requirements (network, token, amount, \`payTo\`, EIP-712 domain).
    Sign an EIP-3009 USDC authorization and retry with the payment attached —
    no account, no API key. Before signing, cross-check \`payTo\` against
-   \`walletAddress\` in https://ynt.codes/.well-known/agent-card.json.
+   \`x-executor.walletAddress\` in https://ynt.codes/.well-known/agent-card.json.
 4. Verify ANY response offline: each one travels inside a signed envelope
    (Ed25519, public key at \`${base}/api/batch/publickey\`). One-click:
    https://ynt.codes/verificar?url=${base}/api/batch/verificar/ejemplo

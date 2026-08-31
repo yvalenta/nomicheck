@@ -90,7 +90,7 @@ describe("auth.md", () => {
   });
 
   it("dice de frente que NO hay registro ni credenciales, y qué hay en su lugar", () => {
-    expect(doc).toContain("NO HAY");
+    expect(doc).toContain("Registration: NONE");
     expect(doc).toContain("x402");
     expect(doc).toContain("402");
     expect(doc).toContain("EIP-3009");
@@ -100,7 +100,7 @@ describe("auth.md", () => {
     expect(doc).toContain("openid-configuration");
     expect(doc).toContain("oauth-protected-resource");
     expect(doc).toContain("authorization_servers");
-    expect(doc).toMatch(/issuer inexistente/i);
+    expect(doc).toMatch(/issuer that does not exist/i);
   });
 
   it("el precio es el que cobra el muro, no un número escrito", () => {

@@ -48,7 +48,7 @@ export class ErrorHttp extends Error {
     public readonly status: number,
     public readonly cuerpo: string,
   ) {
-    super(`HTTP ${status} en ${url}: ${cuerpo.slice(0, 300)}`);
+    super(`HTTP ${status} at ${url}: ${cuerpo.slice(0, 300)}`);
     this.name = "ErrorHttp";
   }
 }
