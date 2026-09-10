@@ -480,10 +480,16 @@ describe("DX402_ACTIVO (la flag de /verificar/durable)", () => {
     expect(problemasDeConfig(base({ dx402Activo: false, redes: [BASE_MAINNET] }))).toEqual([]);
   });
 
-  it("apagada, un sobreProblema real se ignora: la llave del sobre no se exige", () => {
+  it("apagada, un sobreProblema que llega se empuja igual: quién lo computa es el llamador", () => {
+    // `montarMuroX402` lo computa con la flag encendida O con la llave
+    // declarada en el entorno (declarada y rota se acusa aunque no se venda:
+    // sirve la verificación de los sobres ya vendidos); apagada y sin llave
+    // no lo pasa. Esa decisión vive allá — acá no se filtra por la flag,
+    // que es lo que probaba `x402MuroArranque.test.ts` con el wiring real.
     expect(
-      problemasDeConfig(base({ dx402Activo: false, redes: [BASE_MAINNET] }), "NOMICHECK_SOBRE_SIGNING_KEY_PEM no está configurada"),
-    ).toEqual([]);
+      problemasDeConfig(base({ dx402Activo: false, redes: [BASE_MAINNET] }), "NOMICHECK_SOBRE_SIGNING_KEY_PEM está rota"),
+    ).toEqual(["NOMICHECK_SOBRE_SIGNING_KEY_PEM está rota"]);
+    expect(problemasDeConfig(base({ dx402Activo: false, redes: [BASE_MAINNET] }), null)).toEqual([]);
   });
 
   it("encendida, vuelve a exigir las dos cosas", () => {

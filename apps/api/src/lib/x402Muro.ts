@@ -41,7 +41,7 @@ import { muroDurableDe } from "./x402MuroDurable.js";
 // `/verificar/durable` está montada (`rutasActivas`, DX402_ACTIVO) y el resultado de
 // `sobreConfigurado()`, y es el único lugar donde juntar los dos no infla la
 // superficie de `x402Config.ts` con un chequeo que le es ajeno.
-import { sobreConfigurado } from "../services/sobreSignatureService.js";
+import { llaveDelSobreDeclarada, sobreConfigurado } from "../services/sobreSignatureService.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
 const PREFIJO = "/api/batch";
@@ -492,11 +492,15 @@ export function montarMuroX402(app: Express): void {
   const cfg = leerConfigX402();
   if (!cfg.activo) return;
 
-  // `sobreConfigurado()` solo con `DX402_ACTIVO=true`: apagada, `/verificar/
-  // durable` no se monta (`rutasActivas`) y su llave no se exige — es lo que
-  // deja desplegar `main` con el muro encendido y sin la llave del sobre.
-  // `problemasDeConfig` además la ignora por su cuenta si llegara igual.
-  const problemas = problemasDeConfig(cfg, cfg.dx402Activo ? sobreConfigurado() : null);
+  // `sobreConfigurado()` corre si la llave IMPORTA: con `DX402_ACTIVO=true`
+  // (la ruta se monta y firma con ella), o con la llave declarada en el
+  // entorno aunque la flag esté apagada (sirve la verificación de los sobres
+  // ya vendidos; declarada y rota es una revocación silenciosa, y se acusa
+  // al arrancar igual que cualquier otra config rota). Apagada y sin llave:
+  // no se exige nada — es lo que deja desplegar `main` con el muro encendido
+  // y sin la llave del sobre.
+  const laLlaveImporta = cfg.dx402Activo || llaveDelSobreDeclarada();
+  const problemas = problemasDeConfig(cfg, laLlaveImporta ? sobreConfigurado() : null);
   // Una ruta que cobra sin esquema de validacion previa vuelve a abrir el
   // agujero del "typo pagado". Se revienta al arrancar, no con el primer
   // comprador.

@@ -42,9 +42,36 @@ if grep -q 'cambia_esto_ahora' "$APP_DIR/.env"; then
   echo "ERROR: $APP_DIR/.env aún tiene placeholders — edita DB_PASSWORD y JWT_SECRET" >&2
   exit 1
 fi
+# ── Lectura del .env como la hace Compose, no como un grep literal ──────────
+# Producción entrega las variables al contenedor por env_file de Compose, así
+# que lo que vale es lo que Compose lee: acepta `export `, sangría, espacios
+# alrededor del `=`, comillas, un comentario al final (solo tras espacio en
+# valores sin comillas), CRLF y BOM en la primera línea; entre líneas
+# repetidas gana la ÚLTIMA; una línea comentada no cuenta. Un grep literal
+# `^X=true` divergía en todo eso, y en cada divergencia la guarda se saltaba
+# (crash-loop) o bloqueaba en falso (dos rondas del refutador, 2026-09-10).
+# Medido contra `docker compose config` 5.x sobre 25 formatos.
+valor_en_env() {  # valor_en_env NOMBRE ARCHIVO → imprime el valor que Compose entregaría
+  local bom=$'\xEF\xBB\xBF'
+  tr -d '\r' < "$2" \
+    | sed -nE "s/^(${bom})?[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=[[:space:]]*//p" \
+    | tail -n 1 \
+    | sed -E -e 's/^"([^"]*)".*$/\1/' -e t -e "s/^'([^']*)'.*$/\1/" -e t \
+             -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//'
+  # (`-e t` separado y no `t;`: BSD sed toma lo que sigue al `;` como etiqueta.)
+}
+flag_en_env() {  # flag_en_env NOMBRE ARCHIVO → 0 si la app la va a leer como exactamente "true"
+  [[ "$(valor_en_env "$1" "$2")" == "true" ]]
+}
+var_con_valor_en_env() {  # var_con_valor_en_env NOMBRE ARCHIVO → 0 si está declarada con valor no vacío
+  [[ -n "$(valor_en_env "$1" "$2")" ]]
+}
+
 # El PEM de firma debe venir completo por env_file. Si se pierde, el wrapper
 # firma con un keypair efímero y los outputs dejan de verificar tras el redeploy.
-if ! grep -q 'NOMICHECK_BATCH_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
+# Con valor, no solo presente: `NOMICHECK_BATCH_SIGNING_KEY_PEM=` vacía o
+# comentada es la misma pérdida.
+if ! var_con_valor_en_env NOMICHECK_BATCH_SIGNING_KEY_PEM "$APP_DIR/.env"; then
   echo "ERROR: falta NOMICHECK_BATCH_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
   exit 1
 fi
@@ -62,20 +89,16 @@ fi
 # exigirla — es lo que permite desplegar main sin la llave y encender DX402
 # después, con la llave puesta.
 #
-# `flag_en_env` lee la flag como la leen dotenv y Compose, no como un grep
-# literal: acepta `export `, espacios alrededor del `=`, comillas y un
-# comentario al final, y exige que el valor sea exactamente `true` (sin
-# ancla, `DX402_ACTIVO=truena` daba match). Un `DX402_ACTIVO="true"` escrito
-# a mano encendía la flag en el contenedor y NO la guarda — se saltaban las
-# dos, y el crash-loop que cierran volvía (hallazgo del refutador, 2026-09-10).
-flag_en_env() {  # flag_en_env NOMBRE ARCHIVO → 0 si la app la va a leer como "true"
-  grep -qE "^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=[[:space:]]*(true|\"true\"|'true')[[:space:]]*(#.*)?$" "$2"
-}
+# Las tres guardas de DX402 leen el .env con `valor_en_env` (arriba): un
+# `DX402_ACTIVO="true"` escrito a mano encendía la flag en el contenedor y
+# NO la guarda — se saltaban las dos y el crash-loop volvía; una llave
+# comentada o vacía pasaba un `grep 'NOMBRE='`; y `export X402_RED=avalanche`
+# bloqueaba en falso (dos rondas del refutador, 2026-09-10).
 DX402_ENCENDIDO=0
 if flag_en_env X402_ACTIVO "$APP_DIR/.env" && flag_en_env DX402_ACTIVO "$APP_DIR/.env"; then
   DX402_ENCENDIDO=1
 fi
-if [[ "$DX402_ENCENDIDO" == 1 ]] && ! grep -q 'NOMICHECK_SOBRE_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
+if [[ "$DX402_ENCENDIDO" == 1 ]] && ! var_con_valor_en_env NOMICHECK_SOBRE_SIGNING_KEY_PEM "$APP_DIR/.env"; then
   echo "ERROR: X402_ACTIVO=true y DX402_ACTIVO=true pero falta NOMICHECK_SOBRE_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
   echo "  /verificar/durable no arranca sin ella (llave NUEVA, nunca la de NOMICHECK_BATCH_SIGNING_KEY_PEM)." >&2
   echo "  Para desplegar sin ella: DX402_ACTIVO=false (o la línea ausente)." >&2
@@ -89,7 +112,7 @@ fi
 # avalanche adentro, no solo "que no la contradiga" (mismo modo de falla que
 # la llave del sobre arriba, reparación DX402 punto 2 ronda 2, hallazgo del
 # refutador). Misma condición doble: solo con DX402_ACTIVO=true.
-if [[ "$DX402_ENCENDIDO" == 1 ]] && ! grep -qE '^X402_RED=.*avalanche' "$APP_DIR/.env"; then
+if [[ "$DX402_ENCENDIDO" == 1 ]] && [[ "$(valor_en_env X402_RED "$APP_DIR/.env")" != *avalanche* ]]; then
   echo "ERROR: X402_ACTIVO=true y DX402_ACTIVO=true pero X402_RED no incluye avalanche en $APP_DIR/.env" >&2
   echo "  /verificar/durable solo liquida en eip155:43114:" >&2
   echo "  montarMuroX402 revienta al arrancar y se lleva la API entera (x402Config.ts, problemasDeConfig)." >&2
@@ -232,6 +255,22 @@ for _ in $(seq 1 30); do
     # desde `d95cd19` una ruta paga contesta su 402 a cualquier verbo, que es
     # justo lo que hacen el facilitador y los crawlers. Un cuerpo de ejemplo
     # habría vuelto a atar esta guarda a un esquema que puede cambiar.
+    # La llave del sobre se sirve siempre que esté declarada, con DX402
+    # encendida o no (los sobres ya vendidos verifican contra esa URL 90
+    # días). Es el único estado sin otro instrumento — "no vendo pero sigo
+    # verificando" — y su falla es una revocación silenciosa: se sondea.
+    if var_con_valor_en_env NOMICHECK_SOBRE_SIGNING_KEY_PEM "$APP_DIR/.env" 2>/dev/null; then
+      CODIGO_LLAVE="$(curl -s -o /dev/null -w '%{http_code}' \
+        http://localhost:3002/api/batch/verificar/durable/sobre-publickey 2>/dev/null || true)"
+      if [[ "$CODIGO_LLAVE" == "200" ]]; then
+        echo "✓ la llave del sobre se sirve: GET /api/batch/verificar/durable/sobre-publickey responde 200"
+      else
+        echo "⚠ $APP_DIR/.env declara NOMICHECK_SOBRE_SIGNING_KEY_PEM pero la llave pública NO se sirve" >&2
+        echo "  (/api/batch/verificar/durable/sobre-publickey responde ${CODIGO_LLAVE:-sin respuesta}, no 200)." >&2
+        echo "  Los sobres ya vendidos verifican contra esa URL: revisá la llave en el contenedor." >&2
+      fi
+    fi
+
     if flag_en_env X402_ACTIVO "$APP_DIR/.env" 2>/dev/null; then
       CODIGO_402="$(curl -s -o /dev/null -w '%{http_code}' \
         http://localhost:3002/api/batch/verificar 2>/dev/null || true)"

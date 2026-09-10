@@ -15,6 +15,7 @@
 // Si alguien reemplazara la línea real por, por ejemplo,
 // `problemasDeConfig(cfg, null)`, ninguno de esos tests lo notaría — este sí.
 import express from "express";
+import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { montarMuroX402 } from "../x402Muro.js";
 
@@ -67,6 +68,32 @@ describe("montarMuroX402 con DX402_ACTIVO apagada", () => {
     process.env.X402_PAY_TO = PAY_TO_LIMPIA;
     process.env.X402_RED = "base";
     delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+
+    expect(() => montarMuroX402(express())).not.toThrow();
+  });
+
+  it("apagada, con la llave DECLARADA pero rota, revienta nombrando la llave", () => {
+    // La flag no exige la llave, pero si el operador la declaró es porque los
+    // sobres ya vendidos verifican contra ella (90 días): declarada y rota es
+    // una revocación silenciosa, y se acusa al arrancar como cualquier config
+    // rota (segundo refutador, 2026-09-10).
+    process.env.X402_ACTIVO = "true";
+    delete process.env.DX402_ACTIVO;
+    process.env.X402_PAY_TO = PAY_TO_LIMPIA;
+    process.env.X402_RED = "base";
+    process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = "-----BEGIN PRIVATE KEY-----\ntruncada\n";
+
+    expect(() => montarMuroX402(express())).toThrow(/NOMICHECK_SOBRE_SIGNING_KEY_PEM está configurada pero no es un PEM/);
+  });
+
+  it("apagada, con la llave declarada y válida, arranca sin Avalanche", () => {
+    process.env.X402_ACTIVO = "true";
+    delete process.env.DX402_ACTIVO;
+    process.env.X402_PAY_TO = PAY_TO_LIMPIA;
+    process.env.X402_RED = "base";
+    process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = generateKeyPairSync("ed25519")
+      .privateKey.export({ format: "pem", type: "pkcs8" })
+      .toString();
 
     expect(() => montarMuroX402(express())).not.toThrow();
   });

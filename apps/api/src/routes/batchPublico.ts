@@ -34,7 +34,12 @@ import { construirOpenApi } from "../services/openApiService.js";
 import { fecha } from "../validation/comunes.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
-import { obtenerSobrePublicKeyId, obtenerSobrePublicKeyPem, sobreConfigurado } from "../services/sobreSignatureService.js";
+import {
+  llaveDelSobreDeclarada,
+  obtenerSobrePublicKeyId,
+  obtenerSobrePublicKeyPem,
+  sobreConfigurado,
+} from "../services/sobreSignatureService.js";
 import { leerConfigX402 } from "../lib/x402Config.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
 import {
@@ -366,14 +371,17 @@ batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response
 // encendida o no: un sobre vendido promete 90 días de verificación offline
 // contra esta URL, y apagar la venta (la ruta paga da 404) no puede revocar
 // lo ya cobrado — "no vendo" y "no verifico" son dos estados distintos
-// (hallazgo del refutador, 2026-09-10). Sin llave: 404 con la flag apagada
-// (la ruta no existe y un 503 diría "existe pero está rota") y 503 con la
-// flag encendida (existe y está rota; `problemasDeConfig` no debería haber
-// dejado arrancar así).
+// (hallazgo del refutador, 2026-09-10). Sin llave declarada y con la flag
+// apagada: 404 (la ruta no existe, y un 503 diría "existe pero está rota").
+// Cualquier otro problema —llave declarada pero rota, o flag encendida sin
+// llave— es 503 con el motivo: una llave rota con la flag apagada NO es "no
+// habilitada", es una config rota que revoca la verificación de lo ya
+// vendido, y culpar a la flag escondería la perilla equivocada (segundo
+// refutador).
 batchPublicoRouter.get("/verificar/durable/sobre-publickey", (_req: Request, res: Response) => {
   const problema = sobreConfigurado();
   if (problema) {
-    if (!leerConfigX402().dx402Activo) {
+    if (!leerConfigX402().dx402Activo && !llaveDelSobreDeclarada()) {
       return res.status(404).json({
         error: "not_found",
         mensaje: "/verificar/durable no está habilitada en este servidor (DX402_ACTIVO).",

@@ -689,10 +689,12 @@ export function rutasActivas(cfg: Pick<ConfigX402, "dx402Activo">): string[] {
  * tarea pide explícitamente evitarlo. Quien conoce si `/verificar/durable`
  * está montada (`RUTAS_CON_MURO`) Y el resultado de `sobreConfigurado()` es
  * el llamador (`montarMuroX402`, `x402Muro.ts`); acá solo se empuja lo que
- * llega. `undefined`/`null` = nada que empujar. Con `DX402_ACTIVO=false` se
- * ignora aunque venga: el sobre es de `/verificar/durable`, y apagada la
- * flag esa ruta no existe — exigir su llave sería exactamente lo que la
- * flag vino a evitar.
+ * llega. `undefined`/`null` = nada que empujar. La decisión de CUÁNDO
+ * computarlo es del llamador y no de `dx402Activo`: `montarMuroX402` lo
+ * computa con la flag encendida O con la llave declarada en el entorno
+ * (declarada y rota se acusa aunque no se venda — sirve la verificación de
+ * los sobres ya vendidos); apagada y sin llave, no lo pasa. Acá se empuja
+ * lo que llega, también con la flag apagada.
  */
 export function problemasDeConfig(cfg: ConfigX402, sobreProblema?: string | null): string[] {
   const p: string[] = [];
@@ -763,7 +765,7 @@ export function problemasDeConfig(cfg: ConfigX402, sobreProblema?: string | null
       );
     }
   }
-  if (sobreProblema && cfg.dx402Activo) {
+  if (sobreProblema) {
     p.push(sobreProblema);
   }
   return p;

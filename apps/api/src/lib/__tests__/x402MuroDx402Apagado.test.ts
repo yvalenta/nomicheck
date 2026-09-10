@@ -11,7 +11,7 @@
 import express from "express";
 import type { Server } from "node:http";
 import { generateKeyPairSync } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { montarMuroX402 } from "../x402Muro.js";
 import { batchPublicoRouter } from "../../routes/batchPublico.js";
 
@@ -30,8 +30,7 @@ beforeAll(async () => {
   process.env.X402_FACILITATOR = "https://facilitator.ultravioletadao.xyz";
   process.env.NOMICHECK_PUBLIC_ORIGIN = "https://nomicheck.ynt.codes";
   // SIN llave del sobre al arrancar: es el deploy de `main` sin la llave, el
-  // que la flag vino a permitir. El test de la llave presente la pone después
-  // (el keypair se cachea recién cuando carga bien, así que el orden importa).
+  // que la flag vino a permitir. Los tests que necesitan llave la ponen ellos.
   delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
 
   const app = express();
@@ -56,6 +55,12 @@ afterAll(() => {
 });
 
 describe("DX402_ACTIVO apagada, muro encendido", () => {
+  // Cada test parte SIN llave y pone la que necesita: la caché del keypair
+  // sigue a la env, así que el orden (o un shuffle) no cambia el resultado.
+  beforeEach(() => {
+    delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+  });
+
   it("POST /verificar/durable da 404, no 402: la ruta no existe, no es que cueste", async () => {
     const res = await fetch(`${base}/api/batch/verificar/durable`, {
       method: "POST",
@@ -95,6 +100,22 @@ describe("DX402_ACTIVO apagada, muro encendido", () => {
     expect(cuerpo.publicKeyPem).toContain("BEGIN PUBLIC KEY");
     // Y la ruta paga sigue sin existir: la llave no la resucita.
     expect((await fetch(`${base}/api/batch/verificar/durable`)).status).toBe(404);
+  });
+
+  it("con la llave declarada pero ROTA, 503 con el motivo — no un 404 que culpe a la flag", async () => {
+    // Una llave rota con la flag apagada no es "no habilitada": es una config
+    // rota que revoca la verificación de lo ya vendido, y el mensaje tiene que
+    // apuntar a la perilla correcta (segundo refutador, 2026-09-10).
+    process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = "-----BEGIN PRIVATE KEY-----\ntruncada\n";
+    const res = await fetch(`${base}/api/batch/verificar/durable/sobre-publickey`);
+    expect(res.status).toBe(503);
+    const cuerpo = (await res.json()) as { error: string; mensaje: string };
+    expect(cuerpo.error).toBe("sobre_key_missing");
+    expect(cuerpo.mensaje).toMatch(/NOMICHECK_SOBRE_SIGNING_KEY_PEM.*no es un PEM/);
+    expect(cuerpo.mensaje).not.toContain("DX402_ACTIVO");
+    // Quitada la llave, vuelve el 404: la caché del keypair sigue a la env.
+    delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+    expect((await fetch(`${base}/api/batch/verificar/durable/sobre-publickey`)).status).toBe(404);
   });
 
   it("las demás rutas pagas siguen cobrando: el muro entero no se apagó", async () => {
