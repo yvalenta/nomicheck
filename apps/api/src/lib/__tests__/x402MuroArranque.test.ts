@@ -1,0 +1,44 @@
+// El wiring real entre Parte 1 y Parte 3 del brief DX402 punto 2: dentro de
+// `montarMuroX402`, `x402Muro.ts:404` llama
+// `problemasDeConfig(cfg, sobreConfigurado())` — el `sobreConfigurado()` DE
+// VERDAD, no uno inyectado — así que un deployment con `/verificar/durable`
+// activa (está en `RUTAS_CON_MURO` sin condición) pero sin
+// `NOMICHECK_SOBRE_SIGNING_KEY_PEM` configurada tiene que reventar al
+// arrancar, igual que `sinEsquema`.
+//
+// Esa línea es la única que junta las dos piezas, y ningún otro test la
+// ejercita: `x402Config.test.ts` (describe "sobreProblema") prueba
+// `problemasDeConfig` con un string INYECTADO a mano; `sobreSignatureService
+// .test.ts` prueba `sobreConfigurado()` aislado; `x402MuroGet.test.ts`
+// SIEMPRE setea la env en su `beforeAll` antes de llamar a
+// `montarMuroX402`, así que solo cubre "está bien configurada, no revienta".
+// Si alguien reemplazara la línea real por, por ejemplo,
+// `problemasDeConfig(cfg, null)`, ninguno de esos tests lo notaría — este sí.
+import express from "express";
+import { afterEach, describe, expect, it } from "vitest";
+import { montarMuroX402 } from "../x402Muro.js";
+
+const PAY_TO_LIMPIA = "0x1111111111111111111111111111111111111111";
+
+afterEach(() => {
+  delete process.env.X402_ACTIVO;
+  delete process.env.X402_PAY_TO;
+  delete process.env.X402_RED;
+  delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+});
+
+describe("montarMuroX402 sin NOMICHECK_SOBRE_SIGNING_KEY_PEM", () => {
+  it("revienta al arrancar — no espera al primer comprador de /verificar/durable", () => {
+    process.env.X402_ACTIVO = "true";
+    process.env.X402_PAY_TO = PAY_TO_LIMPIA;
+    // Avalanche presente a propósito: así el ÚNICO problema posible es el de
+    // la llave del sobre, no la falta de red (eso ya lo prueba
+    // `x402Config.test.ts`, describe "requisitos de red por ruta", por
+    // separado — mezclar los dos acá dejaría la aserción de abajo sin poder
+    // distinguir cuál de los dos reventó).
+    process.env.X402_RED = "base,avalanche";
+    delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+
+    expect(() => montarMuroX402(express())).toThrow(/NOMICHECK_SOBRE_SIGNING_KEY_PEM no está configurada/);
+  });
+});

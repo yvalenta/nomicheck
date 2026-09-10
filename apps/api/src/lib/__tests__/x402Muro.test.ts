@@ -15,6 +15,7 @@ import {
   BASE_MAINNET,
   BASE_SEPOLIA,
   extensionBazaar,
+  declaracionDurableEvidence,
   perfilFacilitador,
   requisitosDePago,
 } from "../x402Config.js";
@@ -22,6 +23,7 @@ import { EJEMPLO_RETENCION, EJEMPLO_VERIFICACION } from "../ejemplosBatch.js";
 import {
   aFormatoV1,
   desafioDeDescubrimiento,
+  gruposConPropios,
   gruposPorFacilitador,
   redDelPago,
   rutasPublicasConMuro,
@@ -208,6 +210,56 @@ describe("redDelPago", () => {
   });
 });
 
+// El filtro que usan `muroDe` y `muroDurableDe` para no anunciar un
+// facilitador sin nada que settlear (`x402Muro.ts#gruposConPropios`).
+// `muroDe` nunca lo dispara hoy — todas sus rutas cobran en todas las redes
+// de `cfg.redes`, así que cada grupo siempre tiene al menos un accept propio
+// — pero `muroDurableDe` sí, en cuanto `accepts` viene restringido por
+// `REDES_POR_RUTA`. Se prueba acá, directo sobre la función, en vez de
+// depender de que algún día una ruta de `muroDe` deje de cubrir todas las
+// redes y el filtro se ejercite "gratis".
+describe("gruposConPropios (el filtro que descarta facilitadores sin accepts propios)", () => {
+  // Dos facilitadores: CDP se queda con Base, Ultravioleta con Avalanche —
+  // mismo cfg que "cada facilitador recibe SOLO sus redes", arriba.
+  const cfg = {
+    activo: true,
+    facilitatorURL: "https://api.cdp.coinbase.com/platform/v2/x402",
+    facilitadoresPorRed: { avalanche: "https://facilitator.ultravioletadao.xyz" },
+    redes: [BASE_MAINNET, AVALANCHE_MAINNET],
+    redesInvalidas: [],
+    payTo: "0x1111111111111111111111111111111111111111",
+    origenPublico: "https://nomicheck.ynt.codes",
+  };
+
+  it("con accepts en las dos redes, ningún grupo se descarta", () => {
+    // `/verificar` no restringe redes: los dos facilitadores tienen algo
+    // propio y `gruposConPropios` no filtra nada — el caso de siempre.
+    const accepts = requisitosDePago(cfg, "/verificar");
+    expect(gruposConPropios(cfg, accepts).map((g) => g.url)).toEqual([
+      "https://api.cdp.coinbase.com/platform/v2/x402",
+      "https://facilitator.ultravioletadao.xyz",
+    ]);
+  });
+
+  it("con accepts restringidos a Avalanche, el grupo de CDP se descarta entero", () => {
+    // Es lo que le pasa de verdad a `/verificar/durable`: `requisitosDePago`
+    // filtra los accepts a Avalanche (`REDES_POR_RUTA`), y el grupo de CDP
+    // (que solo tiene Base) llega acá con `propios: []`. Sin este filtro,
+    // `muroDurableDe` le armaría a CDP un handler con
+    // `deriveCapabilities([])` — un facilitador que nunca puede matchear
+    // nada, publicado igual.
+    const accepts = requisitosDePago(cfg, "/verificar/durable");
+    const grupos = gruposConPropios(cfg, accepts);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].url).toBe("https://facilitator.ultravioletadao.xyz");
+    expect(grupos[0].propios.map((a) => a.network)).toEqual(["eip155:43114"]);
+  });
+
+  it("sin ningún accept, no queda ningún grupo", () => {
+    expect(gruposConPropios(cfg, [])).toEqual([]);
+  });
+});
+
 // Perfiles de facilitador. Cada campo de estos es la diferencia entre cobrar y
 // no cobrar, y ninguno se nota desde acá: el 402 se ve igual en los dos casos.
 describe("perfilFacilitador", () => {
@@ -364,6 +416,29 @@ describe("desafío de descubrimiento (GET a una ruta paga)", () => {
       expect(d.accepts[0].maxAmountRequired).toBe(requisitosDePago(cfg, precio)[0].maxAmountRequired);
       // Y el recurso anunciado es el de la ruta paga, no el de otra.
       expect(d.accepts[0].resource).toBe(`${cfg.origenPublico}/api/batch${precio}`);
+    }
+  });
+
+  // DX402 punto 2: `extensions` de nivel superior es la declaración que hace
+  // que un comprador SEPA de la evidencia durable antes de firmar nada — es
+  // hermana de `accepts`, no una clave dentro de cada entrada (esa es la
+  // forma v0.2/fallback que ya cubre `requisitosDePago con REDES_POR_RUTA`
+  // en `x402Config.test.ts`).
+  it("/verificar/durable agrega extensions de nivel superior, con acceptIndexes [0]", () => {
+    const d = desafioDeDescubrimiento(cfg, "/verificar/durable", "/api/batch/verificar/durable");
+    expect(d.extensions).toEqual(declaracionDurableEvidence([0]));
+    const declaracion = d.extensions?.["durable-evidence"] as {
+      info: { acceptIndexes: number[] };
+      schema: unknown;
+    };
+    expect(declaracion.info.acceptIndexes).toEqual([0]);
+    expect(declaracion.schema).toBeDefined();
+  });
+
+  it("las demás rutas NO llevan extensions: no prometen lo que no cumplen", () => {
+    for (const { publica, precio } of rutasPublicasConMuro()) {
+      if (precio === "/verificar/durable") continue;
+      expect(desafioDeDescubrimiento(cfg, precio, publica).extensions).toBeUndefined();
     }
   });
 });

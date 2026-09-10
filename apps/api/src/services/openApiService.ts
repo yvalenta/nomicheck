@@ -18,7 +18,7 @@ import { batchVerificacionSchema } from "../validation/batchVerificacion.js";
 import { batchPagoOnchainSchema } from "../validation/batchPagoOnchain.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
-import { PRECIOS_USD, leerConfigX402 } from "../lib/x402Config.js";
+import { PRECIOS_USD, leerConfigX402, AVALANCHE_MAINNET } from "../lib/x402Config.js";
 import { CONTACTO } from "../lib/contacto.js";
 
 const BASE_URL = "https://nomicheck.ynt.codes/api/batch";
@@ -212,6 +212,95 @@ export function construirOpenApi(): Record<string, unknown> {
       },
     };
   }
+
+  // `/verificar/durable` (DX402 punto 2): mismo input, mismo cálculo y mismo
+  // precio que `payslip-verification` (`/verificar`) -- reutiliza su schema,
+  // no lo duplica -- pero la ENTREGA es distinta: un sobre firmado, sellado a
+  // la llave del comprador y anclado con el recibo del facilitador, no el
+  // payload firmado de siempre. Fuera del loop de arriba a propósito: no
+  // tiene gemela CSV (`rutasPublicasConMuro` ya la excluye -- un sobre no es
+  // un CSV), liquida SOLO en Avalanche C-Chain aunque el resto del sitio
+  // acepte otras redes, y su 200 necesita su propia descripcion. Sin esta
+  // entrada, la unica documentacion de una ruta que YA cobra era la
+  // `description` del 402 (reparacion DX402 punto 2 ronda 2, hallazgo del
+  // refutador).
+  {
+    const cobraDurable = cobra("/verificar/durable");
+    paths["/verificar/durable"] = {
+      post: {
+        operationId: "payslip-verification-durable",
+        summary: "Verify a payslip with durable evidence (DX402 envelope)",
+        description:
+          "Same recomputation, same input schema and same price as payslip-verification " +
+          "(/verificar). What changes is delivery: the response is an ENVELOPE, signed with " +
+          "NomiCheck's own Ed25519 envelope key (GET /verificar/durable/sobre-publickey -- a " +
+          "DIFFERENT key from GET /publickey, which signs every other response), sealed to " +
+          "the payer's own key recovered from the payment signature, and anchored with the " +
+          "facilitator's signed receipt (X-Durable-Evidence response header). The ciphertext " +
+          "stays hosted for 90 days, revocable, so the buyer can verify offline later without " +
+          "calling this server again. Avalanche C-Chain only, regardless of which networks " +
+          "the rest of this catalog accepts -- see x-x402.redes below, not the global list.",
+        tags: ["listings"],
+        requestBody: { required: true, content: { "application/json": { schema: refA("BatchVerificacionInput") } } },
+        responses: {
+          "200": {
+            description:
+              "The signed ENVELOPE bytes -- NOT the usual signed JSON payload other " +
+              "operations return. Verify it with the envelope public key from GET " +
+              "/verificar/durable/sobre-publickey, never with GET /publickey. Carries " +
+              "X-Durable-Evidence with the anchor receipt (or a `skipped` reason when " +
+              "anchoring failed and was deferred; the envelope is still delivered either way).",
+          },
+          "400": { description: "`invalid_input` -- the body does not meet the v1 contract." },
+          "402": {
+            description: cobraDurable
+              ? "Payment required (x402): USD " +
+                `${precioDe("/verificar/durable")?.toFixed(2)} per call, Avalanche C-Chain ` +
+                `(\`${AVALANCHE_MAINNET.caip2}\`) only -- unlike every other paid operation ` +
+                "here, this one does not accept the site's other networks."
+              : "Payment required (x402). Only while the paywall is on; it is currently off " +
+                "and this operation answers without payment.",
+          },
+          "413": {
+            description: "`too_large_for_durable` -- the sealed batch exceeds the facilitator's request cap. Not charged.",
+          },
+          "422": {
+            description: "`no_payer_key` -- the payment signature does not recover to `authorization.from`. Not charged.",
+          },
+          "424": {
+            description: "`durable_evidence_unavailable` -- anchoring has been failing sustained. Not charged.",
+          },
+          "500": { description: "`internal_error`." },
+        },
+        ...(cobraDurable ? { security: [{ x402: [] }] } : {}),
+        "x-x402": {
+          cobra: cobraDurable,
+          precioUsd: precioDe("/verificar/durable") ?? null,
+          red: muro.activo ? AVALANCHE_MAINNET.caip2 : null,
+          asset: muro.activo ? AVALANCHE_MAINNET.asset : null,
+          redes: muro.activo
+            ? [{ red: AVALANCHE_MAINNET.caip2, asset: AVALANCHE_MAINNET.asset, nombre: AVALANCHE_MAINNET.nombre }]
+            : null,
+        },
+      },
+    };
+  }
+
+  paths["/verificar/durable/sobre-publickey"] = {
+    get: {
+      operationId: "durable-envelope-public-key",
+      summary: "Ed25519 public key that verifies the durable envelope",
+      description:
+        "Returns the envelope's public key PEM and its `publicKeyId`. This is a DIFFERENT " +
+        "key from GET /publickey: the envelope served by /verificar/durable is signed with " +
+        "its own key, never the one that signs every other response on this API.",
+      tags: ["catalog"],
+      responses: {
+        "200": { description: "PEM and `publicKeyId` of the envelope key." },
+        "503": { description: "`sobre_key_missing` -- the envelope signing key is not configured." },
+      },
+    },
+  };
 
   paths["/parametros"] = {
     get: {

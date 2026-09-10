@@ -1,0 +1,358 @@
+// La cola de reintentos de anclaje diferido (DX402 punto 2, Parte 3).
+//
+// El pago YA liquidó cuando esta cola entra en juego (`programarAnclaje` se
+// llama después de `capture()` en `x402MuroDurable.ts`): lo que se prueba
+// acá es que reintenta con el reloj y el fetch INYECTADOS —nunca esperando
+// tiempo real ni tocando la red— y que un 409 `already_anchored` cuenta como
+// éxito, no como fallo.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { hexToBytes } from "viem";
+import { payerKeyFromEvmSignature, type AnchorOptions } from "uvd-x402-sdk";
+import {
+  programarAnclaje,
+  tareasEnColaParaTest,
+  limpiarColaParaTest,
+  esExitoOYaAnclado,
+  registrarResultadoAnchor,
+  anclajeDisponible,
+  resetContadorFallosParaTest,
+  normalizarResultadoAnchor,
+  envejecerUltimoFalloParaTest,
+  type RelojDeReintentos,
+} from "../anclajeDiferido.js";
+import { usarEmisor, type LineaDeRegistro } from "../registro.js";
+
+/** Una clave de pagador VÁLIDA (33 bytes comprimidos, punto real de la
+ * curva) — recuperada de una firma real en vez de bytes al azar, porque
+ * `sealEvidenceTo` hace ECDH de verdad y un punto inválido lo revienta. */
+async function claveDePagadorValida(): Promise<Uint8Array> {
+  const cuenta = privateKeyToAccount(generatePrivateKey());
+  const digest = `0x${"11".repeat(32)}` as const;
+  const firma = await cuenta.sign({ hash: digest });
+  return payerKeyFromEvmSignature(firma, hexToBytes(digest));
+}
+
+/** Reloj de test: no agenda con `setTimeout` real — guarda los callbacks
+ * para que el test los dispare a mano, sin esperar los 30s/120s/300s reales. */
+function relojManual(): RelojDeReintentos & { dispararProximo: () => Promise<void> } {
+  const pendientes: (() => void)[] = [];
+  return {
+    setTimeout: (fn) => {
+      pendientes.push(fn);
+      return {};
+    },
+    dispararProximo: async () => {
+      const fn = pendientes.shift();
+      if (!fn) throw new Error("no hay ningún reintento agendado para disparar");
+      fn();
+      // `agendar` dispara `intentarAhora` en fire-and-forget (`void`), así
+      // que un `setTimeout` real y corto —no el reloj inyectado— es lo que
+      // deja terminar su cadena de `await` (fetch + `.json()` + la
+      // mutación de la cola) antes de que el test siga afirmando.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    },
+  };
+}
+
+function opciones(fetchDoble: typeof fetch, payerKey: Uint8Array): AnchorOptions {
+  return {
+    paymentId: "0x" + "aa".repeat(32),
+    network: "eip155:43114",
+    txHash: "0x" + "bb".repeat(32),
+    payer: "0x1111111111111111111111111111111111111111",
+    payee: "0x2222222222222222222222222222222222222222",
+    payerKey,
+    backend: "s3",
+    retention: "90d",
+    facilitator: "https://facilitator.ultravioletadao.xyz",
+    fetch: fetchDoble,
+  };
+}
+
+let lineas: LineaDeRegistro[];
+
+beforeEach(() => {
+  limpiarColaParaTest();
+  resetContadorFallosParaTest();
+  lineas = [];
+  usarEmisor((l) => lineas.push(l));
+});
+
+describe("esExitoOYaAnclado", () => {
+  it("un resultado sin `skipped` PERO con `pointer` es éxito", () => {
+    expect(esExitoOYaAnclado({ v: 1, paymentId: "p", pointer: "s3+https://x/y" })).toBe(true);
+  });
+
+  it("un `skipped` con already_anchored en el error es éxito, no fallo", () => {
+    expect(esExitoOYaAnclado({ v: 1, skipped: "anchor_failed", status: 409, error: "dx402_already_anchored" })).toBe(
+      true
+    );
+  });
+
+  it("un `skipped` por cualquier otro motivo es fallo real", () => {
+    expect(esExitoOYaAnclado({ v: 1, skipped: "anchor_failed", status: 503 })).toBe(false);
+    expect(esExitoOYaAnclado({ v: 1, skipped: "too_large" })).toBe(false);
+  });
+
+  // Reparación DX402 punto 2 ronda 2 (hallazgo del refutador): antes, un
+  // resultado sin `skipped` era éxito por la mera AUSENCIA de esa clave, sin
+  // exigir la forma que el SDK del comprador (`parseEvidenceHeader`) en
+  // verdad necesita para leer el header. Un 2xx sin forma de
+  // `AnchoredEvidence` (`{}`, un array, un `123`/`"ok"` ya normalizado por
+  // `normalizarResultadoAnchor`) contaba como anclaje logrado sin haber
+  // anclado nada.
+  it("un objeto SIN `skipped` pero TAMPOCO con `pointer` no es éxito", () => {
+    expect(esExitoOYaAnclado({ v: 1 })).toBe(false);
+    expect(esExitoOYaAnclado({})).toBe(false);
+  });
+
+  it("un `pointer` vacío no cuenta como éxito", () => {
+    expect(esExitoOYaAnclado({ v: 1, pointer: "" })).toBe(false);
+  });
+});
+
+describe("normalizarResultadoAnchor", () => {
+  it("deja pasar un objeto tal cual", () => {
+    const objeto = { v: 1, pointer: "s3+https://x/y" };
+    expect(normalizarResultadoAnchor(objeto)).toBe(objeto);
+  });
+
+  // `anchorEvidence` (uvd-x402-sdk) hace `(await res.json()) as Record<...>`
+  // sin comprobar la forma -- un facilitador que responda 2xx con `null`
+  // pasa TAL CUAL, y sin normalizar antes de la primera lectura eso revienta
+  // con un TypeError DESPUÉS de `capture()` (reparación DX402 punto 2 ronda
+  // 2, hallazgo del refutador).
+  it("un `null` se normaliza a un fallo legible, sin lanzar", () => {
+    const normalizado = normalizarResultadoAnchor(null);
+    expect(normalizado.skipped).toBe("anchor_failed");
+    expect(esExitoOYaAnclado(normalizado)).toBe(false);
+  });
+
+  it("un número, un array o un string se normalizan al mismo fallo -- JSON válido, forma inesperada", () => {
+    for (const r of [123, [], "ok", "", 0, false]) {
+      const normalizado = normalizarResultadoAnchor(r);
+      expect(normalizado.skipped).toBe("anchor_failed");
+      expect(esExitoOYaAnclado(normalizado)).toBe(false);
+    }
+  });
+
+  // Caso DISTINTO del anterior: un `{}` SÍ es un objeto (la comprobación de
+  // "no es objeto" no lo agarra), pero no tiene NI `skipped` NI `pointer` --
+  // ninguno de los dos caminos que el resto del código conoce. Sin
+  // normalizar esto también, `esExitoOYaAnclado({})` da `false` (correcto),
+  // pero el header sale como `evidenceHeader({})` -- sin `skipped` -- que el
+  // SDK del comprador rechaza como malformado en vez de leerlo como "no
+  // ancló" (reparación DX402 punto 2 ronda 2, hallazgo del refutador).
+  it("un objeto SIN skipped y SIN pointer también se normaliza a un fallo legible", () => {
+    const normalizado = normalizarResultadoAnchor({});
+    expect(normalizado.skipped).toBe("anchor_failed");
+    expect(esExitoOYaAnclado(normalizado)).toBe(false);
+  });
+
+  it("un objeto que YA declara `skipped` se deja tal cual, sea cual sea el motivo", () => {
+    const objeto = { v: 1, skipped: "too_large" };
+    expect(normalizarResultadoAnchor(objeto)).toBe(objeto);
+  });
+});
+
+describe("cortacircuitos de fallos consecutivos (anclajeDisponible)", () => {
+  it("disponible por defecto y tras un reset", () => {
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  it("un éxito reinicia el contador a cero", () => {
+    for (let i = 0; i < 4; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    registrarResultadoAnchor({ v: 1, paymentId: "p", pointer: "s3+https://x/y" });
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  it("se apaga tras 5 fallos consecutivos y no antes", () => {
+    for (let i = 0; i < 4; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      expect(anclajeDisponible()).toBe(true);
+    }
+    registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    expect(anclajeDisponible()).toBe(false);
+  });
+
+  it("un already_anchored NO cuenta como fallo para el cortacircuitos", () => {
+    for (let i = 0; i < 10; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 409, error: "dx402_already_anchored" });
+    }
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  // Reparación DX402 punto 2 ronda 2 (hallazgo de DOS refutadores
+  // independientes): sin medio-abierto, `anclajeDisponible()` corta ANTES de
+  // `capture()` en `x402MuroDurable.ts`, así que nunca se vuelve a llamar
+  // `anchorEvidence` de una venta nueva y el único reset
+  // (`registrarResultadoAnchor`) queda inalcanzable -- el corte, una vez
+  // abierto, no tenía camino de vuelta.
+  describe("medio-abierto", () => {
+    it("sigue cerrado (indisponible) recién abierto el corte", () => {
+      for (let i = 0; i < 5; i++) {
+        registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      }
+      expect(anclajeDisponible()).toBe(false);
+    });
+
+    it("sigue cerrado si todavía no pasó la ventana de gracia", () => {
+      for (let i = 0; i < 5; i++) {
+        registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      }
+      envejecerUltimoFalloParaTest(299_000); // 1s antes de los 300s de gracia
+      expect(anclajeDisponible()).toBe(false);
+    });
+
+    it("deja pasar UN intento pasada la ventana de gracia", () => {
+      for (let i = 0; i < 5; i++) {
+        registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      }
+      envejecerUltimoFalloParaTest(300_000);
+      expect(anclajeDisponible()).toBe(true);
+    });
+
+    it("si ese intento falla, el corte se reabre por otra ventana completa", () => {
+      for (let i = 0; i < 5; i++) {
+        registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      }
+      envejecerUltimoFalloParaTest(300_000);
+      expect(anclajeDisponible()).toBe(true);
+      // El intento de sonda falla -- el corte se reabre, no queda medio-abierto.
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      expect(anclajeDisponible()).toBe(false);
+    });
+
+    it("si ese intento ancla, el corte se cierra del todo -- no solo para esa venta", () => {
+      for (let i = 0; i < 5; i++) {
+        registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+      }
+      envejecerUltimoFalloParaTest(300_000);
+      registrarResultadoAnchor({ v: 1, paymentId: "p", pointer: "s3+https://x/y" });
+      expect(anclajeDisponible()).toBe(true);
+      // Sin envejecer de nuevo: si el reset no fuera real, `anclajeDisponible`
+      // volvería a leer el contador viejo.
+      expect(anclajeDisponible()).toBe(true);
+    });
+  });
+});
+
+describe("programarAnclaje", () => {
+  it("no duplica la tarea si se llama dos veces con el mismo paymentId mientras sigue en cola", async () => {
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(async () => new Response(null, { status: 503 }));
+    const reloj = relojManual();
+
+    programarAnclaje("pago-1", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    programarAnclaje("pago-1", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+
+    expect(tareasEnColaParaTest()).toBe(1);
+  });
+
+  it("reintenta con el fetch inyectado cuando el reloj dispara, sin tocar la red real", async () => {
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(
+      async () => new Response(JSON.stringify({ v: 1, paymentId: "p", pointer: "s3+https://x/y" }), { status: 200 })
+    );
+    const reloj = relojManual();
+
+    programarAnclaje("pago-2", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    // `programarAnclaje` solo AGENDA: el intento en sí corre cuando el reloj
+    // dispara, nunca al encolar — el reintento INMEDIATO es responsabilidad
+    // del llamador (`x402MuroDurable.ts`), no de esta cola.
+    expect(fetchDoble).not.toHaveBeenCalled();
+
+    await reloj.dispararProximo();
+
+    expect(fetchDoble).toHaveBeenCalledTimes(1);
+    expect(tareasEnColaParaTest()).toBe(0); // 200 sin `skipped` = éxito, sale de la cola
+  });
+
+  it("un 409 con `already_anchored` cuenta como éxito, no como fallo", async () => {
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 })
+    );
+    const reloj = relojManual();
+
+    programarAnclaje("pago-3", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    await reloj.dispararProximo();
+
+    expect(tareasEnColaParaTest()).toBe(0);
+    expect(lineas.some((l) => l.mensaje === "anclaje diferido logrado")).toBe(true);
+  });
+
+  it("agota sus tres reintentos y sale de la cola logueando el error, sin loguear éxito", async () => {
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(async () => new Response(JSON.stringify({ error: "boom" }), { status: 503 }));
+    const reloj = relojManual();
+
+    programarAnclaje("pago-4", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    await reloj.dispararProximo(); // intento 1 -> falla, agenda intento 2
+    await reloj.dispararProximo(); // intento 2 -> falla, agenda intento 3
+    await reloj.dispararProximo(); // intento 3 -> falla, agota
+
+    expect(tareasEnColaParaTest()).toBe(0);
+    expect(fetchDoble).toHaveBeenCalledTimes(3);
+    expect(lineas.some((l) => l.mensaje === "anclaje diferido agotó sus reintentos")).toBe(true);
+    expect(lineas.some((l) => l.mensaje === "anclaje diferido logrado")).toBe(false);
+  });
+
+  // Reparación DX402 punto 2 ronda 2 (hallazgo del refutador): los hasta 3
+  // fallos de ESTA cola (`ESPERAS_MS`) son el 60% de `UMBRAL_FALLOS_CONSECUTIVOS`
+  // (5) -- si contaran contra el cortacircuitos, una sola venta con su anchor
+  // caído amplificaría su propia falla contra ventas NUEVAS que no tienen
+  // nada que ver. Los tres reintentos de acá NO deben mover el contador.
+  it("sus fallos NO cuentan contra el cortacircuitos -- solo los anclajes de venta lo hacen", async () => {
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(async () => new Response(JSON.stringify({ error: "boom" }), { status: 503 }));
+    const reloj = relojManual();
+
+    programarAnclaje("pago-5", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    await reloj.dispararProximo(); // intento 1 -> falla
+    await reloj.dispararProximo(); // intento 2 -> falla
+    await reloj.dispararProximo(); // intento 3 -> falla, agota
+
+    expect(fetchDoble).toHaveBeenCalledTimes(3);
+    // Si estos 3 fallos contaran, con UMBRAL=5 alcanzarían para casi apagar
+    // el cortacircuitos solos -- sigue disponible porque no cuentan.
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  it("un éxito de ESTA cola SÍ cierra el cortacircuitos -- es la señal de que el facilitador volvió", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    expect(anclajeDisponible()).toBe(false);
+
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(
+      async () => new Response(JSON.stringify({ v: 1, paymentId: "p", pointer: "s3+https://x/y" }), { status: 200 })
+    );
+    const reloj = relojManual();
+    programarAnclaje("pago-6", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    await reloj.dispararProximo();
+
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  it("no encola una tarea nueva cuando la cola ya está en el tope", async () => {
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(async () => new Response(null, { status: 503 }));
+    // Un reloj que nunca dispara: las 50 tareas quedan "colgadas" en cola,
+    // que es justo la situación que el tope existe para acotar.
+    const reloj: RelojDeReintentos = { setTimeout: () => ({}) };
+
+    for (let i = 0; i < 50; i++) {
+      programarAnclaje(`tope-${i}`, new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    }
+    expect(tareasEnColaParaTest()).toBe(50);
+
+    programarAnclaje("tope-51-de-mas", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+
+    expect(tareasEnColaParaTest()).toBe(50);
+    expect(lineas.some((l) => l.mensaje.includes("cola de anclaje diferido llena"))).toBe(true);
+  });
+});

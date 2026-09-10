@@ -34,6 +34,7 @@ import { construirOpenApi } from "../services/openApiService.js";
 import { fecha } from "../validation/comunes.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
+import { obtenerSobrePublicKeyId, obtenerSobrePublicKeyPem, sobreConfigurado } from "../services/sobreSignatureService.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
 import {
   emitirComprobantes,
@@ -347,6 +348,29 @@ batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response
   } catch (e) {
     return responderFallo(res, e);
   }
+});
+
+// Llave pública Ed25519 del SOBRE de /verificar/durable (DX402 punto 2,
+// listing con evidencia durable). Formato exacto de SPEC.md §5 del sobre —
+// las mismas tres claves que GET /publickey, pero para
+// NOMICHECK_SOBRE_SIGNING_KEY_PEM, que es una llave PROPIA y DISTINTA de la
+// del batch (decisión de Yonatan, 2026-09-09; ver sobreSignatureService.ts).
+//
+// 503 y no 500 si falta: es lectura pública sin costo para quien la pide, y
+// una config rota del lado del vendedor no es lo mismo que "no existís" —
+// `problemasDeConfig` es quien revienta el arranque si /verificar/durable
+// está activa sin esta llave (ver x402Config.ts).
+batchPublicoRouter.get("/verificar/durable/sobre-publickey", (_req: Request, res: Response) => {
+  const problema = sobreConfigurado();
+  if (problema) {
+    return res.status(503).json({ error: "sobre_key_missing", mensaje: problema });
+  }
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  return res.status(200).json({
+    algo: "ed25519",
+    publicKeyId: obtenerSobrePublicKeyId(),
+    publicKeyPem: obtenerSobrePublicKeyPem(),
+  });
 });
 
 // El pre-chequeo GRATIS: contesta "¿hay algo, y cuánto pesa?" sin decir qué.

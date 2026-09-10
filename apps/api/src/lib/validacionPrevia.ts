@@ -47,6 +47,10 @@ const ESQUEMA_POR_RUTA: Record<string, ZodTypeAny> = {
   "/verificar": batchVerificacionSchema,
   "/pago-onchain": batchPagoOnchainSchema,
   "/comprobante": comprobanteSchema,
+  // Mismo esquema que /verificar (DX402 punto 2): lo que cambia en la ruta
+  // durable es qué se hace con el resultado después de calcularlo —lo sella
+  // en un sobre y lo ancla—, no la forma del cuerpo que entra.
+  "/verificar/durable": batchVerificacionSchema,
 };
 
 export type ProblemaDeEntrada = {

@@ -9,6 +9,7 @@
 // puede hacer sola.
 import express from "express";
 import type { Server } from "node:http";
+import { generateKeyPairSync } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { montarMuroX402 } from "../x402Muro.js";
 
@@ -21,9 +22,22 @@ let base: string;
 beforeAll(async () => {
   process.env.X402_ACTIVO = "true";
   process.env.X402_PAY_TO = PAY_TO;
-  process.env.X402_RED = "base";
+  // Avalanche entra acá y no solo Base porque `/verificar/durable` (DX402
+  // punto 2) está en `PRECIOS_USD` sin condición: con el muro activo,
+  // `problemasDeConfig` revienta al arrancar si esa ruta no tiene Avalanche
+  // en `X402_RED` (ver `x402Config.test.ts`, "requisitos de red por ruta").
+  // El facilitador de Ultravioleta —ya el default de abajo— es el que ancla.
+  process.env.X402_RED = "base,avalanche";
   process.env.X402_FACILITATOR = "https://facilitator.ultravioletadao.xyz";
   process.env.NOMICHECK_PUBLIC_ORIGIN = "https://nomicheck.ynt.codes";
+  // Llave del SOBRE (DX402 punto 2): generada en memoria, nunca de archivo
+  // ni de red (regla de la casa) — `/verificar/durable` está en
+  // `RUTAS_CON_MURO` sin condición, así que `montarMuroX402` revienta al
+  // arrancar sin esto (`sobreSignatureService.ts#sobreConfigurado`).
+  const { privateKey } = generateKeyPairSync("ed25519");
+  process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = privateKey
+    .export({ format: "pem", type: "pkcs8" })
+    .toString();
 
   const app = express();
   app.use(express.json());
@@ -47,6 +61,7 @@ afterAll(() => {
   server?.close();
   delete process.env.X402_ACTIVO;
   delete process.env.X402_PAY_TO;
+  delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
 });
 
 describe("GET a una ruta paga", () => {
@@ -73,7 +88,7 @@ describe("GET a una ruta paga", () => {
     expect(res.headers.get("allow")).toBe("POST");
   });
 
-  it("vale para las cinco rutas y para las variantes /csv", async () => {
+  it("vale para las seis rutas y para las variantes /csv", async () => {
     for (const r of [
       "/liquidar",
       "/retencion",
@@ -81,9 +96,85 @@ describe("GET a una ruta paga", () => {
       "/pago-onchain",
       "/comprobante",
       "/verificar/csv",
+      "/verificar/durable",
     ]) {
       expect((await fetch(`${base}/api/batch${r}`)).status).toBe(402);
     }
+  });
+
+  it("/verificar/durable/csv NO existe: un sobre no es un CSV", async () => {
+    expect((await fetch(`${base}/api/batch/verificar/durable/csv`)).status).not.toBe(402);
+  });
+
+  // DX402 punto 2: el 402 de la ruta durable trae, ADEMÁS de `accepts`, la
+  // declaración de nivel superior `extensions["durable-evidence"]` (informe
+  // `declaracion` §1) — y cada accept lleva su propia copia en
+  // `extra.extensions` (la forma v0.2/fallback, informe `declaracion` §2).
+  it("el 402 de /verificar/durable trae la declaración durable-evidence completa", async () => {
+    const d = (await (await fetch(`${base}/api/batch/verificar/durable`)).json()) as {
+      accepts: { network: string; extra: { extensions?: Record<string, unknown> } }[];
+      extensions?: {
+        "durable-evidence": { info: Record<string, unknown>; schema: unknown };
+      };
+    };
+    // Solo Avalanche: la ruta durable no hereda Base aunque X402_RED lo anuncie.
+    expect(d.accepts).toHaveLength(1);
+    expect(d.accepts[0].network).toBe("eip155:43114");
+    expect(d.extensions?.["durable-evidence"].info).toMatchObject({
+      mode: "direct",
+      backend: "s3",
+      retention: "90d",
+      acceptIndexes: [0],
+    });
+    expect(d.accepts[0].extra.extensions).toEqual({
+      "durable-evidence": {
+        mode: "direct",
+        backend: "s3",
+        retention: "90d",
+        maxBodyBytes: 47000,
+        paidBy: "seller",
+      },
+    });
+  });
+
+  it("el 402 de /verificar (no durable) NO trae extensions de nivel superior", async () => {
+    const d = (await (await fetch(`${base}/api/batch/verificar`)).json()) as {
+      extensions?: unknown;
+    };
+    expect(d.extensions).toBeUndefined();
+  });
+
+  // Reparación DX402 punto 2 ronda 2 (hallazgo del refutador): la forma
+  // CANÓNICA de `extensions` vive en el header v2 `PAYMENT-REQUIRED`, hermana
+  // de `accepts` -- no solo en el cuerpo v1 de este GET (que no tiene ese
+  // campo). El facilitador y los crawlers de catálogo, que son quienes hacen
+  // este GET, son justo quienes leerían ese header.
+  it("el 402 de /verificar/durable trae PAYMENT-REQUIRED (v2) con la misma declaración", async () => {
+    const res = await fetch(`${base}/api/batch/verificar/durable`);
+    const crudo = res.headers.get("payment-required");
+    expect(crudo).toBeTruthy();
+    const decodificado = JSON.parse(Buffer.from(crudo!, "base64").toString("utf8")) as {
+      x402Version: number;
+      resource: { url: string };
+      accepts: { network: string; amount: string; payTo: string }[];
+      extensions?: { "durable-evidence": { info: Record<string, unknown>; schema: unknown } };
+    };
+    expect(decodificado.x402Version).toBe(2);
+    expect(decodificado.resource.url).toBe("https://nomicheck.ynt.codes/api/batch/verificar/durable");
+    expect(decodificado.accepts).toHaveLength(1);
+    // Forma v2: `amount`, no `maxAmountRequired` (el cuerpo v1 usa el otro).
+    expect(decodificado.accepts[0]).toMatchObject({ network: "eip155:43114", amount: "20000", payTo: PAY_TO });
+    expect(decodificado.extensions?.["durable-evidence"].info).toMatchObject({
+      mode: "direct",
+      backend: "s3",
+      retention: "90d",
+      acceptIndexes: [0],
+    });
+  });
+
+  it("el 402 de /verificar (no durable) NO trae PAYMENT-REQUIRED -- nada que declarar", async () => {
+    const res = await fetch(`${base}/api/batch/verificar`);
+    expect(res.headers.get("payment-required")).toBeNull();
   });
 });
 

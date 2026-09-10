@@ -24,7 +24,9 @@ vi.mock("../../lib/prisma.js", () => ({
   },
 }));
 
-const { ejecutarBatchVerificacion, resumenPrechequeo } = await import("../batchVerificacionService.js");
+const { ejecutarBatchVerificacion, calcularBatchVerificacion, resumenPrechequeo } = await import(
+  "../batchVerificacionService.js"
+);
 const { hashCatalogo, REGLAS_VERIFICADAS_AL } = await import("../reglasVerificadasService.js");
 const { verificarFirma } = await import("../batchSignatureService.js");
 const { batchVerificacionToCsv } = await import("../batchCsvService.js");
@@ -103,6 +105,20 @@ describe("ejecutarBatchVerificacion", () => {
     });
     const salida = await ejecutarBatchVerificacion(input);
     expect(salida.resultados.map((r) => r.externalId)).toEqual(["CMP-1", "CMP-2"]);
+  });
+
+  it("calcularBatchVerificacion (DX402 punto 2) produce EXACTAMENTE el mismo output sin firma", async () => {
+    // El extraído para /verificar/durable tiene que dar bit a bit lo mismo
+    // que ejecutarBatchVerificacion salvo `signature` — si divergieran, el
+    // sobre estaría verificando OTRO cálculo del que ve el batch normal.
+    const sinFirma = await calcularBatchVerificacion(baseInput());
+    expect(sinFirma).not.toHaveProperty("signature");
+    const { signature: _firma, ...delEjecutado } = await ejecutarBatchVerificacion(baseInput());
+    // `generadoEn` difiere en milisegundos entre las dos corridas — se compara
+    // el resto, que es lo que efectivamente audita el cálculo.
+    const { generadoEn: _g1, ...sinFirmaSinFecha } = sinFirma;
+    const { generadoEn: _g2, ...delEjecutadoSinFecha } = delEjecutado;
+    expect(sinFirmaSinFecha).toEqual(delEjecutadoSinFecha);
   });
 
   it("el CSV lleva cabecera con hash + disclaimer y una fila por línea verificada", async () => {

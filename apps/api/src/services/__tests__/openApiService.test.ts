@@ -116,6 +116,27 @@ describe("documento OpenAPI", () => {
     }
   });
 
+  // Reparación DX402 punto 2 ronda 2 (hallazgo del refutador): la ruta que
+  // ya cobra 0,02 USD no estaba en este documento en absoluto -- la única
+  // documentación de lo que se cobraba era la `description` del 402.
+  it("/verificar/durable está documentada, sin gemela CSV, y liquida solo en Avalanche", () => {
+    expect(doc.paths).toHaveProperty("/verificar/durable");
+    expect(doc.paths).not.toHaveProperty("/verificar/durable/csv");
+    const op = doc.paths["/verificar/durable"].post as unknown as {
+      requestBody: { content: { "application/json": { schema: { $ref: string } } } };
+    };
+    // Mismo schema que `/verificar` -- no lo duplica.
+    expect(op.requestBody.content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/BatchVerificacionInput"
+    );
+  });
+
+  it("/verificar/durable/sobre-publickey está documentada como un GET propio", () => {
+    expect(doc.paths).toHaveProperty("/verificar/durable/sobre-publickey");
+    const op = doc.paths["/verificar/durable/sobre-publickey"].get as unknown as { operationId: string };
+    expect(op.operationId).toBe("durable-envelope-public-key");
+  });
+
   it("el catálogo de parámetros documenta la consulta por fecha", () => {
     const op = doc.paths["/parametros"].get as unknown as {
       description: string;
@@ -195,6 +216,22 @@ describe("el muro en el documento servido", () => {
           nombre: "base",
         },
       ],
+    });
+  });
+
+  it("/verificar/durable siempre publica Avalanche en x-x402, sin importar X402_RED", () => {
+    // A diferencia de `/verificar` (que publica la PRIMERA de `cfg.redes`),
+    // esta ruta liquida SOLO en Avalanche C-Chain -- lo hardcodea, no lo lee
+    // de `cfg.redes` (`REDES_POR_RUTA` ya se lo exige a `problemasDeConfig`
+    // en `x402Config.ts`). El test corre con el X402_RED del proceso, sea
+    // cual sea, y igual tiene que dar Avalanche acá.
+    const d = conMuro(true);
+    const x = (d.paths["/verificar/durable"].post as unknown as Record<string, unknown>)["x-x402"];
+    expect(x).toMatchObject({
+      cobra: true,
+      precioUsd: PRECIOS_USD["/verificar/durable"],
+      red: "eip155:43114",
+      redes: [{ red: "eip155:43114", nombre: "avalanche" }],
     });
   });
 
