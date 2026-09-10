@@ -4,9 +4,48 @@
 // leyendo solo el `networks` GLOBAL de este documento firma en la red
 // equivocada y se lleva un 402 con un único `accept` — el descubrimiento le
 // mintió (hallazgo del refutador).
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { construirPricing } from "../pricingService.js";
 import { RUTAS_CON_MURO } from "../../lib/x402Config.js";
+
+// `/verificar/durable` solo existe con `DX402_ACTIVO=true` (2026-09-10): estas
+// pruebas son las del pricing COMPLETO. La flag apagada, abajo.
+beforeAll(() => {
+  process.env.DX402_ACTIVO = "true";
+});
+afterAll(() => {
+  delete process.env.DX402_ACTIVO;
+});
+
+describe("construirPricing con DX402_ACTIVO apagada", () => {
+  const sinFlag = <T>(f: () => T): T => {
+    const antes = process.env.DX402_ACTIVO;
+    delete process.env.DX402_ACTIVO;
+    try {
+      return f();
+    } finally {
+      if (antes !== undefined) process.env.DX402_ACTIVO = antes;
+    }
+  };
+
+  it("/verificar/durable NO se publica: anunciar precio por una ruta que da 404 es mentir", () => {
+    const rutas = sinFlag(() => construirPricing().paid.map((e) => e.route));
+    expect(rutas).not.toContain("/api/batch/verificar/durable");
+    // Y ninguna entrada restringe red: la única que lo hacía era esa.
+    for (const entrada of sinFlag(() => construirPricing().paid)) {
+      expect(entrada).not.toHaveProperty("networks");
+    }
+  });
+
+  it("las demás rutas pagas se publican igual que con la flag encendida", () => {
+    const apagada = sinFlag(() => construirPricing().paid);
+    const encendida = construirPricing().paid.filter((e) => e.route !== "/api/batch/verificar/durable");
+    expect(apagada).toEqual(encendida);
+    expect(apagada.map((e) => e.route)).toEqual(
+      RUTAS_CON_MURO.filter((r) => r !== "/verificar/durable").map((r) => `/api/batch${r}`),
+    );
+  });
+});
 
 describe("construirPricing — networks por entrada de `paid`", () => {
   it("/verificar/durable declara `networks: [avalanche]`", () => {

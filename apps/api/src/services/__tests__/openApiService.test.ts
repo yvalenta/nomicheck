@@ -8,9 +8,17 @@
 // catálogo ARD lee `capabilities: ["final-settlement", ...]` y después busca esa
 // operación en el OpenAPI. Si los nombres no coinciden, encontró el anuncio y
 // no encuentra la puerta.
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { construirOpenApi } from "../openApiService.js";
 import { PRECIOS_USD } from "../../lib/x402Config.js";
+
+// `/verificar/durable` y su llave pública solo se documentan con
+// `DX402_ACTIVO=true` (2026-09-10): el documento de acá es el COMPLETO. La
+// flag apagada tiene su describe al final.
+process.env.DX402_ACTIVO = "true";
+afterAll(() => {
+  delete process.env.DX402_ACTIVO;
+});
 
 const doc = construirOpenApi() as {
   openapi: string;
@@ -268,5 +276,31 @@ describe("el muro en el documento servido", () => {
       const get = d.paths[ruta]?.get as unknown as { security?: unknown[] } | undefined;
       if (get) expect(get.security).toBeUndefined();
     }
+  });
+});
+
+describe("documento OpenAPI con DX402_ACTIVO apagada", () => {
+  const sinFlag = () => {
+    const antes = process.env.DX402_ACTIVO;
+    delete process.env.DX402_ACTIVO;
+    try {
+      return construirOpenApi() as typeof doc;
+    } finally {
+      if (antes !== undefined) process.env.DX402_ACTIVO = antes;
+    }
+  };
+
+  it("no documenta /verificar/durable ni su llave: una puerta que no está no se publica", () => {
+    const d = sinFlag();
+    expect(d.paths).not.toHaveProperty("/verificar/durable");
+    expect(d.paths).not.toHaveProperty("/verificar/durable/sobre-publickey");
+    expect(JSON.stringify(d)).not.toContain("payslip-verification-durable");
+  });
+
+  it("el resto del documento es idéntico al de la flag encendida", () => {
+    const d = sinFlag();
+    const { "/verificar/durable": _durable, "/verificar/durable/sobre-publickey": _llave, ...restoEncendido } = doc.paths;
+    expect(d.paths).toEqual(restoEncendido);
+    expect(d.components).toEqual(doc.components);
   });
 });

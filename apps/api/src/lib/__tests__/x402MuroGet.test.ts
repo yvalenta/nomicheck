@@ -21,6 +21,10 @@ let base: string;
 
 beforeAll(async () => {
   process.env.X402_ACTIVO = "true";
+  // `/verificar/durable` solo se monta con la flag (2026-09-10): estas
+  // pruebas son las del muro COMPLETO, con ella encendida. La flag apagada
+  // se prueba en `x402MuroDx402Apagado.test.ts`.
+  process.env.DX402_ACTIVO = "true";
   process.env.X402_PAY_TO = PAY_TO;
   // Avalanche entra acá y no solo Base porque `/verificar/durable` (DX402
   // punto 2) está en `PRECIOS_USD` sin condición: con el muro activo,
@@ -60,6 +64,7 @@ beforeAll(async () => {
 afterAll(() => {
   server?.close();
   delete process.env.X402_ACTIVO;
+  delete process.env.DX402_ACTIVO;
   delete process.env.X402_PAY_TO;
   delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
 });

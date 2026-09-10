@@ -25,8 +25,13 @@ x-env: &app-env
   # sin esto en el mapa de env, ni poniéndola en el `.env` de la raíz llega
   # nunca al contenedor (mismo motivo que el comentario de arriba: Compose
   # solo pasa lo que está listado acá). Default vacío a propósito: sin
-  # X402_ACTIVO=true el muro no monta nada y esta llave no hace falta.
+  # X402_ACTIVO=true el muro no monta nada, y sin DX402_ACTIVO=true (abajo)
+  # /verificar/durable no se monta y esta llave no hace falta.
   NOMICHECK_SOBRE_SIGNING_KEY_PEM: ${NOMICHECK_SOBRE_SIGNING_KEY_PEM:-}
+  # Flag de /verificar/durable (DX402 punto 2), aparte de X402_ACTIVO y con
+  # default false: apagada, esa ruta no existe (404) y ni la llave de arriba
+  # ni Avalanche en X402_RED se exigen al arrancar. Ver x402Config.ts.
+  DX402_ACTIVO: ${DX402_ACTIVO:-false}
   CORS_ORIGIN: http://localhost:5173
   PORT: 3001
   # Existe en producción desde el commit de performance, pero el compose no la

@@ -23,10 +23,12 @@ import {
   DESCRIPCIONES,
   PRECIOS_USD,
   RUTAS_CON_MURO,
+  RUTAS_DX402,
   WALLET_COMPROMETIDA,
   leerConfigX402,
   problemasDeConfig,
   requisitosDePago,
+  rutasActivas,
   soloAscii,
 } from "../x402Config.js";
 import { rutasPublicasConMuro } from "../x402Muro.js";
@@ -37,9 +39,12 @@ const LIMPIA = "0x1111111111111111111111111111111111111111";
 // `/verificar/durable` (DX402 punto 2), `problemasDeConfig` exige esa red
 // para CUALQUIER config con el muro activo (ver el describe de más abajo,
 // "requisitos de red por ruta"). Sin ella acá, cada test genérico de esta
-// config tendría que saber de una ruta que no está probando.
+// config tendría que saber de una ruta que no está probando. `dx402Activo`
+// en true por lo mismo: es la config "con todo encendido", que es la que
+// más exige; la flag apagada tiene su propio describe más abajo.
 const base = (over: Partial<ReturnType<typeof leerConfigX402>> = {}) => ({
   activo: true,
+  dx402Activo: true,
   facilitatorURL: "https://facilitator.ultravioletadao.xyz",
   facilitadoresPorRed: {},
   redes: [BASE_MAINNET, AVALANCHE_MAINNET],
@@ -117,11 +122,12 @@ describe("problemasDeConfig", () => {
     });
   });
 
-  // `/verificar/durable` vive en `PRECIOS_USD` sin condición, así que está en
-  // `RUTAS_CON_MURO` siempre que el muro esté activo — no hace falta "activarla"
-  // aparte. Sin Avalanche en `cfg.redes`, `requisitosDePago` la filtra a un
-  // array vacío y el 402 de esa ruta queda sin `accepts`: nadie puede pagar y
-  // nada lo grita, salvo este chequeo.
+  // `/verificar/durable` vive en `PRECIOS_USD`, y con `dx402Activo: true`
+  // (el default de `base()` acá) está en `rutasActivas` siempre que el muro
+  // esté activo. Sin Avalanche en `cfg.redes`, `requisitosDePago` la filtra a
+  // un array vacío y el 402 de esa ruta queda sin `accepts`: nadie puede
+  // pagar y nada lo grita, salvo este chequeo. Con la flag apagada no aplica
+  // (ver el describe "DX402_ACTIVO" más abajo).
   describe("requisitos de red por ruta (/verificar/durable exige Avalanche)", () => {
     it("revienta si /verificar/durable está activa y Avalanche no está en cfg.redes", () => {
       const p = problemasDeConfig(base({ redes: [BASE_MAINNET] }));
@@ -351,7 +357,7 @@ describe("cobertura de rutas", () => {
     // alguien la quiere cobrar, tiene que venir a borrarlo, que es justo el
     // momento en que va a leer el porqué.
     expect(RUTAS_CON_MURO).not.toContain("/liquidacion-final");
-    expect(rutasPublicasConMuro().map((r) => r.publica)).not.toContain(
+    expect(rutasPublicasConMuro(base()).map((r) => r.publica)).not.toContain(
       "/api/batch/liquidacion-final",
     );
   });
@@ -369,7 +375,7 @@ describe("cobertura de rutas", () => {
     // gratis de saltárselo. `/comprobante` no tiene variante CSV, y tampoco
     // `/verificar/durable`: lo que esa vende es un sobre firmado, y un CSV no
     // es un sobre.
-    const publicas = rutasPublicasConMuro().map((r) => r.publica);
+    const publicas = rutasPublicasConMuro(base()).map((r) => r.publica);
     expect(publicas).toContain("/api/batch/verificar");
     expect(publicas).toContain("/api/batch/verificar/csv");
     expect(publicas).toContain("/api/batch/comprobante");
@@ -382,7 +388,7 @@ describe("cobertura de rutas", () => {
   });
 
   it("el /csv cuesta lo mismo que su ruta base", () => {
-    const porPublica = new Map(rutasPublicasConMuro().map((r) => [r.publica, r.precio]));
+    const porPublica = new Map(rutasPublicasConMuro(base()).map((r) => [r.publica, r.precio]));
     expect(porPublica.get("/api/batch/liquidar/csv")).toBe(
       porPublica.get("/api/batch/liquidar"),
     );
@@ -411,5 +417,75 @@ describe("descripciones publicadas", () => {
     expect(soloAscii("NomiCheck payroll")).toBe(true);
     expect(soloAscii("NomiCheck — payroll")).toBe(false);
     expect(soloAscii("catálogo")).toBe(false);
+  });
+});
+
+// `DX402_ACTIVO` (pedido de Yonatan, 2026-09-10): la flag que desacopla el
+// deploy de la llave del sobre. Con `/verificar/durable` en `PRECIOS_USD` sin
+// condición, encender el muro obligaba a tener `NOMICHECK_SOBRE_SIGNING_KEY_PEM`
+// y Avalanche en `X402_RED` — no se podía desplegar `main` sin un secreto que
+// todavía no existía. La lente de estas pruebas: apagada de verdad no
+// existe (ni se exige nada suyo); encendida, todo vuelve exactamente a lo que
+// `54e4d22` mergeó.
+describe("DX402_ACTIVO (la flag de /verificar/durable)", () => {
+  beforeEach(() => {
+    delete process.env.DX402_ACTIVO;
+  });
+  afterEach(() => {
+    delete process.env.DX402_ACTIVO;
+  });
+
+  it("apagada por default: sin la variable, dx402Activo es false", () => {
+    expect(leerConfigX402().dx402Activo).toBe(false);
+  });
+
+  it("solo la cadena exacta `true` la enciende", () => {
+    for (const v of ["1", "TRUE", "yes", "on", ""]) {
+      process.env.DX402_ACTIVO = v;
+      expect(leerConfigX402().dx402Activo).toBe(false);
+    }
+    process.env.DX402_ACTIVO = "true";
+    expect(leerConfigX402().dx402Activo).toBe(true);
+  });
+
+  it("RUTAS_DX402 es exactamente /verificar/durable, y está en RUTAS_CON_MURO", () => {
+    expect([...RUTAS_DX402]).toEqual(["/verificar/durable"]);
+    expect(RUTAS_CON_MURO).toContain("/verificar/durable");
+  });
+
+  it("apagada, rutasActivas es RUTAS_CON_MURO sin /verificar/durable; encendida, es igual", () => {
+    expect(rutasActivas({ dx402Activo: false })).toEqual(
+      RUTAS_CON_MURO.filter((r) => r !== "/verificar/durable"),
+    );
+    expect(rutasActivas({ dx402Activo: true })).toEqual(RUTAS_CON_MURO);
+    // Y no muta el const: cinco módulos lo leen.
+    expect(RUTAS_CON_MURO).toEqual(Object.keys(PRECIOS_USD));
+  });
+
+  it("apagada, X402_RED sin Avalanche NO es un problema de arranque", () => {
+    // Es el deploy que la flag vino a permitir: muro encendido, solo Base.
+    expect(problemasDeConfig(base({ dx402Activo: false, redes: [BASE_MAINNET] }))).toEqual([]);
+  });
+
+  it("apagada, un sobreProblema real se ignora: la llave del sobre no se exige", () => {
+    expect(
+      problemasDeConfig(base({ dx402Activo: false, redes: [BASE_MAINNET] }), "NOMICHECK_SOBRE_SIGNING_KEY_PEM no está configurada"),
+    ).toEqual([]);
+  });
+
+  it("encendida, vuelve a exigir las dos cosas", () => {
+    expect(problemasDeConfig(base({ dx402Activo: true, redes: [BASE_MAINNET] }))).toEqual([
+      expect.stringMatching(/verificar\/durable.*eip155:43114/),
+    ]);
+    expect(problemasDeConfig(base({ dx402Activo: true }), "falta la llave")).toEqual(["falta la llave"]);
+  });
+
+  it("apagada, el muro no monta /verificar/durable; las otras 9 rutas públicas siguen", () => {
+    const apagada = rutasPublicasConMuro(base({ dx402Activo: false })).map((r) => r.publica);
+    expect(apagada).not.toContain("/api/batch/verificar/durable");
+    expect(apagada).toHaveLength(9);
+    // Las 9 son exactamente las de siempre: encendida solo suma la durable.
+    const encendida = rutasPublicasConMuro(base({ dx402Activo: true })).map((r) => r.publica);
+    expect(encendida.filter((p) => p !== "/api/batch/verificar/durable")).toEqual(apagada);
   });
 });

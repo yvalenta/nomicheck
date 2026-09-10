@@ -24,7 +24,14 @@
 // Mismo motivo y mismo bump que el quickstart: la audiencia medida son
 // máquinas en inglés, y el v1 (claves en español) no tenía integradores.
 import { origenPublico } from "../lib/pagosConfig.js";
-import { PRECIOS_USD, RUTAS_CON_MURO, REDES_POR_RUTA, nombreDeRed } from "../lib/x402Config.js";
+import {
+  PRECIOS_USD,
+  RUTAS_CON_MURO,
+  REDES_POR_RUTA,
+  leerConfigX402,
+  nombreDeRed,
+  rutasActivas,
+} from "../lib/x402Config.js";
 
 // El porqué de cada ruta paga. La clave es la MISMA de `PRECIOS_USD`: si se
 // agrega una ruta con precio y sin motivo, la guarda de abajo lo nombra.
@@ -146,7 +153,10 @@ export function construirPricing() {
       why: g.why,
     })),
 
-    paid: RUTAS_CON_MURO.map((ruta) => {
+    // `rutasActivas` y no `RUTAS_CON_MURO`: con `DX402_ACTIVO=false`,
+    // `/verificar/durable` no existe, y publicarle precio sería anunciar una
+    // ruta que contesta 404.
+    paid: rutasActivas(leerConfigX402()).map((ruta) => {
       const redesPermitidas = REDES_POR_RUTA[ruta];
       return {
         route: `/api/batch${ruta}`,
@@ -171,7 +181,9 @@ export function construirPricing() {
  * Rutas que cobran sin motivo publicado. Vacío = todas lo declaran.
  *
  * Un precio sin defensa escrita es el que nadie revisa: se pone una vez y se
- * queda. Esto lo vigila una prueba, no una intención.
+ * queda. Esto lo vigila una prueba, no una intención. Sobre `RUTAS_CON_MURO`
+ * entera, no `rutasActivas`: el porqué se exige desde que el precio existe,
+ * no desde que la ruta se enciende.
  */
 export function rutasPagasSinPorque(): string[] {
   return RUTAS_CON_MURO.filter((r) => !WHY_IT_CHARGES[r]);

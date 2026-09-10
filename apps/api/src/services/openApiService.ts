@@ -18,7 +18,7 @@ import { batchVerificacionSchema } from "../validation/batchVerificacion.js";
 import { batchPagoOnchainSchema } from "../validation/batchPagoOnchain.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
-import { PRECIOS_USD, leerConfigX402, AVALANCHE_MAINNET } from "../lib/x402Config.js";
+import { PRECIOS_USD, leerConfigX402, rutasActivas, AVALANCHE_MAINNET } from "../lib/x402Config.js";
 import { CONTACTO } from "../lib/contacto.js";
 
 const BASE_URL = "https://nomicheck.ynt.codes/api/batch";
@@ -125,7 +125,10 @@ export function construirOpenApi(): Record<string, unknown> {
   // de la misma config que monta el muro, que es la única que sabe la verdad.
   const muro = leerConfigX402();
   const precioDe = (ruta: string): number | undefined => PRECIOS_USD[ruta];
-  const cobra = (ruta: string): boolean => muro.activo && precioDe(ruta) !== undefined;
+  // `rutasActivas` y no `PRECIOS_USD`: con `DX402_ACTIVO=false`,
+  // `/verificar/durable` tiene precio declarado pero no existe.
+  const activas = rutasActivas(muro);
+  const cobra = (ruta: string): boolean => muro.activo && activas.includes(ruta);
 
   for (const op of OPERACIONES) {
     // Una sola copia del schema, referenciada por la operación JSON y por su
@@ -224,7 +227,10 @@ export function construirOpenApi(): Record<string, unknown> {
   // entrada, la unica documentacion de una ruta que YA cobra era la
   // `description` del 402 (reparacion DX402 punto 2 ronda 2, hallazgo del
   // refutador).
-  {
+  //
+  // Solo con `DX402_ACTIVO=true`: apagada, la ruta y su llave pública no
+  // existen (404), y documentarlas sería publicar una puerta que no está.
+  if (muro.dx402Activo) {
     const cobraDurable = cobra("/verificar/durable");
     paths["/verificar/durable"] = {
       post: {
@@ -295,9 +301,8 @@ export function construirOpenApi(): Record<string, unknown> {
         },
       },
     };
-  }
 
-  paths["/verificar/durable/sobre-publickey"] = {
+    paths["/verificar/durable/sobre-publickey"] = {
     get: {
       operationId: "durable-envelope-public-key",
       summary: "Ed25519 public key that verifies the durable envelope",
@@ -312,6 +317,7 @@ export function construirOpenApi(): Record<string, unknown> {
       },
     },
   };
+  }
 
   paths["/parametros"] = {
     get: {

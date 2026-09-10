@@ -35,6 +35,7 @@ import { fecha } from "../validation/comunes.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { obtenerPublicKeyId, obtenerPublicKeyPem } from "../services/batchSignatureService.js";
 import { obtenerSobrePublicKeyId, obtenerSobrePublicKeyPem, sobreConfigurado } from "../services/sobreSignatureService.js";
+import { leerConfigX402 } from "../lib/x402Config.js";
 import { obtenerLedgerReglas } from "../services/reglasVerificadasService.js";
 import {
   emitirComprobantes,
@@ -360,7 +361,17 @@ batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response
 // una config rota del lado del vendedor no es lo mismo que "no existís" —
 // `problemasDeConfig` es quien revienta el arranque si /verificar/durable
 // está activa sin esta llave (ver x402Config.ts).
+//
+// 404 con `DX402_ACTIVO=false`, antes de mirar la llave: apagada la flag,
+// /verificar/durable no existe y un 503 acá diría "existe pero está rota" —
+// y además delataría si hay llave o no en un deploy que no vende sobres.
 batchPublicoRouter.get("/verificar/durable/sobre-publickey", (_req: Request, res: Response) => {
+  if (!leerConfigX402().dx402Activo) {
+    return res.status(404).json({
+      error: "not_found",
+      mensaje: "/verificar/durable no está habilitada en este servidor (DX402_ACTIVO).",
+    });
+  }
   const problema = sobreConfigurado();
   if (problema) {
     return res.status(503).json({ error: "sobre_key_missing", mensaje: problema });

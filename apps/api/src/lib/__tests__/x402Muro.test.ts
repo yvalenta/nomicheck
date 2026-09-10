@@ -376,6 +376,7 @@ describe("extensionBazaar", () => {
 describe("desafío de descubrimiento (GET a una ruta paga)", () => {
   const cfg = {
     activo: true,
+    dx402Activo: true,
     facilitatorURL: "https://facilitator.ultravioletadao.xyz",
     facilitadoresPorRed: {},
     redes: [BASE_MAINNET, AVALANCHE_MAINNET],
@@ -411,7 +412,7 @@ describe("desafío de descubrimiento (GET a una ruta paga)", () => {
   });
 
   it("el precio del desafío es el precio que cobra el muro", () => {
-    for (const { publica, precio } of rutasPublicasConMuro()) {
+    for (const { publica, precio } of rutasPublicasConMuro(cfg)) {
       const d = desafioDeDescubrimiento(cfg, precio, publica);
       expect(d.accepts[0].maxAmountRequired).toBe(requisitosDePago(cfg, precio)[0].maxAmountRequired);
       // Y el recurso anunciado es el de la ruta paga, no el de otra.
@@ -436,7 +437,7 @@ describe("desafío de descubrimiento (GET a una ruta paga)", () => {
   });
 
   it("las demás rutas NO llevan extensions: no prometen lo que no cumplen", () => {
-    for (const { publica, precio } of rutasPublicasConMuro()) {
+    for (const { publica, precio } of rutasPublicasConMuro(cfg)) {
       if (precio === "/verificar/durable") continue;
       expect(desafioDeDescubrimiento(cfg, precio, publica).extensions).toBeUndefined();
     }
