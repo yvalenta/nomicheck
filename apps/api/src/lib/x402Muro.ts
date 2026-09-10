@@ -493,14 +493,27 @@ export function montarMuroX402(app: Express): void {
   if (!cfg.activo) return;
 
   // `sobreConfigurado()` corre si la llave IMPORTA: con `DX402_ACTIVO=true`
-  // (la ruta se monta y firma con ella), o con la llave declarada en el
-  // entorno aunque la flag esté apagada (sirve la verificación de los sobres
-  // ya vendidos; declarada y rota es una revocación silenciosa, y se acusa
-  // al arrancar igual que cualquier otra config rota). Apagada y sin llave:
-  // no se exige nada — es lo que deja desplegar `main` con el muro encendido
-  // y sin la llave del sobre.
-  const laLlaveImporta = cfg.dx402Activo || llaveDelSobreDeclarada();
-  const problemas = problemasDeConfig(cfg, laLlaveImporta ? sobreConfigurado() : null);
+  // (la ruta se monta y firma con ella: rota, revienta el arranque como
+  // cualquier config rota), o con la llave declarada en el entorno aunque la
+  // flag esté apagada. En ese segundo caso NO es fatal: la llave solo sirve
+  // la verificación de los sobres ya vendidos, y tumbar la API entera —las
+  // cinco rutas que facturan incluidas— por una llave que no es precondición
+  // de nada que se venda es desproporcionado; además la sonda post-deploy que
+  // la vigila nunca correría, porque la API no llegaría sana (tercer
+  // refutador, 2026-09-10). Se avisa acá, `GET …/sobre-publickey` contesta
+  // 503 con el motivo, y `deploy.sh` grita al sondearla. Apagada y sin
+  // llave: no se exige nada — es lo que deja desplegar `main` con el muro
+  // encendido y sin la llave del sobre.
+  const problemaSobre = cfg.dx402Activo || llaveDelSobreDeclarada() ? sobreConfigurado() : null;
+  const problemas = problemasDeConfig(cfg, cfg.dx402Activo ? problemaSobre : null);
+  if (!cfg.dx402Activo && problemaSobre) {
+    registro.warn(
+      "x402",
+      "la llave del sobre está declarada pero no sirve: GET /api/batch/verificar/durable/sobre-publickey " +
+        "contesta 503 hasta arreglarla, y los sobres ya vendidos no verifican mientras tanto. " +
+        `DX402 está apagada, así que el muro arranca igual. Motivo: ${problemaSobre}`,
+    );
+  }
   // Una ruta que cobra sin esquema de validacion previa vuelve a abrir el
   // agujero del "typo pagado". Se revienta al arrancar, no con el primer
   // comprador.

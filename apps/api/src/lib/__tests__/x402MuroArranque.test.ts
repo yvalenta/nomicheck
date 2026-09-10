@@ -18,6 +18,7 @@ import express from "express";
 import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { montarMuroX402 } from "../x402Muro.js";
+import { usarEmisor, type LineaDeRegistro } from "../registro.js";
 
 const PAY_TO_LIMPIA = "0x1111111111111111111111111111111111111111";
 
@@ -72,15 +73,32 @@ describe("montarMuroX402 con DX402_ACTIVO apagada", () => {
     expect(() => montarMuroX402(express())).not.toThrow();
   });
 
-  it("apagada, con la llave DECLARADA pero rota, revienta nombrando la llave", () => {
-    // La flag no exige la llave, pero si el operador la declaró es porque los
-    // sobres ya vendidos verifican contra ella (90 días): declarada y rota es
-    // una revocación silenciosa, y se acusa al arrancar como cualquier config
-    // rota (segundo refutador, 2026-09-10).
+  it("apagada, con la llave DECLARADA pero rota, ARRANCA y avisa: la llave no es precondición de lo que se vende", () => {
+    // Declarada y rota es una revocación silenciosa de los sobres ya vendidos
+    // (90 días), pero tumbar la API entera —las cinco rutas que facturan— por
+    // eso es desproporcionado, y la sonda post-deploy que la vigila nunca
+    // correría porque la API no llegaría sana (tercer refutador, 2026-09-10).
+    // Se avisa en el registro; el 503 con motivo lo prueba
+    // `x402MuroDx402Apagado.test.ts`.
     process.env.X402_ACTIVO = "true";
     delete process.env.DX402_ACTIVO;
     process.env.X402_PAY_TO = PAY_TO_LIMPIA;
     process.env.X402_RED = "base";
+    process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = "-----BEGIN PRIVATE KEY-----\ntruncada\n";
+    const lineas: LineaDeRegistro[] = [];
+    usarEmisor((l) => lineas.push(l));
+
+    expect(() => montarMuroX402(express())).not.toThrow();
+    const aviso = lineas.find((l) => l.nivel === "warn" && l.origen === "x402");
+    expect(aviso?.mensaje).toMatch(/sobre-publickey[\s\S]*503/);
+    expect(aviso?.mensaje).toMatch(/NOMICHECK_SOBRE_SIGNING_KEY_PEM está configurada pero no es un PEM/);
+  });
+
+  it("encendida, la misma llave rota sí revienta: ahí firma lo que se vende", () => {
+    process.env.X402_ACTIVO = "true";
+    process.env.DX402_ACTIVO = "true";
+    process.env.X402_PAY_TO = PAY_TO_LIMPIA;
+    process.env.X402_RED = "base,avalanche";
     process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = "-----BEGIN PRIVATE KEY-----\ntruncada\n";
 
     expect(() => montarMuroX402(express())).toThrow(/NOMICHECK_SOBRE_SIGNING_KEY_PEM está configurada pero no es un PEM/);

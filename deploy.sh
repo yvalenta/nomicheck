@@ -66,6 +66,13 @@ flag_en_env() {  # flag_en_env NOMBRE ARCHIVO → 0 si la app la va a leer como 
 var_con_valor_en_env() {  # var_con_valor_en_env NOMBRE ARCHIVO → 0 si está declarada con valor no vacío
   [[ -n "$(valor_en_env "$1" "$2")" ]]
 }
+red_en_env() {  # red_en_env RED ARCHIVO → 0 si X402_RED lista exactamente esa red
+  # Elemento exacto tras partir por comas y recortar, NO subcadena: con
+  # `*avalanche*`, `avalanche-fuji` (eip155:43113) pasaba la guarda y
+  # `/verificar/durable`, que exige eip155:43114, reventaba el arranque
+  # (tercer refutador, 2026-09-10; el grep anterior tenía el mismo agujero).
+  valor_en_env X402_RED "$2" | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | grep -qx -- "$1"
+}
 
 # El PEM de firma debe venir completo por env_file. Si se pierde, el wrapper
 # firma con un keypair efímero y los outputs dejan de verificar tras el redeploy.
@@ -112,7 +119,7 @@ fi
 # avalanche adentro, no solo "que no la contradiga" (mismo modo de falla que
 # la llave del sobre arriba, reparación DX402 punto 2 ronda 2, hallazgo del
 # refutador). Misma condición doble: solo con DX402_ACTIVO=true.
-if [[ "$DX402_ENCENDIDO" == 1 ]] && [[ "$(valor_en_env X402_RED "$APP_DIR/.env")" != *avalanche* ]]; then
+if [[ "$DX402_ENCENDIDO" == 1 ]] && ! red_en_env avalanche "$APP_DIR/.env"; then
   echo "ERROR: X402_ACTIVO=true y DX402_ACTIVO=true pero X402_RED no incluye avalanche en $APP_DIR/.env" >&2
   echo "  /verificar/durable solo liquida en eip155:43114:" >&2
   echo "  montarMuroX402 revienta al arrancar y se lleva la API entera (x402Config.ts, problemasDeConfig)." >&2

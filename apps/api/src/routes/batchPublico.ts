@@ -384,7 +384,9 @@ batchPublicoRouter.get("/verificar/durable/sobre-publickey", (_req: Request, res
     if (!leerConfigX402().dx402Activo && !llaveDelSobreDeclarada()) {
       return res.status(404).json({
         error: "not_found",
-        mensaje: "/verificar/durable no está habilitada en este servidor (DX402_ACTIVO).",
+        mensaje:
+          "/verificar/durable no está habilitada en este servidor: hace falta X402_ACTIVO=true " +
+          "y DX402_ACTIVO=true.",
       });
     }
     return res.status(503).json({ error: "sobre_key_missing", mensaje: problema });

@@ -84,8 +84,10 @@ function obtenerKeypairSobre(): KeypairSobre {
  * con `DX402_ACTIVO` apagada la llave no se exige, pero si está declarada
  * tiene que ser válida — sirve la verificación de los sobres ya vendidos, y
  * una llave rota ahí es una revocación silenciosa de esos 90 días. Quien la
- * declara y está rota se entera al arrancar (`montarMuroX402`) y en
- * `GET /verificar/durable/sobre-publickey` (503, no 404).
+ * declara y está rota se entera por tres vías, ninguna fatal con la flag
+ * apagada (la llave no es precondición de nada que se venda): un warn al
+ * arrancar (`montarMuroX402`), 503 con el motivo en
+ * `GET /verificar/durable/sobre-publickey` (no 404), y la sonda de `deploy.sh`.
  */
 export function llaveDelSobreDeclarada(): boolean {
   return Boolean(process.env[ENV_LLAVE_SOBRE]);
