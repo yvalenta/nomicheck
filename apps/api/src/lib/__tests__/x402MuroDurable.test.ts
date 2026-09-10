@@ -1148,7 +1148,7 @@ describe("el facilitador ecoa un accept con la red correcta pero otro payTo o as
 // `/settle`. Antes se comparaba el string crudo, el accept se descartaba y
 // el 402 salía con `accepts: []` sin un solo log (refutador `dinero`, ronda 3).
 describe("el facilitador ecoa el accept propio con el nombre legado de la red", () => {
-  it("sobrevive al filtro -- el 402 publica la oferta", async () => {
+  it("sobrevive al filtro -- y el 402 publica la oferta con la red como la declaramos (CAIP-2), no como la ecoó", async () => {
     const acceptLegado = { ...accept, network: "avalanche" };
     const base = await construirApp(handlerFalso({ getRequirements: async () => [acceptLegado] }));
 
@@ -1161,7 +1161,35 @@ describe("el facilitador ecoa el accept propio con el nombre legado de la red", 
     expect(res.status).toBe(402);
     const cuerpo = (await res.json()) as { accepts: Array<{ network: string }> };
     expect(cuerpo.accepts).toHaveLength(1);
-    expect(cuerpo.accepts[0].network).toBe("avalanche");
+    // La tabla legada de faremeter no conoce "avalanche": publicado así, un
+    // comprador v2 con `accepted.network = eip155:43114` nunca casaría.
+    expect(cuerpo.accepts[0].network).toBe("eip155:43114");
+  });
+
+  it("y la venta completa con ese accept legado cobra y ancla en eip155:43114 -- no muere en 422 red_no_soportada", async () => {
+    const { llamadas } = stubFetchAnchorExitoso();
+    const acceptLegado = { ...accept, network: "avalanche" };
+    const settle = vi.fn(
+      async (req: Record<string, unknown>, pay: Record<string, unknown>) => ({
+        success: true,
+        transaction: `0x${randomBytes(32).toString("hex")}`,
+        network: req.network,
+        payer: (pay.payload as CargaDePago).authorization.from,
+      })
+    );
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso({ getRequirements: async () => [acceptLegado], handleSettle: settle }));
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(200);
+    expect(settle).toHaveBeenCalledTimes(1);
+    // El anchor y el paymentId salen de la tabla (CAIP-2), nunca del eco.
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0].network).toBe("eip155:43114");
+    const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
+    expect(evidencia.skipped).toBeUndefined();
   });
 
   it("cuando el filtro deja el 402 sin ofertas, lo grita en el registro -- una ruta paga que no vende no es 'nadie compró'", async () => {

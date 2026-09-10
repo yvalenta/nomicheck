@@ -151,9 +151,9 @@ function conExtensionesPorAccept(cuerpo: Record<string, unknown>): Record<string
 }
 
 /**
- * Un accept es "propio" cuando coincide EXACTO —esquema, red, activo, `payTo`
- * y monto— con uno de los que `requisitosDePago(cfg, "/verificar/durable")`
- * declaró (ya convertidos a forma v2 con `common.relaxedRequirementsToV2`,
+ * El accept PROPIO que corresponde a `a` (o `undefined`): coincide EXACTO
+ * —esquema, red, activo, `payTo` y monto— con uno de los que
+ * `requisitosDePago(cfg, "/verificar/durable")` declaró (ya convertidos a forma v2 con `common.relaxedRequirementsToV2`,
  * que es la misma forma en la que llegan los `accepts` que devuelve
  * `getRequirements()` — de ahí que se comparen `amount` contra `amount`, no
  * `amount` contra `maxAmountRequired`).
@@ -182,10 +182,13 @@ function mismaRed(x: unknown, y: unknown): boolean {
   return nombreDeRed(x).toLowerCase() === nombreDeRed(y).toLowerCase();
 }
 
-function esAcceptPropio(a: Record<string, unknown>, propios: Record<string, unknown>[]): boolean {
+function acceptPropioDe(
+  a: Record<string, unknown>,
+  propios: Record<string, unknown>[]
+): Record<string, unknown> | undefined {
   const iguales = (x: unknown, y: unknown): boolean =>
     typeof x === "string" && typeof y === "string" ? x.toLowerCase() === y.toLowerCase() : x === y;
-  return propios.some(
+  return propios.find(
     (p) =>
       p.scheme === a.scheme &&
       mismaRed(p.network, a.network) &&
@@ -197,7 +200,7 @@ function esAcceptPropio(a: Record<string, unknown>, propios: Record<string, unkn
 
 /**
  * Filtra los `accepts` que cada handler anuncia a los que esta ruta declaró
- * de verdad (`esAcceptPropio`, arriba).
+ * de verdad (`acceptPropioDe`, arriba).
  *
  * POR QUÉ HACE FALTA, si `requisitosDePago` YA filtra antes de construir
  * `acceptsOverride`: ese filtro decide lo que NOSOTROS declaramos, pero
@@ -231,7 +234,17 @@ function conAcceptsFiltrados(
     ...h,
     getRequirements: async (...args: Parameters<typeof h.getRequirements>) => {
       const todos = await h.getRequirements(...args);
-      const filtrados = todos.filter((a) => esAcceptPropio(a as Record<string, unknown>, propios));
+      // Los que sobreviven salen con la red TAL COMO LA DECLARAMOS (CAIP-2):
+      // el eco puede traer el nombre legado (`avalanche`), y la tabla legada
+      // de faremeter (`@faremeter/info`, `legacyNameToCAIP2`) no lo conoce —
+      // un comprador v2 con `accepted.network = eip155:43114` nunca casaría
+      // contra ese eco en `findMatching` y recibiría 402 tras 402. El accept
+      // es propio: restaurar nuestra propia declaración no inventa nada
+      // (revisión de la sesión madre, ronda 3).
+      const filtrados = todos.flatMap((a) => {
+        const propio = acceptPropioDe(a as Record<string, unknown>, propios);
+        return propio ? [{ ...(a as Record<string, unknown>), network: propio.network } as typeof a] : [];
+      });
       if (todos.length > 0 && filtrados.length === 0) {
         // Una ruta paga que deja de vender NO puede verse igual que "nadie
         // compró" (`problemasDeConfig`, x402Config.ts): sin este log, el 402
@@ -503,7 +516,13 @@ export function crearMiddlewareDurable(
         // válida de un extraño y sale como `no_payer_key`, un error que le
         // echa la culpa a la firma del comprador cuando la causa real es la
         // red (hallazgo del refutador, reparación DX402 punto 2 ronda 1).
-        if (requisitos.network !== AVALANCHE_MAINNET.caip2) {
+        // `mismaRed`, no `!==`: el accept pagado es el que el facilitador
+        // ecoó y sobrevivió al filtro, y puede venir con el nombre legado
+        // (`avalanche`) — comparar el string crudo dejaba pasar la oferta y
+        // mataba la venta acá con 422 `red_no_soportada` (revisión de la
+        // sesión madre, ronda 3). El dominio, el `network` del anchor y el
+        // `paymentId` siguen saliendo de `AVALANCHE_MAINNET`, nunca del eco.
+        if (!mismaRed(requisitos.network, AVALANCHE_MAINNET.caip2)) {
           registro.error("x402", "accept pagado en una red que /verificar/durable no liquida", undefined, {
             network: requisitos.network,
           });
@@ -542,7 +561,7 @@ export function crearMiddlewareDurable(
         }
 
         // El tercer campo del dominio, `verifyingContract`, sale de la MISMA
-        // tabla que `name`/`version`, no del eco de `asset`: `esAcceptPropio`
+        // tabla que `name`/`version`, no del eco de `asset`: `acceptPropioDe`
         // ya garantiza que el accept pagado lleva NUESTRO asset, así que un
         // eco distinto (USDC.e en vez del nativo) o ausente solo puede
         // desviar el dominio — y con `asset` ausente viem OMITE
