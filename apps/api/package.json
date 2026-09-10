@@ -26,7 +26,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
-    "multer": "^2.2.0",
+    "multer": "^2.3.0",
     "pg-boss": "^12.28.0",
     "prisma": "^5.22.0",
     "uvd-x402-sdk": "2.88.0",
