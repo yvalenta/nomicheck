@@ -22,6 +22,7 @@ import {
   type RelojDeReintentos,
   reservarMedioAbierto,
   liberarIntentoMedioAbierto,
+  envejecerReservaParaTest,
   sondearFacilitador,
   recuperarEvidenciaAnclada,
 } from "../anclajeDiferido.js";
@@ -455,7 +456,7 @@ describe("reservarMedioAbierto (single-flight) y la ventana por política", () =
   // sigue en 200 cuando /dx402/anchor rechaza por POLÍTICA (402
   // dx402_proof_rejected en fase 2, 422 backend). Para eso no hay sonda
   // gratis: lo que acota el costo es una ventana de una hora, no de 300 s.
-  it("un rechazo por política del anchor (402/422) abre una ventana de una hora, no de cinco minutos", () => {
+  it("un rechazo por política del anchor (402) abre una ventana de una hora, no de cinco minutos", () => {
     for (let i = 0; i < 5; i++) {
       registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
     }
@@ -463,21 +464,90 @@ describe("reservarMedioAbierto (single-flight) y la ventana por política", () =
     expect(anclajeDisponible()).toBe(false);
     envejecerUltimoFalloParaTest(3_300_000);
     expect(anclajeDisponible()).toBe(true);
-    // Un 422 de backend cuenta igual que política; una caída (503) vuelve a 300 s.
+    // Un 422 de backend NO es política (stats lo expone y la sonda lo ve):
+    // ventana corta, igual que una caída (503).
     resetContadorFallosParaTest();
     for (let i = 0; i < 5; i++) {
       registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 422, error: "dx402_backend_unavailable" });
     }
     envejecerUltimoFalloParaTest(300_000);
-    expect(anclajeDisponible()).toBe(false);
+    expect(anclajeDisponible()).toBe(true);
     resetContadorFallosParaTest();
     for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
     envejecerUltimoFalloParaTest(300_000);
     expect(anclajeDisponible()).toBe(true);
   });
+
+  // Segundo refutador de cierre, ronda 3: clasificar por el ÚLTIMO fallo
+  // degradaba la ventana — `4×402 + 1×503`, o un timeout sin status, o la
+  // propia sonda fallida, devolvían los 300 s en pleno régimen de política.
+  it("la política se decide por la racha: un 503, un timeout o la sonda fallida después de un 402 no acortan la hora", () => {
+    for (let i = 0; i < 4; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
+    }
+    registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(false);
+    registrarResultadoAnchor({ v: 1, skipped: "anchor_failed" }); // timeout: el catch del SDK no trae status
+    registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", error: "sonda_medio_abierto" });
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(3_300_000);
+    expect(anclajeDisponible()).toBe(true);
+    // Solo un éxito limpia la racha.
+    registrarResultadoAnchor({ v: 1, paymentId: "p", pointer: "s3+https://x/y" });
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  // Segundo refutador de cierre, ronda 3: contar el 409 resuelto-sin-registro-
+  // propio como fallo dejaba que un tercero (paymentId público, anchor sin
+  // identidad) o una caída de GET /dx402/evidence abrieran el corte con
+  // cinco compras y apagaran la ruta para todos.
+  it("un 409 resuelto sin registro propio es NEUTRO: no abre el corte, y con el corte abierto solo rearma la ventana", () => {
+    const ajeno = { v: 1, skipped: "already_anchored", paymentId: "p", contentHash: "0xcc", error: "registro_ajeno" };
+    const irrecuperable = { v: 1, skipped: "already_anchored", paymentId: "p", contentHash: "0xcc" };
+    for (let i = 0; i < 10; i++) registrarResultadoAnchor(i % 2 ? ajeno : irrecuperable);
+    expect(anclajeDisponible()).toBe(true);
+    expect(reservarMedioAbierto()).toBe("cerrado");
+    // Con el corte abierto y la ventana pasada, la venta que probó y salió
+    // con un 409 ajeno no demostró nada: se rearma sin sumar.
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    envejecerUltimoFalloParaTest(300_000);
+    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    registrarResultadoAnchor(ajeno);
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  // Segundo refutador de cierre, ronda 3: `capture()` no tiene timeout y un
+  // /settle colgado dejaba la reserva tomada hasta que cortara undici, con
+  // toda venta en 424 mientras tanto.
+  it("una reserva del medio-abierto vence a los 60 s: otra venta puede tomarla", () => {
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    envejecerUltimoFalloParaTest(300_000);
+    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    expect(reservarMedioAbierto()).toBe("ocupado");
+    envejecerReservaParaTest(59_000);
+    expect(reservarMedioAbierto()).toBe("ocupado");
+    envejecerReservaParaTest(1_000);
+    expect(reservarMedioAbierto()).toBe("medio-abierto");
+  });
 });
 
 describe("sondearFacilitador", () => {
+  it("con backend: true solo si figura enabled en backends[]; un stats sin backends[] no bloquea", async () => {
+    const stats = (backends: unknown) => vi.fn(async () => new Response(JSON.stringify({ backends }), { status: 200 }));
+    expect(
+      await sondearFacilitador("https://f.example", stats([{ id: "s3", enabled: false }, { id: "ipfs-private", enabled: true }]) as unknown as typeof fetch, "s3")
+    ).toBe(false);
+    expect(await sondearFacilitador("https://f.example", stats([{ id: "s3", enabled: true }]) as unknown as typeof fetch, "s3")).toBe(true);
+    expect(await sondearFacilitador("https://f.example", stats([{ id: "ipfs-private", enabled: true }]) as unknown as typeof fetch, "s3")).toBe(false);
+    expect(await sondearFacilitador("https://f.example", stats(undefined) as unknown as typeof fetch, "s3")).toBe(true);
+  });
+
   it("true con 2xx, false con 5xx, false si fetch lanza -- nunca lanza", async () => {
     const ok = vi.fn(async () => new Response("{}", { status: 200 }));
     expect(await sondearFacilitador("https://f.example/", ok as unknown as typeof fetch)).toBe(true);

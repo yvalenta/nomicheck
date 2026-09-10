@@ -179,24 +179,34 @@ let ultimoFalloMs = 0;
 const VENTANA_MEDIO_ABIERTO_MS = 300_000;
 
 /**
- * Ventana del medio-abierto cuando el último fallo fue de POLÍTICA del
- * facilitador (402 `dx402_proof_rejected` — fase 2 de `DX402_REQUIRE_PROOF` —
- * o 422 `dx402_backend_unavailable` / `dx402_signature_not_verified`), no
- * una caída. Es la razón de ser del cortacircuitos (ver
- * `UMBRAL_FALLOS_CONSECUTIVOS`) y NO se arregla sola en cinco minutos:
- * `/dx402/stats` sigue en 200 mientras `/dx402/anchor` rechaza, así que la
- * sonda gratis de `sondearFacilitador` no la ve (hallazgo del refutador de
- * cierre, ronda 3). No hay sonda gratis posible para el anchor (exige un
- * pago liquidado de verdad), así que lo único que acota el costo es dejar
- * pasar UNA venta por hora — no una cada 300 s — mientras la política siga
- * cambiada; un anclaje que sí prende (esa venta, o la cola diferida) cierra
- * el corte del todo.
+ * Ventana del medio-abierto cuando la racha de fallos incluye un rechazo por
+ * POLÍTICA del facilitador (402 `dx402_proof_rejected`, fase 2 de
+ * `DX402_REQUIRE_PROOF`), no una caída. Es la razón de ser del
+ * cortacircuitos (ver `UMBRAL_FALLOS_CONSECUTIVOS`) y NO se arregla sola en
+ * cinco minutos: `/dx402/stats` sigue en 200 mientras `/dx402/anchor`
+ * rechaza, así que la sonda gratis de `sondearFacilitador` no la ve
+ * (hallazgo del refutador de cierre, ronda 3). No hay sonda gratis posible
+ * para el anchor (exige un pago liquidado de verdad), así que lo único que
+ * acota el costo es dejar pasar UNA venta por hora — no una cada 300 s —
+ * mientras la política siga cambiada; un anclaje que sí prende (esa venta,
+ * o la cola diferida) cierra el corte del todo.
+ *
+ * El 422 `dx402_backend_unavailable` NO es política: es el backend caído,
+ * y `/dx402/stats` lo expone en `backends[].enabled` — la sonda gratis SÍ
+ * lo ve (`sondearFacilitador` con el backend), así que va por la ventana
+ * corta (segundo refutador de cierre, ronda 3).
  */
 const VENTANA_MEDIO_ABIERTO_POLITICA_MS = 3_600_000;
 
-/** `true` cuando el último fallo que subió el contador fue un rechazo por
- * política (402/422 del anchor), no una caída (5xx, timeout, red). */
-let ultimoFalloDePolitica = false;
+/**
+ * `true` si en la RACHA actual de fallos hubo al menos un rechazo por
+ * política (402). Se decide por la racha y no por el último fallo: con
+ * `4×402 + 1×503` (o un timeout sin status, o la propia sonda fallida) el
+ * último fallo devolvía la ventana a 300 s en pleno régimen de política —
+ * doce ventas por hora cobradas sin evidencia en vez de una (segundo
+ * refutador de cierre, ronda 3). Se limpia solo con un éxito.
+ */
+let hayPoliticaEnRacha = false;
 
 /**
  * Single-flight del medio-abierto: mientras UNA venta esté usando la ventana
@@ -209,6 +219,20 @@ let ultimoFalloDePolitica = false;
  */
 let intentoMedioAbiertoEnCurso = false;
 
+/** Cuándo se tomó la reserva vigente del medio-abierto. */
+let reservaDesdeMs = 0;
+
+/**
+ * Una reserva más vieja que esto se considera vencida y otra venta puede
+ * tomarla: `capture()` no tiene timeout propio (`fetch` pelado en
+ * `x402Muro.ts`), y un `/settle` colgado dejaba la reserva tomada hasta que
+ * cortara undici (~300 s), con TODA venta en 424 mientras tanto; el
+ * `finally` del adaptador la libera, pero recién cuando la request termina
+ * (segundo refutador de cierre, ronda 3). 60 s es el doble del
+ * `maxTimeoutSeconds` que publica el accept.
+ */
+const RESERVA_MAX_MS = 60_000;
+
 /** Actualiza el contador con el resultado de un anclaje REAL de una venta
  * NUEVA (el inmediato + su único reintento en `x402MuroDurable.ts` — nunca
  * el de la medición previa al cobro, que usa un `fetch` que no sale a la
@@ -220,12 +244,24 @@ export function registrarResultadoAnchor(resultado: Record<string, unknown>): vo
   intentoMedioAbiertoEnCurso = false;
   if (esExitoOYaAnclado(resultado)) {
     fallosConsecutivos = 0;
-    ultimoFalloDePolitica = false;
+    hayPoliticaEnRacha = false;
+    return;
+  }
+  if (resultado.skipped === "already_anchored") {
+    // NEUTRO: un 409 resuelto sin registro propio (ajeno, o el GET no se
+    // pudo leer) prueba que `/dx402/anchor` contesta — no es caída ni
+    // política. Contarlo como fallo dejaba que un tercero (el `paymentId`
+    // sale del tx público y `/dx402/anchor` no exige identidad) o una
+    // caída de `GET /dx402/evidence` abrieran el corte con cinco compras y
+    // apagaran la ruta para todos (segundo refutador de cierre, ronda 3).
+    // Pero si el corte YA está abierto, esta venta tampoco probó que el
+    // anclaje volvió: se rearma la ventana sin sumar.
+    if (fallosConsecutivos >= UMBRAL_FALLOS_CONSECUTIVOS) ultimoFalloMs = Date.now();
     return;
   }
   fallosConsecutivos += 1;
   ultimoFalloMs = Date.now();
-  ultimoFalloDePolitica = resultado.status === 402 || resultado.status === 422;
+  if (resultado.status === 402) hayPoliticaEnRacha = true;
 }
 
 /**
@@ -241,7 +277,7 @@ export function registrarResultadoAnchor(resultado: Record<string, unknown>): vo
  */
 export function anclajeDisponible(): boolean {
   if (fallosConsecutivos < UMBRAL_FALLOS_CONSECUTIVOS) return true;
-  const ventana = ultimoFalloDePolitica ? VENTANA_MEDIO_ABIERTO_POLITICA_MS : VENTANA_MEDIO_ABIERTO_MS;
+  const ventana = hayPoliticaEnRacha ? VENTANA_MEDIO_ABIERTO_POLITICA_MS : VENTANA_MEDIO_ABIERTO_MS;
   return Date.now() - ultimoFalloMs >= ventana;
 }
 
@@ -257,8 +293,9 @@ export function anclajeDisponible(): boolean {
  */
 export function reservarMedioAbierto(): "cerrado" | "medio-abierto" | "ocupado" {
   if (fallosConsecutivos < UMBRAL_FALLOS_CONSECUTIVOS) return "cerrado";
-  if (intentoMedioAbiertoEnCurso) return "ocupado";
+  if (intentoMedioAbiertoEnCurso && Date.now() - reservaDesdeMs < RESERVA_MAX_MS) return "ocupado";
   intentoMedioAbiertoEnCurso = true;
+  reservaDesdeMs = Date.now();
   return "medio-abierto";
 }
 
@@ -273,8 +310,14 @@ export function liberarIntentoMedioAbierto(): void {
 export function resetContadorFallosParaTest(): void {
   fallosConsecutivos = 0;
   ultimoFalloMs = 0;
-  ultimoFalloDePolitica = false;
+  hayPoliticaEnRacha = false;
   intentoMedioAbiertoEnCurso = false;
+  reservaDesdeMs = 0;
+}
+
+/** Solo para tests: envejece la reserva vigente del medio-abierto en `ms`. */
+export function envejecerReservaParaTest(ms: number): void {
+  reservaDesdeMs -= ms;
 }
 
 /** Solo para tests: mueve `ultimoFalloMs` al pasado en `ms`, para probar el
@@ -322,12 +365,23 @@ export function programarAnclaje(
 /**
  * Sonda GRATIS del facilitador para la ventana de medio-abierto: un GET a
  * `/dx402/stats` (solo lectura, sin pago) con el `fetch` con timeout del
- * llamador. `true` si contesta 2xx. Nunca lanza.
+ * llamador. `true` si contesta 2xx y, cuando se pasa `backend`, si ese
+ * backend figura `enabled` en `backends[]` (es lo que un 422
+ * `dx402_backend_unavailable` significa, y stats lo expone — segundo
+ * refutador de cierre, ronda 3). Un stats sin `backends[]` (facilitador
+ * viejo) no bloquea. Nunca lanza.
  */
-export async function sondearFacilitador(facilitator: string, doFetch: typeof fetch): Promise<boolean> {
+export async function sondearFacilitador(facilitator: string, doFetch: typeof fetch, backend?: string): Promise<boolean> {
   try {
     const res = await doFetch(`${facilitator.replace(/\/+$/, "")}/dx402/stats`);
-    return res.ok;
+    if (!res.ok) return false;
+    if (!backend) return true;
+    const cuerpo = (await res.json()) as { backends?: unknown };
+    if (!Array.isArray(cuerpo.backends)) return true;
+    return cuerpo.backends.some((b) => {
+      const o = b as Record<string, unknown>;
+      return o.id === backend && o.enabled === true;
+    });
   } catch {
     return false;
   }

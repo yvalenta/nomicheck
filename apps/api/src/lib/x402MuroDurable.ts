@@ -688,8 +688,9 @@ export function crearMiddlewareDurable(
         // gratis a `/dx402/stats`, no la venta del siguiente comprador (antes
         // el que caía en la ventana pagaba 0,02 por ser la sonda — hallazgo
         // del refutador `dinero`, ronda 3). Si la sonda falla, cuenta como
-        // fallo y rearma la ventana sin cobrar. Lo que la sonda NO ve es un
-        // rechazo por POLÍTICA del anchor (402/422 con stats en 200): para
+        // fallo y rearma la ventana sin cobrar; mira también que nuestro
+        // backend figure `enabled` en stats. Lo que la sonda NO ve es un
+        // rechazo por POLÍTICA del anchor (402 con stats en 200): para
         // eso `anclajeDisponible` usa una ventana de una hora
         // (`VENTANA_MEDIO_ABIERTO_POLITICA_MS`), y esta venta única es la
         // sonda cara — no hay una gratis (refutador de cierre, ronda 3).
@@ -697,7 +698,11 @@ export function crearMiddlewareDurable(
         if (admision === "ocupado") return noDisponible();
         if (admision === "medio-abierto") {
           reservoMedioAbierto = true;
-          const vivo = await sondearFacilitador(opcionesBase.facilitator, fetchConTimeout(3000));
+          const vivo = await sondearFacilitador(
+            opcionesBase.facilitator,
+            fetchConTimeout(3000),
+            DURABLE_EVIDENCE_INFO.backend
+          );
           if (!vivo) {
             registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", error: "sonda_medio_abierto" });
             return noDisponible();

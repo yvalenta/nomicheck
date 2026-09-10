@@ -1019,6 +1019,10 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
     // sin evidencia propia -- no del 409 crudo como éxito (refutador de
     // cierre, ronda 3).
     expect(registrarSpy.mock.calls.at(-1)?.[0]).toMatchObject({ skipped: "already_anchored", error: "registro_ajeno" });
+    // ...y es NEUTRO para el corte: un tercero con cinco compras no puede
+    // apagar la ruta para todos (segundo refutador de cierre, ronda 3).
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+    expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("cerrado");
   });
 
   it("si GET /dx402/evidence no contesta, se degrada a already_anchored con paymentId + contentHash, sin reintento", async () => {
@@ -1470,6 +1474,82 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     // La única venta ancló: el corte se cierra del todo.
     expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
     expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("cerrado");
+  });
+
+  // Segundo refutador de cierre, ronda 3: un 422 dx402_backend_unavailable
+  // es el backend caído, no política, y /dx402/stats lo expone en
+  // backends[].enabled -- la sonda gratis lo mira antes de cobrar.
+  it("en medio-abierto, si stats dice que nuestro backend está deshabilitado, la sonda falla: 424 sin cobrar", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 422, error: "dx402_backend_unavailable" });
+    }
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+    let anchors = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: { body?: string }) => {
+        const url = String(input);
+        if (url.endsWith("/dx402/stats")) {
+          return new Response(JSON.stringify({ backends: [{ id: "s3", enabled: false }, { id: "ipfs-private", enabled: true }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.endsWith("/dx402/anchor")) {
+          anchors += 1;
+          return new Response("{}", { status: 422 });
+        }
+        return fetchOriginal(input as never, init as never);
+      })
+    );
+    const settle = vi.fn();
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso({ handleSettle: settle }));
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(424);
+    expect(anchors).toBe(0);
+    expect(settle).not.toHaveBeenCalled();
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(false);
+  });
+
+  // Segundo refutador de cierre, ronda 3: el `.finally` del adaptador es la
+  // red que libera la reserva cuando la request muere antes de informar
+  // (p. ej. el settle revienta). Sin él, toda venta siguiente sería 424.
+  it("si la venta que reservó el medio-abierto revienta en el settle, el finally libera la reserva", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    envejecerUltimoFalloParaTest(300_000);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: { body?: string }) => {
+        const url = String(input);
+        if (url.endsWith("/dx402/stats")) return new Response("{}", { status: 200 });
+        return fetchOriginal(input as never, init as never);
+      })
+    );
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirAppConCatch424(
+      handlerFalso({
+        handleSettle: async () => {
+          throw new Error("facilitator 502: <html>bad gateway</html>");
+        },
+      })
+    );
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(424);
+    expect(((await res.json()) as { error: string }).error).toBe("facilitator_error");
+    // La ventana sigue pasada (nadie registró un fallo) y la reserva quedó
+    // libre: la siguiente venta puede tomarla.
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+    expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("medio-abierto");
   });
 });
 
