@@ -171,3 +171,34 @@ describe("llaveDelPagador — firma de otra cuenta", () => {
     );
   });
 });
+
+// Refutador `identidad`, ronda 3: viem rechaza con `InvalidAddressError` toda
+// dirección en mayúsculas mixtas cuyo checksum EIP-55 no sea exacto. Un
+// `X402_PAY_TO` con checksum malo —que el arranque acepta, su guarda es
+// `/^0x[0-9a-fA-F]{40}$/`— mataba CADA venta de /verificar/durable con un 422
+// `no_payer_key` que le echaba la culpa a la firma del comprador. El digest
+// EIP-712 codifica las direcciones como bytes20: el casing no cambia el hash.
+describe("llaveDelPagador — direcciones con checksum EIP-55 inválido o en mayúsculas", () => {
+  it("recupera la misma clave con `to`, `from` y `verifyingContract` en cualquier casing", async () => {
+    const cuenta = privateKeyToAccount(generatePrivateKey());
+    const toMinusculas = "0x000000000000000000000000000000000000dead" as Address;
+    const auth = autorizacion(cuenta.address, toMinusculas);
+    const firma = await firmarConCuenta(cuenta, auth, DOMINIO_AVALANCHE);
+    const carga = { signature: firma, authorization: auth };
+
+    const referencia = await llaveDelPagador(carga, DOMINIO_AVALANCHE);
+    const variantes: Array<[typeof carga, DominioTransferWithAuthorization]> = [
+      // checksum EIP-55 inválido en `to` (el `payTo` publicado)
+      [{ ...carga, authorization: { ...auth, to: "0x000000000000000000000000000000000000dEAD" } }, DOMINIO_AVALANCHE],
+      // `from` serializado en hex mayúsculas por el cliente
+      [{ ...carga, authorization: { ...auth, from: ("0x" + cuenta.address.slice(2).toUpperCase()) as Address } }, DOMINIO_AVALANCHE],
+      // checksum inválido en el token del dominio
+      [carga, { ...DOMINIO_AVALANCHE, verifyingContract: "0xb97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E" as Address }],
+    ];
+    for (const [c, d] of variantes) {
+      const clave = await llaveDelPagador(c, d);
+      expect(Buffer.from(clave)).toEqual(Buffer.from(referencia));
+      expect(direccionDesdeClaveComprimida(clave).toLowerCase()).toBe(cuenta.address.toLowerCase());
+    }
+  });
+});

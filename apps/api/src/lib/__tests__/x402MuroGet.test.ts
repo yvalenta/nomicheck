@@ -211,4 +211,15 @@ describe("lo que NO puede cambiar", () => {
     expect(b.error).toBe("wrong_method");
     expect(b.mensaje).toMatch(/NO se liquidó/);
   });
+
+  it("un pago v2 (PAYMENT-SIGNATURE) por GET tampoco se liquida -- mismo 405", async () => {
+    // La guarda miraba solo `x-payment` (v1): un pago v2 por GET recibía otro
+    // 402 y el cliente reintentaba firmando, nunca el 405 que explica qué
+    // pasó (refutador `protocolo`, ronda 3).
+    const res = await fetch(`${base}/api/batch/verificar`, {
+      headers: { "payment-signature": "eyJhbGciOiJIUzI1NiJ9.e30" },
+    });
+    expect(res.status).toBe(405);
+    expect(((await res.json()) as { error: string }).error).toBe("wrong_method");
+  });
 });

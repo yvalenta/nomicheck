@@ -73,13 +73,21 @@ export function digestTransferWithAuthorization(
   autorizacion: AutorizacionEip3009,
   dominio: DominioTransferWithAuthorization
 ): Hex {
+  // Las tres direcciones en minúsculas ANTES de pasar por viem:
+  // `hashTypedData` rechaza con `InvalidAddressError` toda dirección en
+  // mayúsculas mixtas cuyo checksum EIP-55 no sea exacto, y el digest EIP-712
+  // codifica la dirección como bytes20 — el casing no cambia el hash. Sin
+  // esto, un `X402_PAY_TO` con checksum malo (que el arranque acepta:
+  // `/^0x[0-9a-fA-F]{40}$/`) o un cliente que serialice `from` en mayúsculas
+  // convertían CADA venta en un 422 `no_payer_key` que le echaba la culpa a
+  // la firma del comprador (hallazgo del refutador `identidad`, ronda 3).
   return hashTypedData({
-    domain: dominio,
+    domain: { ...dominio, verifyingContract: dominio.verifyingContract.toLowerCase() as Address },
     types: TIPOS_TRANSFER_WITH_AUTHORIZATION,
     primaryType: "TransferWithAuthorization",
     message: {
-      from: autorizacion.from as Address,
-      to: autorizacion.to as Address,
+      from: autorizacion.from.toLowerCase() as Address,
+      to: autorizacion.to.toLowerCase() as Address,
       value: BigInt(autorizacion.value),
       validAfter: BigInt(autorizacion.validAfter),
       validBefore: BigInt(autorizacion.validBefore),

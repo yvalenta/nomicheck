@@ -528,11 +528,15 @@ export function montarMuroX402(app: Express): void {
 
     // ── GET/HEAD: desafío de descubrimiento, nunca una venta ────────────────
     if (req.method === "GET" || req.method === "HEAD") {
-      // Un GET con `X-PAYMENT` NO se liquida. Es la ley `cobrar-antes-de-servir`
-      // en su forma más cruda: por GET no hay cuerpo que procesar, así que
-      // aceptar el pago sería cobrar por algo que no podemos entregar, y el
-      // pago x402 es inmediato y final — no habría cómo devolverlo.
-      if (req.headers["x-payment"]) {
+      // Un GET con `X-PAYMENT` (v1) o `PAYMENT-SIGNATURE` (v2) NO se liquida.
+      // Es la ley `cobrar-antes-de-servir` en su forma más cruda: por GET no
+      // hay cuerpo que procesar, así que aceptar el pago sería cobrar por
+      // algo que no podemos entregar, y el pago x402 es inmediato y final —
+      // no habría cómo devolverlo. La guarda miraba solo v1: un pago v2 por
+      // GET (el comprador previsto usa `@x402/fetch` v2) recibía otro 402 y
+      // el cliente reintentaba firmando, nunca el 405 que explica qué pasó
+      // (hallazgo del refutador `protocolo`, ronda 3).
+      if (req.headers["x-payment"] || req.headers["payment-signature"]) {
         return res.status(405).set("Allow", "POST").json({
           error: "wrong_method",
           mensaje:

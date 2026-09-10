@@ -50,7 +50,8 @@ const WHY_IT_CHARGES: Record<string, string> = {
     "Same recomputation as /verificar, same price. What is charged for here is not the " +
     "calculation, it is the envelope: the response is sealed to your key, anchored with the " +
     "facilitator's signed receipt, and the ciphertext stays hosted for 90 days so you can " +
-    "verify it later without calling us again. Avalanche C-Chain only.",
+    "verify it later without calling us again. About 50 payslips per batch (larger ones get " +
+    "413 without charge). Avalanche C-Chain only.",
 };
 
 // Lo gratis, y por qué lo es. Esta lista es la que hace honesta a la otra:

@@ -203,7 +203,7 @@ export const DESCRIPCIONES: Record<string, string> = {
   "/comprobante":
     "NomiCheck payment receipt: cross-checks the liquidation, the frozen FX snapshot and the on-chain transfer. Ed25519-signed output with the legal-rules hash and the date they were verified.",
   "/verificar/durable":
-    "NomiCheck batch verification with durable evidence (DX402). The response is an envelope signed with NomiCheck's Ed25519 envelope key (GET /api/batch/verificar/durable/sobre-publickey), sealed to the payer's key and anchored with the facilitator's signed receipt; the ciphertext is hosted for 90 days (revocable). Keep the response: the signed envelope and the receipt verify offline after that. Avalanche C-Chain only, same price as /verificar.",
+    "NomiCheck batch verification with durable evidence (DX402). The response is an envelope signed with NomiCheck's Ed25519 envelope key (GET /api/batch/verificar/durable/sobre-publickey), sealed to the payer's key and anchored with the facilitator's signed receipt; the ciphertext is hosted for 90 days and then stops being served (no early deletion on request). Keep the response: the signed envelope and the receipt verify offline after that. About 50 payslips per call (the sealed request must stay under the facilitator's 64 KiB cap); larger batches get 413 without charge. Avalanche C-Chain only, same price as /verificar.",
 };
 
 /** Lo que `btoa` puede serializar sin romperse. */
@@ -412,7 +412,7 @@ export function nombreDeRed(caip2: string): string {
 /**
  * La config de retención declarada para `/verificar/durable`. Decisión fija
  * de Yonatan (DX402 punto 2, `tareas/2026-09-08-nomicheck-vendedor-dx402-con-sobre.md`):
- * retención "90d" (revocable), modo "direct" (sin escrow del lado del
+ * retención "90d" (no permanente: vence, y no hay borrado a pedido), modo "direct" (sin escrow del lado del
  * facilitador), backend "s3", pagado por el vendedor (nosotros, no el
  * comprador). `maxBodyBytes: 47000` es MEDIDO, no elegido: el SDK sella el
  * sobre y lo mide contra el tope real de 64 KiB del request al facilitador —
@@ -429,6 +429,18 @@ export const DURABLE_EVIDENCE_INFO = {
   maxBodyBytes: 47000,
   paidBy: "seller",
 } as const;
+
+/**
+ * Cuántos comprobantes entran, en la práctica, en una llamada a
+ * `/verificar/durable`. MEDIDO, no elegido (refutador `dinero`, ronda 3,
+ * `ventana.test.ts`): 50 comprobantes × 4 líneas dan un sobre de 47.164 B que
+ * todavía entra bajo `maxBodyBytes`; 200 → `too_large`. El esquema de entrada
+ * admite hasta 500 (`validation/batchVerificacion.ts`) porque es el mismo de
+ * `/verificar` plano — el 413 de la ruta durable nombra este número para
+ * que el comprador no lo descubra a prueba y error. Aproximado a propósito:
+ * depende del largo de los campos declarados, no solo de la cantidad.
+ */
+export const COMPROBANTES_QUE_ENTRAN = 50;
 
 /**
  * El JSON schema que se publica junto a `info`, informativo para quien lo lea

@@ -237,8 +237,10 @@ export function construirOpenApi(): Record<string, unknown> {
           "DIFFERENT key from GET /publickey, which signs every other response), sealed to " +
           "the payer's own key recovered from the payment signature, and anchored with the " +
           "facilitator's signed receipt (X-Durable-Evidence response header). The ciphertext " +
-          "stays hosted for 90 days, revocable, so the buyer can verify offline later without " +
-          "calling this server again. Avalanche C-Chain only, regardless of which networks " +
+          "stays hosted for 90 days and then stops being served (no early deletion on request), " +
+          "so the buyer can verify offline later without calling this server again. About 50 " +
+          "payslips per call: the sealed request must stay under the facilitator's 64 KiB cap, " +
+          "and a larger batch gets 413 without charge. Avalanche C-Chain only, regardless of which networks " +
           "the rest of this catalog accepts -- see x-x402.redes below, not the global list.",
         tags: ["listings"],
         requestBody: { required: true, content: { "application/json": { schema: refA("BatchVerificacionInput") } } },
@@ -262,13 +264,18 @@ export function construirOpenApi(): Record<string, unknown> {
                 "and this operation answers without payment.",
           },
           "413": {
-            description: "`too_large_for_durable` -- the sealed batch exceeds the facilitator's request cap. Not charged.",
+            description:
+              "`too_large_for_durable` -- the sealed batch exceeds the facilitator's 64 KiB request cap " +
+              "(about 50 payslips per call). Split the batch. Not charged.",
           },
           "422": {
             description: "`no_payer_key` -- the payment signature does not recover to `authorization.from`. Not charged.",
           },
           "424": {
-            description: "`durable_evidence_unavailable` -- anchoring has been failing sustained. Not charged.",
+            description:
+              "`durable_evidence_unavailable` -- anchoring has been failing sustained (not charged); or " +
+              "`settle_failed` -- the facilitator reported the settlement as failed (not delivered; check " +
+              "PAYMENT-RESPONSE and the tx before paying again).",
           },
           "500": { description: "`internal_error`." },
         },

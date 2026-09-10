@@ -324,6 +324,11 @@ function stubFetchAnchorExitoso(): { llamadas: Array<Record<string, unknown>> } 
     "fetch",
     vi.fn(async (input: unknown, init?: { body?: string }) => {
       const url = String(input);
+      // La sonda gratis del medio-abierto (`sondearFacilitador`): un
+      // facilitador "sano" contesta 2xx.
+      if (url.endsWith("/dx402/stats")) {
+        return new Response(JSON.stringify({ backend: "s3" }), { status: 200, headers: { "content-type": "application/json" } });
+      }
       if (!url.endsWith("/dx402/anchor")) {
         return fetchOriginal(input as never, init as never);
       }
@@ -375,6 +380,10 @@ describe("camino feliz", () => {
     expect(enviado.retention).toBe("90d");
     expect(enviado.mode).toBe("direct");
     expect(enviado.backend).toBe("s3");
+    // `storage` es el SELECTOR del backend en el request de anchor; sin él
+    // el facilitador usa su default (`ipfs`) aunque el 402 prometa s3
+    // (refutador `protocolo`, ronda 3).
+    expect(enviado.storage).toBe("s3");
     expect(enviado.keyAlg).toBe("ECIES-secp256k1");
     expect(enviado.sellerSignature).toBeUndefined();
 
@@ -444,8 +453,15 @@ describe("lote que no entra en el tope del facilitador", () => {
     const res = await postFirmado(base, batchGrande(), carga);
 
     expect(res.status).toBe(413);
-    const cuerpo = (await res.json()) as { error: string };
+    const cuerpo = (await res.json()) as { error: string; mensaje: string; limite: { comprobantesAprox: number } };
     expect(cuerpo.error).toBe("too_large_for_durable");
+    // El 413 nombra el techo medido (~50 comprobantes) en vez de dejar que
+    // el comprador lo descubra a prueba y error contra un contrato que
+    // publica 500 (refutador `dinero`, ronda 3), y lleva el header con el
+    // motivo del vocabulario DX402 (refutador `protocolo`, ronda 3).
+    expect(cuerpo.limite.comprobantesAprox).toBe(50);
+    expect(cuerpo.mensaje).toMatch(/50 comprobantes/);
+    expect(decodeEvidenceHeader(res.headers.get("x-durable-evidence")!).skipped).toBe("too_large");
     expect(settle).not.toHaveBeenCalled();
   });
 });
@@ -477,17 +493,32 @@ describe("authorize falla", () => {
 // ── 5) capture falla ──────────────────────────────────────────────────────
 
 describe("capture falla", () => {
-  it("responde el error de faremeter, sin tocar el anchor", async () => {
+  it("responde 424 settle_failed con el motivo -- nunca el 402 'pagá de nuevo' de faremeter -- sin tocar el anchor", async () => {
     const { llamadas } = stubFetchAnchorExitoso();
     const pagador = privateKeyToAccount(generatePrivateKey());
     const carga = await firmarCarga(pagador);
     const base = await construirApp(
-      handlerFalso({ handleSettle: async () => ({ success: false, errorReason: "settle_failed" }) })
+      handlerFalso({ handleSettle: async () => ({ success: false, errorReason: "insufficient_funds" }) })
     );
 
     const res = await postFirmado(base, batchChico(), carga);
 
-    expect(res.status).toBe(402);
+    // El `errorResponse` de faremeter es un 402: si la autorización llegó a
+    // liquidarse antes del fallo reportado, un cliente x402 que obedece el
+    // 402 paga DOS VECES (refutador `dinero`, ronda 3). 424 corta ese
+    // reintento automático y nombra el motivo.
+    expect(res.status).toBe(424);
+    const cuerpo = (await res.json()) as { error: string; mensaje: string };
+    expect(cuerpo.error).toBe("settle_failed");
+    expect(cuerpo.mensaje).toMatch(/dos veces/);
+    // Sin `PAYMENT-REQUIRED`: no se invita a repagar. Con `PAYMENT-RESPONSE`:
+    // el motivo del facilitador viaja ahí (faremeter lo setea dentro de
+    // `capture()` antes de su 402), y es lo que el comprador mira antes de
+    // decidir si vuelve a pagar.
+    expect(res.headers.get("payment-required")).toBeNull();
+    const paymentResponse = res.headers.get("payment-response");
+    expect(paymentResponse).toBeTruthy();
+    expect(JSON.parse(atob(paymentResponse!))).toMatchObject({ success: false, errorReason: "insufficient_funds" });
     expect(res.headers.get("x-durable-evidence")).toBeNull();
     expect(llamadas).toHaveLength(0);
   });
@@ -507,7 +538,7 @@ describe("el facilitador de anchor está caído", () => {
         return new Response(JSON.stringify({ error: "facilitator_unreachable" }), { status: 503 });
       })
     );
-    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => {});
+    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
 
     const pagador = privateKeyToAccount(generatePrivateKey());
     const carga = await firmarCarga(pagador);
@@ -520,8 +551,17 @@ describe("el facilitador de anchor está caído", () => {
     // respuesta — el pago ya cobró y no puede quedar esperando al reintento
     // diferido para contestar.
     expect(llamadasAnchor).toBe(2);
+    const cuerpo = Buffer.from(await res.arrayBuffer());
     const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
     expect(evidencia.skipped).toBe("anchor_failed");
+    // El 503 del facilitador es RETRYABLE: el header le da al comprador el
+    // `paymentId` + `contentHash` para volver a preguntar por
+    // `GET /dx402/evidence/{paymentId}`, y `deferred` dice que la cola va a
+    // reintentar (refutador `protocolo`, ronda 3).
+    expect(evidencia.status).toBe(503);
+    expect(evidencia.deferred).toBe(true);
+    expect(typeof evidencia.paymentId).toBe("string");
+    expect(evidencia.contentHash).toBe(contentHash(cuerpo));
     expect(programarSpy).toHaveBeenCalledTimes(1);
     expect(typeof programarSpy.mock.calls[0][0]).toBe("string");
   });
@@ -643,6 +683,7 @@ describe("la firma no es de quien dice pagar", () => {
     expect(res.status).toBe(422);
     const cuerpo = (await res.json()) as { error: string };
     expect(cuerpo.error).toBe("no_payer_key");
+    expect(decodeEvidenceHeader(res.headers.get("x-durable-evidence")!).skipped).toBe("no_payer_key");
     expect(settle).not.toHaveBeenCalled();
   });
 });
@@ -671,9 +712,16 @@ describe("POST sin pago", () => {
     expect(decodificado.extensions?.["durable-evidence"].schema).toBeDefined();
     expect(decodificado.accepts[0].extra?.extensions).toBeDefined();
 
-    // El cuerpo (SIEMPRE v1) no tiene `extensions` de nivel superior, pero sí
-    // el merge por accept.
-    const cuerpo = (await res.json()) as { accepts: Array<{ extra?: { extensions?: Record<string, unknown> } }> };
+    // El cuerpo (SIEMPRE v1) lleva TAMBIÉN `extensions` de nivel superior —
+    // el mismo criterio que el 402 del GET (`desafioDeDescubrimiento`): un
+    // comprador v1 lee el cuerpo, no el header, y la puerta previa al pago
+    // de testigo exige `info.acceptIndexes` ahí (refutador `protocolo`,
+    // ronda 3) — además del merge por accept.
+    const cuerpo = (await res.json()) as {
+      extensions?: { "durable-evidence": { info: { acceptIndexes: number[] } } };
+      accepts: Array<{ extra?: { extensions?: Record<string, unknown> } }>;
+    };
+    expect(cuerpo.extensions?.["durable-evidence"].info.acceptIndexes).toEqual([0]);
     expect(cuerpo.accepts[0].extra?.extensions?.["durable-evidence"]).toBeDefined();
   });
 });
@@ -802,8 +850,9 @@ describe("presupuesto de tiempo del reintento inmediato de anchor", () => {
 
 // 13) `transaction` ausente/vacía en el settle: nunca un paymentId inventado.
 describe("settle sin transaction valida (ausente o vacía)", () => {
-  it("NO ancla con un id inventado -- sirve el sobre igual, con skip explícito", async () => {
+  it("NO ancla con un id inventado -- sirve el sobre igual, con skip explícito, y el cortacircuitos se entera", async () => {
     const { llamadas } = stubFetchAnchorExitoso();
+    const registrarSpy = vi.spyOn(anclajeDiferidoModule, "registrarResultadoAnchor");
     const pagador = privateKeyToAccount(generatePrivateKey());
     const carga = await firmarCarga(pagador);
     const base = await construirApp(
@@ -826,6 +875,13 @@ describe("settle sin transaction valida (ausente o vacía)", () => {
     const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
     expect(evidencia.skipped).toBe("anchor_failed");
     expect(evidencia.error).toBe("settle_sin_txhash");
+    // Era el ÚNICO camino post-capture() que no informaba al cortacircuitos:
+    // un facilitador que dejara de devolver `transaction` vendía la garantía
+    // rota venta tras venta sin que el corte se enterara (refutador `dinero`,
+    // ronda 3).
+    expect(registrarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped: "anchor_failed", error: "settle_sin_txhash" })
+    );
   });
 });
 
@@ -857,23 +913,50 @@ describe("normalización del txHash a minúsculas", () => {
   });
 });
 
-// 15) Un 409 already_anchored en el reintento inmediato es éxito, no skip mentiroso.
+// 15) Un 409 already_anchored en el reintento inmediato: el registro se
+// RECUPERA con `GET /dx402/evidence/{paymentId}` (refutador `protocolo`,
+// ronda 3 -- antes se servía `skipped:"already_anchored"` sin distinguir si
+// el registro era nuestro o de un tercero que ancló primero bajo nuestro id).
 describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en el reintento)", () => {
-  it("no encola un reintento diferido inútil, y el header no dice anchor_failed", async () => {
+  function stubAnchor409ConEvidencia(evidencia: (enviado: Record<string, unknown>) => Response) {
     let llamadasAnchor = 0;
+    let enviado: Record<string, unknown> = {};
+    const llamadasEvidence: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: unknown, init?: { body?: string }) => {
         const url = String(input);
+        if (url.includes("/dx402/evidence/")) {
+          llamadasEvidence.push(url);
+          return evidencia(enviado);
+        }
         if (!url.endsWith("/dx402/anchor")) return fetchOriginal(input as never, init as never);
         llamadasAnchor += 1;
+        enviado = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
         if (llamadasAnchor === 1) {
           return new Response(JSON.stringify({ error: "facilitator_unreachable" }), { status: 503 });
         }
         return new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 });
       })
     );
-    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => {});
+    return { llamadasEvidence, llamadasAnchor: () => llamadasAnchor };
+  }
+
+  it("si el registro anclado es el NUESTRO (mismo contentHash), el header trae el pointer real, sin skipped ni reintento", async () => {
+    const { llamadasEvidence, llamadasAnchor } = stubAnchor409ConEvidencia(
+      (enviado) =>
+        new Response(
+          JSON.stringify({
+            paymentId: enviado.paymentId,
+            pointer: "s3+https://facilitator.example/evidencia/nuestra",
+            contentHash: enviado.contentHash,
+            mode: "direct",
+            receipt: { signed: true },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    );
+    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
 
     const pagador = privateKeyToAccount(generatePrivateKey());
     const carga = await firmarCarga(pagador);
@@ -882,12 +965,76 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
     const res = await postFirmado(base, batchChico(), carga);
 
     expect(res.status).toBe(200);
-    expect(llamadasAnchor).toBe(2);
+    expect(llamadasAnchor()).toBe(2);
+    expect(llamadasEvidence).toHaveLength(1);
+    expect(llamadasEvidence[0]).toMatch(/\/dx402\/evidence\/0x[0-9a-f]{64}$/);
+    const cuerpo = Buffer.from(await res.arrayBuffer());
     const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
-    expect(evidencia.skipped).not.toBe("anchor_failed");
+    expect(evidencia.skipped).toBeUndefined();
+    expect(evidencia.pointer).toBe("s3+https://facilitator.example/evidencia/nuestra");
+    expect(evidencia.contentHash).toBe(contentHash(cuerpo));
+    expect(typeof evidencia.paymentId).toBe("string");
+    expect(programarSpy).not.toHaveBeenCalled();
+  });
+
+  it("si el registro anclado es AJENO (otro contentHash), el header dice already_anchored + registro_ajeno y se grita en el registro", async () => {
+    const { llamadasEvidence } = stubAnchor409ConEvidencia(
+      (enviado) =>
+        new Response(
+          JSON.stringify({
+            paymentId: enviado.paymentId,
+            pointer: "s3+https://facilitator.example/evidencia/de-otro",
+            contentHash: "0x" + "ff".repeat(32),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    );
+    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
+    const lineas: LineaDeRegistro[] = [];
+    usarEmisor((l) => lineas.push(l));
+
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso());
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(200);
+    expect(llamadasEvidence).toHaveLength(1);
+    const cuerpo = Buffer.from(await res.arrayBuffer());
+    const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
     expect(evidencia.skipped).toBe("already_anchored");
-    expect(evidencia.paymentId).toBeDefined();
-    expect(evidencia.contentHash).toBeDefined();
+    expect(evidencia.error).toBe("registro_ajeno");
+    // Nunca el pointer ajeno: el comprador no debe dereferenciar bytes que
+    // no son los que se le sirvieron.
+    expect(evidencia.pointer).toBeUndefined();
+    expect(evidencia.contentHash).toBe(contentHash(cuerpo));
+    expect(typeof evidencia.paymentId).toBe("string");
+    // Un registro ajeno es un anclaje provisional que un tercero ganó: no se
+    // reintenta (nunca lo va a superar) y sí se grita.
+    expect(programarSpy).not.toHaveBeenCalled();
+    expect(lineas.some((l) => l.nivel === "error" && l.mensaje.includes("AJENO"))).toBe(true);
+  });
+
+  it("si GET /dx402/evidence no contesta, se degrada a already_anchored con paymentId + contentHash, sin reintento", async () => {
+    const { llamadasEvidence } = stubAnchor409ConEvidencia(() => new Response("index unavailable", { status: 503 }));
+    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
+
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso());
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(200);
+    expect(llamadasEvidence).toHaveLength(1);
+    const cuerpo = Buffer.from(await res.arrayBuffer());
+    const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
+    expect(evidencia.skipped).toBe("already_anchored");
+    expect(evidencia.error).toBeUndefined();
+    expect(evidencia.pointer).toBeUndefined();
+    expect(evidencia.contentHash).toBe(contentHash(cuerpo));
+    expect(typeof evidencia.paymentId).toBe("string");
     expect(programarSpy).not.toHaveBeenCalled();
   });
 });
@@ -995,6 +1142,47 @@ describe("el facilitador ecoa un accept con la red correcta pero otro payTo o as
   });
 });
 
+// 17c) El eco con el nombre LEGADO de la red ("avalanche" en vez de
+// `eip155:43114`) es el MISMO accept propio: faremeter normaliza los ids de
+// red y el facilitador puede ecoar el nombre que él mismo exige en
+// `/settle`. Antes se comparaba el string crudo, el accept se descartaba y
+// el 402 salía con `accepts: []` sin un solo log (refutador `dinero`, ronda 3).
+describe("el facilitador ecoa el accept propio con el nombre legado de la red", () => {
+  it("sobrevive al filtro -- el 402 publica la oferta", async () => {
+    const acceptLegado = { ...accept, network: "avalanche" };
+    const base = await construirApp(handlerFalso({ getRequirements: async () => [acceptLegado] }));
+
+    const res = await fetch(`${base}/api/batch/verificar/durable`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(batchChico()),
+    });
+
+    expect(res.status).toBe(402);
+    const cuerpo = (await res.json()) as { accepts: Array<{ network: string }> };
+    expect(cuerpo.accepts).toHaveLength(1);
+    expect(cuerpo.accepts[0].network).toBe("avalanche");
+  });
+
+  it("cuando el filtro deja el 402 sin ofertas, lo grita en el registro -- una ruta paga que no vende no es 'nadie compró'", async () => {
+    const lineas: LineaDeRegistro[] = [];
+    usarEmisor((l) => lineas.push(l));
+    const acceptOtroPayTo = { ...accept, payTo: "0xDeadBeefDeadBeefDeadBeefDeadBeefDeadBeef" };
+    const base = await construirApp(handlerFalso({ getRequirements: async () => [acceptOtroPayTo] }));
+
+    const res = await fetch(`${base}/api/batch/verificar/durable`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(batchChico()),
+    });
+
+    expect(res.status).toBe(402);
+    expect(((await res.json()) as { accepts: unknown[] }).accepts).toHaveLength(0);
+    const grito = lineas.find((l) => l.nivel === "error" && l.mensaje.includes("sin ofertas"));
+    expect(grito).toBeDefined();
+  });
+});
+
 // 18) El sobre durable NO es byte a byte el mismo documento que /verificar
 // plano: documentado con un test, no descubierto en producción.
 describe("diferencia entre /verificar plano y /verificar/durable para el mismo dato extralegal", () => {
@@ -1082,8 +1270,58 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     expect(res.status).toBe(424);
     const cuerpo = (await res.json()) as { error: string };
     expect(cuerpo.error).toBe("durable_evidence_unavailable");
+    expect(decodeEvidenceHeader(res.headers.get("x-durable-evidence")!)).toMatchObject({
+      skipped: "anchor_failed",
+      error: "circuit_open",
+    });
     expect(settle).not.toHaveBeenCalled();
     disponibleSpy.mockRestore();
+  });
+
+  // Refutador `dinero`, ronda 3: el medio-abierto dejaba pasar "UN intento
+  // de anclar", pero `anclajeDisponible()` se consulta ANTES de `capture()`:
+  // el comprador que caía en la ventana PAGABA 0,02 por ser la sonda de que
+  // el facilitador seguía caído -- una venta cobrada sin evidencia cada
+  // 300 s, indefinidamente. Ahora la sonda es un GET gratis a /dx402/stats.
+  it("en medio-abierto con el facilitador todavía caído, la sonda gratis falla: 424 sin cobrar y la ventana se rearma", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+
+    let sondas = 0;
+    let anchors = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: { body?: string }) => {
+        const url = String(input);
+        if (url.endsWith("/dx402/stats")) {
+          sondas += 1;
+          return new Response("error code: 503", { status: 503 });
+        }
+        if (url.endsWith("/dx402/anchor")) {
+          anchors += 1;
+          return new Response("{}", { status: 503 });
+        }
+        return fetchOriginal(input as never, init as never);
+      })
+    );
+    const settle = vi.fn();
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso({ handleSettle: settle }));
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(424);
+    expect(((await res.json()) as { error: string }).error).toBe("durable_evidence_unavailable");
+    expect(sondas).toBe(1);
+    expect(anchors).toBe(0);
+    expect(settle).not.toHaveBeenCalled();
+    // La sonda fallida cuenta como fallo: la ventana se rearma sin que nadie
+    // haya pagado por descubrirlo.
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(false);
   });
 
   // Reparación DX402 punto 2 ronda 2 (hallazgo de DOS refutadores
@@ -1143,7 +1381,7 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
 // 21) El sobre declara dónde queda su propio ciphertext, no solo que NomiCheck
 // no persiste -- lo que el comprador compró es justo esa retención externa.
 describe("habeasData del sobre declara la retención externa del facilitador", () => {
-  it("trae habeasData.retencionExterna (90d, revocable) -- /verificar plano no la tiene", async () => {
+  it("trae habeasData.retencionExterna (90d, vence, sin borrado a pedido) -- /verificar plano no la tiene", async () => {
     stubFetchAnchorExitoso();
     const pagador = privateKeyToAccount(generatePrivateKey());
     const carga = await firmarCarga(pagador);
@@ -1151,14 +1389,20 @@ describe("habeasData del sobre declara la retención externa del facilitador", (
 
     const res = await postFirmado(base, batchChico(), carga);
     const cuerpo = JSON.parse(Buffer.from(await res.arrayBuffer()).toString("utf8")) as {
-      habeasData: { retencionExterna?: { donde: string; plazo: string; revocable: boolean } };
+      habeasData: { retencionExterna?: Record<string, unknown> };
     };
 
+    // Sin `revocable: true`: en el facilitador "revocable" es una propiedad
+    // del store (no permanente), no una operación del comprador -- su
+    // openapi no tiene DELETE ni revoke. Firmado bajo habeasData se leía
+    // como un derecho que nadie puede ejercer (refutador `protocolo`, ronda 3).
     expect(cuerpo.habeasData.retencionExterna).toEqual({
       donde: "facilitador DX402 (cifrado, solo lo abre el pagador)",
       plazo: "90d",
-      revocable: true,
+      alVencer: "el facilitador deja de servir el cifrado (410)",
+      borradoAPedido: false,
     });
+    expect(cuerpo.habeasData.retencionExterna).not.toHaveProperty("revocable");
 
     // /verificar plano NO tiene esta clave: construirHabeasData() la
     // comparten seis rutas más que no hospedan nada en un tercero.
@@ -1243,5 +1487,51 @@ describe("el backend/retención real del anchor diverge de lo que el sobre firm�
 
     expect(res.status).toBe(200);
     expect(lineas.some((l) => l.mensaje.includes("difiere"))).toBe(false);
+  });
+});
+
+// ── 23) El fetch del anchor LANZA después del cobro ───────────────────────
+//
+// Revisión de la sesión madre (2026-09-10). Leído en `uvd-x402-sdk` 2.88.0
+// (`dist/index.mjs`, `anchorEvidence`): TODO el cuerpo de la función vive
+// dentro de un `try/catch` que devuelve `{v:1, skipped:"anchor_failed"}`,
+// así que hoy un `fetch` que lanza (red caída, DNS, el `TimeoutError` de
+// `AbortSignal.timeout` que arma `fetchConTimeout`) nunca escapa de él. Este
+// test pinnea esa propiedad DEL LADO NUESTRO: el día que una versión del SDK
+// deje escapar la excepción, el `await anchorEvidence(...)` de
+// `x402MuroDurable.ts` la propaga hasta el `.catch()` de `montarMuroX402`,
+// que responde 424 SIN el sobre — sobre un pago que `capture()` ya liquidó.
+// Cobro sin entrega, justo lo que la ley de esta ruta prohíbe. Con el SDK
+// actual pasa; si deja de pasar, el fallo dice exactamente qué se rompió.
+describe("el fetch del anchor lanza (red caída o timeout) después del cobro", () => {
+  it("el comprador igual recibe el sobre: 200 verificable, skipped anchor_failed, reintento diferido", async () => {
+    let llamadasAnchor = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: { body?: string }) => {
+        const url = String(input);
+        if (!url.endsWith("/dx402/anchor")) return fetchOriginal(input as never, init as never);
+        llamadasAnchor += 1;
+        // Lo que undici lanza ante una conexión rechazada; el `TimeoutError`
+        // de `AbortSignal.timeout` sigue el mismo camino (`catch` genérico).
+        throw new TypeError("fetch failed");
+      })
+    );
+    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => {});
+
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso());
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(200);
+    expect(llamadasAnchor).toBe(2);
+    const cuerpo = Buffer.from(await res.arrayBuffer());
+    const sobre = JSON.parse(cuerpo.toString("utf8")) as Record<string, unknown>;
+    expect(verificar(sobre, sobrePublicKeyPem)).toBe(true);
+    const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
+    expect(evidencia.skipped).toBe("anchor_failed");
+    expect(programarSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -118,8 +118,12 @@ export function esExitoOYaAnclado(resultado: Record<string, unknown>): boolean {
   if (typeof resultado.skipped !== "string") {
     return typeof resultado.pointer === "string" && resultado.pointer.length > 0;
   }
+  // El `already_anchored` real es un 409 (`dx402_already_anchored`, openapi
+  // vivo del facilitador). Sin exigir el status, un 5xx cuyo mensaje
+  // contuviera esa subcadena servía header de éxito, no encolaba reintento y
+  // reseteaba el cortacircuitos (hallazgo del refutador `dinero`, ronda 3).
   const error = resultado.error;
-  return typeof error === "string" && error.includes("already_anchored");
+  return resultado.status === 409 && typeof error === "string" && error.includes("already_anchored");
 }
 
 /**
@@ -225,23 +229,122 @@ export function envejecerUltimoFalloParaTest(ms: number): void {
  * primera vez (mismo sobre, mismo `payerKey`, mismo `paymentId`/`txHash`
  * reales) — repetir el anchor con los mismos datos es seguro porque el
  * facilitador es quien decide si ya lo tiene (`already_anchored`).
+ *
+ * Devuelve `true` si el reintento quedó en cola (o ya estaba) y `false` si se
+ * descartó por el tope: el llamador se lo dice al comprador en el header
+ * (`deferred`), para que sepa si vale la pena volver a preguntar por
+ * `GET /dx402/evidence/{paymentId}` más tarde.
  */
 export function programarAnclaje(
   paymentId: string,
   body: Uint8Array,
   opts: AnchorOptions,
   reloj: RelojDeReintentos = relojReal
-): void {
-  if (cola.has(paymentId)) return;
+): boolean {
+  if (cola.has(paymentId)) return true;
   if (cola.size >= TOPE_COLA) {
     registro.error("x402", "cola de anclaje diferido llena: se descarta el reintento", undefined, {
       paymentId,
       tope: TOPE_COLA,
     });
-    return;
+    return false;
   }
   cola.set(paymentId, { body, opts, intento: 0 });
   agendar(paymentId, reloj);
+  return true;
+}
+
+/**
+ * `true` solo en la ventana de medio-abierto: el corte se abrió (umbral
+ * agotado) y ya pasó `VENTANA_MEDIO_ABIERTO_MS` desde el último fallo.
+ * `anclajeDisponible()` también da `true` ahí — esta función existe para que
+ * el llamador sepa que está en la ventana y SONDEE al facilitador antes de
+ * cobrar: sin la sonda, el comprador que caía en la ventana pagaba 0,02 por
+ * ser la prueba de que el facilitador seguía caído, una venta cobrada sin
+ * evidencia cada 300 s (hallazgo del refutador `dinero`, ronda 3).
+ */
+export function enMedioAbierto(): boolean {
+  return fallosConsecutivos >= UMBRAL_FALLOS_CONSECUTIVOS && anclajeDisponible();
+}
+
+/**
+ * Sonda GRATIS del facilitador para la ventana de medio-abierto: un GET a
+ * `/dx402/stats` (solo lectura, sin pago) con el `fetch` con timeout del
+ * llamador. `true` si contesta 2xx. Nunca lanza.
+ */
+export async function sondearFacilitador(facilitator: string, doFetch: typeof fetch): Promise<boolean> {
+  try {
+    const res = await doFetch(`${facilitator.replace(/\/+$/, "")}/dx402/stats`);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Qué hay detrás de un 409 `dx402_already_anchored`. El facilitador YA tiene
+ * un registro para este `paymentId` que supera al nuestro (el nuestro es
+ * provisional: sin `sellerSignature`, decisión 7 del brief, y en la escalera
+ * "provisional < signed < verified" nunca desplaza a nadie). Puede ser
+ * NUESTRO — el primer intento ancló y su respuesta se perdió en el timeout —
+ * o AJENO: `paymentId = keccak(caip2‖tx)` se deriva del tx público,
+ * `/dx402/anchor` no exige identidad, y un tercero que ancle primero gana.
+ * Las dos cosas se distinguen con `GET /dx402/evidence/{paymentId}` (openapi
+ * vivo, 2026-09-10: devuelve pointer, `contentHash` del TEXTO PLANO y el
+ * recibo firmado; 404 = nunca hubo registro, 410 = venció): si el
+ * `contentHash` anclado es el de los bytes que servimos, es nuestra
+ * evidencia y el comprador recibe el pointer real; si no, hay un registro
+ * ajeno bajo nuestro id, se loguea como error y el header lo dice
+ * (`error: "registro_ajeno"`). Si el GET no contesta, se degrada a lo que se
+ * servía antes: `skipped: "already_anchored"` con `paymentId` + `contentHash`
+ * para que el comprador vuelva a preguntar (hallazgo del refutador
+ * `protocolo`, ronda 3 — el comentario anterior afirmaba que no existía un
+ * GET para recuperar el pointer).
+ */
+export async function recuperarEvidenciaAnclada(
+  facilitator: string,
+  paymentId: string,
+  contentHashServido: string,
+  doFetch: typeof fetch
+): Promise<Record<string, unknown>> {
+  const sinPointer: Record<string, unknown> = {
+    v: 1,
+    skipped: "already_anchored",
+    paymentId,
+    contentHash: contentHashServido,
+  };
+  try {
+    const res = await doFetch(`${facilitator.replace(/\/+$/, "")}/dx402/evidence/${paymentId}`);
+    if (!res.ok) {
+      registro.warn("x402", "409 del anchor pero GET /dx402/evidence no devolvió el registro", {
+        paymentId,
+        status: res.status,
+      });
+      return sinPointer;
+    }
+    const registroAnclado = normalizarResultadoAnchor(await res.json());
+    if (typeof registroAnclado.pointer !== "string" || registroAnclado.pointer.length === 0) {
+      registro.warn("x402", "409 del anchor pero el registro de GET /dx402/evidence no trae pointer", { paymentId });
+      return sinPointer;
+    }
+    const anclado = registroAnclado.contentHash;
+    if (typeof anclado !== "string" || anclado.toLowerCase() !== contentHashServido.toLowerCase()) {
+      registro.error(
+        "x402",
+        "registro DX402 AJENO bajo nuestro paymentId: el contentHash anclado no es el de los bytes servidos",
+        undefined,
+        { paymentId, anclado, servido: contentHashServido }
+      );
+      return { ...sinPointer, error: "registro_ajeno" };
+    }
+    return { v: 1, ...registroAnclado, paymentId, contentHash: anclado };
+  } catch (e) {
+    registro.warn("x402", "409 del anchor y GET /dx402/evidence falló", {
+      paymentId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return sinPointer;
+  }
 }
 
 function agendar(paymentId: string, reloj: RelojDeReintentos): void {

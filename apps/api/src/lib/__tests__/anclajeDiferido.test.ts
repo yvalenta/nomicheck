@@ -20,6 +20,9 @@ import {
   normalizarResultadoAnchor,
   envejecerUltimoFalloParaTest,
   type RelojDeReintentos,
+  enMedioAbierto,
+  sondearFacilitador,
+  recuperarEvidenciaAnclada,
 } from "../anclajeDiferido.js";
 import { usarEmisor, type LineaDeRegistro } from "../registro.js";
 
@@ -354,5 +357,109 @@ describe("programarAnclaje", () => {
 
     expect(tareasEnColaParaTest()).toBe(50);
     expect(lineas.some((l) => l.mensaje.includes("cola de anclaje diferido llena"))).toBe(true);
+  });
+});
+
+// ── Ronda 3 de refutación (2026-09-10) ──────────────────────────────────
+
+describe("esExitoOYaAnclado exige el 409 real", () => {
+  // Refutador `dinero`, ronda 3: `error.includes("already_anchored")` sobre
+  // un string ajeno, sin mirar `status`, hacía que un 5xx con esa subcadena
+  // sirviera header de éxito, no encolara reintento y reseteara el corte.
+  it("un 5xx cuyo mensaje contiene 'already_anchored' NO es éxito", () => {
+    expect(
+      esExitoOYaAnclado({ v: 1, skipped: "anchor_failed", status: 503, error: "index rebuild: already_anchored set" })
+    ).toBe(false);
+    expect(esExitoOYaAnclado({ v: 1, skipped: "anchor_failed", error: "dx402_already_anchored" })).toBe(false);
+  });
+});
+
+describe("programarAnclaje dice si quedó en cola", () => {
+  it("true al encolar, true si ya estaba, false cuando la cola está llena", async () => {
+    const payerKey = await claveDePagadorValida();
+    const reloj = relojManual();
+    const fetchDoble = vi.fn(async () => new Response("{}", { status: 503 }));
+    const body = new TextEncoder().encode("{}");
+    const opts = opciones(fetchDoble as unknown as typeof fetch, payerKey);
+
+    expect(programarAnclaje("p-1", body, opts, reloj)).toBe(true);
+    expect(programarAnclaje("p-1", body, opts, reloj)).toBe(true);
+    for (let i = 2; i <= 50; i++) programarAnclaje(`p-${i}`, body, opts, reloj);
+    expect(tareasEnColaParaTest()).toBe(50);
+    expect(programarAnclaje("p-51", body, opts, reloj)).toBe(false);
+    expect(lineas.some((l) => l.mensaje.includes("cola de anclaje diferido llena"))).toBe(true);
+  });
+});
+
+describe("enMedioAbierto", () => {
+  it("false cerrado, false recién abierto, true pasada la ventana, false tras un reset", () => {
+    expect(enMedioAbierto()).toBe(false);
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    expect(anclajeDisponible()).toBe(false);
+    expect(enMedioAbierto()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+    expect(enMedioAbierto()).toBe(true);
+    registrarResultadoAnchor({ v: 1, paymentId: "p", pointer: "s3+https://x/y" });
+    expect(enMedioAbierto()).toBe(false);
+  });
+});
+
+describe("sondearFacilitador", () => {
+  it("true con 2xx, false con 5xx, false si fetch lanza -- nunca lanza", async () => {
+    const ok = vi.fn(async () => new Response("{}", { status: 200 }));
+    expect(await sondearFacilitador("https://f.example/", ok as unknown as typeof fetch)).toBe(true);
+    expect(String((ok.mock.calls[0] as unknown[])[0])).toBe("https://f.example/dx402/stats");
+    const caido = vi.fn(async () => new Response("error code: 503", { status: 503 }));
+    expect(await sondearFacilitador("https://f.example", caido as unknown as typeof fetch)).toBe(false);
+    const lanza = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(await sondearFacilitador("https://f.example", lanza as unknown as typeof fetch)).toBe(false);
+  });
+});
+
+describe("recuperarEvidenciaAnclada (qué hay detrás de un 409)", () => {
+  const paymentId = "0x" + "aa".repeat(32);
+  const nuestro = "0x" + "cc".repeat(32);
+
+  it("registro NUESTRO (mismo contentHash): devuelve el registro con pointer, sin skipped", async () => {
+    const doFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ paymentId, pointer: "s3+https://f/e/1", contentHash: nuestro.toUpperCase(), receipt: {} }), {
+          status: 200,
+        })
+    );
+    const r = await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, doFetch as unknown as typeof fetch);
+    expect(String((doFetch.mock.calls[0] as unknown[])[0])).toBe(`https://f.example/dx402/evidence/${paymentId}`);
+    expect(r.skipped).toBeUndefined();
+    expect(r.pointer).toBe("s3+https://f/e/1");
+    expect(r.paymentId).toBe(paymentId);
+    expect(esExitoOYaAnclado(r)).toBe(true);
+  });
+
+  it("registro AJENO (otro contentHash): skipped already_anchored + registro_ajeno, sin pointer, y un error en el registro", async () => {
+    const doFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ paymentId, pointer: "s3+https://f/e/otro", contentHash: "0x" + "ff".repeat(32) }), {
+          status: 200,
+        })
+    );
+    const r = await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, doFetch as unknown as typeof fetch);
+    expect(r).toEqual({ v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro, error: "registro_ajeno" });
+    expect(lineas.some((l) => l.nivel === "error" && l.mensaje.includes("AJENO"))).toBe(true);
+  });
+
+  it("GET que falla (503, sin pointer, o lanza): skipped already_anchored con paymentId + contentHash, sin error", async () => {
+    const esperado = { v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro };
+    const r503 = vi.fn(async () => new Response("index unavailable", { status: 503 }));
+    expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, r503 as unknown as typeof fetch)).toEqual(esperado);
+    const sinPointer = vi.fn(async () => new Response(JSON.stringify({ paymentId, contentHash: nuestro }), { status: 200 }));
+    expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, sinPointer as unknown as typeof fetch)).toEqual(esperado);
+    const lanza = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, lanza as unknown as typeof fetch)).toEqual(esperado);
+    expect(lineas.filter((l) => l.nivel === "warn").length).toBeGreaterThanOrEqual(3);
   });
 });

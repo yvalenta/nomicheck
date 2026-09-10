@@ -41,8 +41,10 @@ import {
   declaracionDurableEvidence,
   facilitadorDe,
   perfilFacilitador,
+  nombreDeRed,
   AVALANCHE_MAINNET,
   DURABLE_EVIDENCE_INFO,
+  COMPROBANTES_QUE_ENTRAN,
   type ConfigX402,
 } from "./x402Config.js";
 import { gruposConPropios, fetchDelFacilitador } from "./x402Muro.js";
@@ -57,6 +59,9 @@ import {
   esExitoOYaAnclado,
   registrarResultadoAnchor,
   anclajeDisponible,
+  enMedioAbierto,
+  sondearFacilitador,
+  recuperarEvidenciaAnclada,
   normalizarResultadoAnchor,
 } from "./anclajeDiferido.js";
 import { registro } from "./registro.js";
@@ -163,13 +168,27 @@ function conExtensionesPorAccept(cuerpo: Record<string, unknown>): Record<string
  * `payTo`/`asset` se comparan sin distinguir mayúsculas — son direcciones
  * EVM/checksums que pueden llegar en cualquier casing.
  */
+/**
+ * `eip155:43114` y su nombre legado `avalanche` son la MISMA red: faremeter
+ * pasa todo por `normalizeNetworkId`, y el facilitador puede ecoar el nombre
+ * que él mismo exige en `/settle` (`fetchDelFacilitador`, `x402Muro.ts`).
+ * Comparar el string crudo descartaba el accept propio ante un eco legado y
+ * la ruta dejaba de vender (hallazgo del refutador `dinero`, ronda 3).
+ * `nombreDeRed` es la tabla de la casa (`REDES_X402`): un CAIP-2 conocido va
+ * a su nombre, cualquier otra cosa queda tal cual.
+ */
+function mismaRed(x: unknown, y: unknown): boolean {
+  if (typeof x !== "string" || typeof y !== "string") return x === y;
+  return nombreDeRed(x).toLowerCase() === nombreDeRed(y).toLowerCase();
+}
+
 function esAcceptPropio(a: Record<string, unknown>, propios: Record<string, unknown>[]): boolean {
   const iguales = (x: unknown, y: unknown): boolean =>
     typeof x === "string" && typeof y === "string" ? x.toLowerCase() === y.toLowerCase() : x === y;
   return propios.some(
     (p) =>
       p.scheme === a.scheme &&
-      p.network === a.network &&
+      mismaRed(p.network, a.network) &&
       iguales(p.asset, a.asset) &&
       iguales(p.payTo, a.payTo) &&
       p.amount === a.amount
@@ -212,35 +231,53 @@ function conAcceptsFiltrados(
     ...h,
     getRequirements: async (...args: Parameters<typeof h.getRequirements>) => {
       const todos = await h.getRequirements(...args);
-      return todos.filter((a) => esAcceptPropio(a as Record<string, unknown>, propios));
+      const filtrados = todos.filter((a) => esAcceptPropio(a as Record<string, unknown>, propios));
+      if (todos.length > 0 && filtrados.length === 0) {
+        // Una ruta paga que deja de vender NO puede verse igual que "nadie
+        // compró" (`problemasDeConfig`, x402Config.ts): sin este log, el 402
+        // salía con `accepts: []` y sin `extensions`, mudo (hallazgo del
+        // refutador `dinero`, ronda 3).
+        const resumen = (r: unknown) => {
+          const o = r as Record<string, unknown>;
+          return { network: o.network, asset: o.asset, payTo: o.payTo, amount: o.amount };
+        };
+        registro.error(
+          "x402",
+          "/verificar/durable: el facilitador no ecoó ningún accept propio; el 402 sale sin ofertas",
+          undefined,
+          { ecoados: todos.map(resumen), propios: propios.map(resumen) }
+        );
+      }
+      return filtrados;
     },
   }));
 }
 
 /**
- * El valor de `X-Durable-Evidence` para un resultado de anchor.
+ * El valor de `X-Durable-Evidence` para un resultado de anchor YA resuelto
+ * (el 409 pasa antes por `recuperarEvidenciaAnclada`, `anclajeDiferido.ts`,
+ * que o trae el pointer real o deja un `skipped` con motivo).
  *
- * Cuando el resultado es éxito-por-409 (`esExitoOYaAnclado`,
- * `anclajeDiferido.ts` — el facilitador contesta `already_anchored` porque
- * un intento anterior SÍ ancló, aunque esta respuesta puntual no lo sepa
- * con un `pointer`), NO se manda el objeto de `skip` tal cual:
- * `evidenceHeader({skipped:"anchor_failed", ...})` le dice al comprador "no
- * durable evidence was anchored" sobre una evidencia que SÍ existe
- * (hallazgo del refutador, reparación DX402 punto 2 ronda 1). Ningún informe
- * de esta tarea documenta un GET del facilitador para recuperar el
- * `pointer` de un anclaje anterior por `paymentId` (y `uvd-x402-sdk` no trae
- * un helper para pedirlo), así que lo máximo que se puede dar sin inventar
- * un pointer que no se tiene es el `paymentId` y el `contentHash` que el
- * comprador puede recalcular por su cuenta, con un motivo (`skipped:
- * "already_anchored"`) que se puede distinguir de un fallo real — sigue sin
- * ser el pointer: queda como límite conocido en las dudas de esta
- * reparación.
+ * Todo `skipped` post-cobro lleva `paymentId` + `contentHash`, y `deferred`
+ * cuando la cola en memoria va a reintentar: el 503 del facilitador es
+ * RETRYABLE ("do not record as 'no evidence'", openapi de `/dx402/anchor`), y
+ * el comprador tiene que poder volver a preguntar por
+ * `GET /dx402/evidence/{paymentId}` en vez de leer "no se ancló nada" como
+ * final (hallazgo del refutador `protocolo`, ronda 3).
  */
-function encabezadoEvidencia(resultado: Record<string, unknown>, paymentId: string, cuerpo: Buffer): string {
-  if (typeof resultado.skipped === "string" && esExitoOYaAnclado(resultado)) {
-    return evidenceHeader({ v: 1, skipped: "already_anchored", paymentId, contentHash: contentHash(cuerpo) });
-  }
-  return evidenceHeader(resultado);
+function encabezadoEvidencia(
+  resultado: Record<string, unknown>,
+  paymentId: string,
+  cuerpo: Buffer,
+  diferido: boolean
+): string {
+  if (typeof resultado.skipped !== "string") return evidenceHeader(resultado);
+  return evidenceHeader({
+    ...resultado,
+    paymentId,
+    contentHash: contentHash(cuerpo),
+    ...(diferido ? { deferred: true } : {}),
+  });
 }
 
 /**
@@ -271,6 +308,14 @@ export function crearMiddlewareDurable(
   // arriba la vea (hallazgo del refutador).
   return (req, res) => {
     const resource = `${req.protocol}://${req.headers.host}${req.path}`;
+    // `true` desde el instante en que se llama `context.capture()`. Lo lee
+    // `sendJSONResponse`: faremeter manda su 402 "pagá" DESDE ADENTRO de
+    // `capture()` (`sendPaymentRequired()`, `common.js`) cuando el settle
+    // reporta fallo, antes de devolver `success:false` — así que el único
+    // lugar donde ese 402 se puede convertir en otra cosa es la función que
+    // lo escribe, no el `if (!cap.success)` de más abajo (ahí la respuesta
+    // ya salió).
+    let cobroIntentado = false;
     const reqArgs: ArgsDurable = {
       x402Handlers: handlersFiltrados,
       pricing,
@@ -288,6 +333,27 @@ export function crearMiddlewareDurable(
       },
       setResponseHeader: (key, value) => res.setHeader(key, value),
       sendJSONResponse: (status, body, headers) => {
+        if (status === 402 && cobroIntentado) {
+          // Un 402 después de intentar cobrar es el settle reportado como
+          // fallido. NO se reenvía: un 402 significa "pagá", y si la
+          // autorización llegó a liquidarse antes del fallo reportado, un
+          // cliente x402 que obedece paga DOS VECES sin vuelta atrás — la
+          // misma regla que `montarMuroX402` (x402Muro.ts) escribe para el
+          // settle que revienta. 424 sin `PAYMENT-REQUIRED` (no se invita a
+          // repagar); `PAYMENT-RESPONSE` ya viaja con el `errorReason` del
+          // facilitador porque faremeter lo setea antes de este punto
+          // (hallazgo del refutador `dinero`, ronda 3).
+          registro.error("x402", "settle fallido en /verificar/durable: el 402 de faremeter sale como 424", undefined, {
+            paymentResponse: res.getHeader("PAYMENT-RESPONSE") ?? res.getHeader("X-PAYMENT-RESPONSE"),
+          });
+          return res.status(424).json({
+            error: "settle_failed",
+            mensaje:
+              "El facilitador reportó la liquidación como fallida (el motivo viene en PAYMENT-RESPONSE). " +
+              "No se entregó el recurso. Antes de volver a pagar, mirá ese header y el tx: si la " +
+              "autorización llegó a liquidarse, un pago nuevo cobra dos veces.",
+          });
+        }
         let cuerpo = body as Record<string, unknown> | undefined;
         const headersFinales = headers ? { ...headers } : undefined;
         if (status === 402) {
@@ -321,8 +387,22 @@ export function crearMiddlewareDurable(
           // El cuerpo v1 (SIEMPRE el que viaja como JSON — informe
           // `faremeter` §4: "faremeter manda header v2 + body v1 en la misma
           // respuesta 402") no tiene campo para `extensions` de nivel
-          // superior; solo le toca el merge por accept.
-          if (cuerpo) cuerpo = conExtensionesPorAccept(cuerpo);
+          // superior en su tipo, pero se le cuelga igual — el mismo criterio
+          // que `desafioDeDescubrimiento` (x402Muro.ts) ya aplica al 402 del
+          // GET: un comprador v1 que POSTea lee el cuerpo, no el header, y la
+          // puerta previa al pago de testigo exige `info.acceptIndexes` en el
+          // nivel superior. Un parser v1 estricto ignora la clave; sin ella,
+          // el 402 de venta y el de descubrimiento decían cosas distintas
+          // (hallazgo del refutador `protocolo`, ronda 3).
+          if (cuerpo) {
+            cuerpo = conExtensionesPorAccept(cuerpo);
+            const acceptsV1 = Array.isArray(cuerpo.accepts) ? (cuerpo.accepts as unknown[]) : [];
+            if (acceptsV1.length > 0) {
+              cuerpo.extensions = declaracionDurableEvidence(acceptsV1.map((_, i) => i));
+            } else {
+              delete cuerpo.extensions;
+            }
+          }
         }
         res.status(status);
         if (headersFinales) {
@@ -379,10 +459,21 @@ export function crearMiddlewareDurable(
             ...sinFirma,
             habeasData: {
               ...sinFirma.habeasData,
+              // Sin `revocable: true`: en el vocabulario del facilitador
+              // (`/dx402/stats`) "revocable" es una propiedad del store —no
+              // es permanente, a diferencia de `ipfs-public`—, no una
+              // operación que el comprador pueda invocar: su openapi
+              // (2026-09-10) no tiene DELETE ni revoke, solo anchor, blob,
+              // evidence, receipt, recover, repair y stats. Firmado bajo
+              // `habeasData` se leía como un derecho que nadie puede ejercer
+              // (hallazgo del refutador `protocolo`, ronda 3). Lo que SÍ es
+              // cierto y verificable: vence, y al vencer el blob contesta
+              // 410; no hay borrado anticipado a pedido.
               retencionExterna: {
                 donde: "facilitador DX402 (cifrado, solo lo abre el pagador)",
                 plazo: DURABLE_EVIDENCE_INFO.retention,
-                revocable: true,
+                alVencer: "el facilitador deja de servir el cifrado (410)",
+                borradoAPedido: false,
               },
             },
           };
@@ -450,15 +541,34 @@ export function crearMiddlewareDurable(
           });
         }
 
+        // El tercer campo del dominio, `verifyingContract`, sale de la MISMA
+        // tabla que `name`/`version`, no del eco de `asset`: `esAcceptPropio`
+        // ya garantiza que el accept pagado lleva NUESTRO asset, así que un
+        // eco distinto (USDC.e en vez del nativo) o ausente solo puede
+        // desviar el dominio — y con `asset` ausente viem OMITE
+        // `verifyingContract` y recupera otra dirección válida sin error
+        // (hallazgo del refutador `identidad`, ronda 3). Se loguea y manda
+        // la tabla, igual que con `name`/`version`.
+        if (
+          typeof requisitos.asset !== "string" ||
+          requisitos.asset.toLowerCase() !== AVALANCHE_MAINNET.asset.toLowerCase()
+        ) {
+          registro.warn("x402", "el eco de asset del facilitador difiere del USDC de la tabla", {
+            eco: requisitos.asset,
+            real: AVALANCHE_MAINNET.asset,
+          });
+        }
+
         let payerKey: Uint8Array;
         try {
           payerKey = await llaveDelPagador(carga, {
             name: dominioReal.name,
             version: dominioReal.version,
             chainId: CHAIN_ID_AVALANCHE,
-            verifyingContract: requisitos.asset as `0x${string}`,
+            verifyingContract: AVALANCHE_MAINNET.asset as `0x${string}`,
           });
         } catch (e) {
+          res.setHeader("X-Durable-Evidence", evidenceHeader({ v: 1, skipped: "no_payer_key" }));
           res.status(422).json({
             error: "no_payer_key",
             mensaje: e instanceof ErrorSinLlaveDelPagador ? e.message : "no se pudo recuperar la llave del pagador",
@@ -472,8 +582,16 @@ export function crearMiddlewareDurable(
           network: AVALANCHE_MAINNET.caip2,
           payer,
           payee: cfg.payTo,
-          backend: "s3" as const,
-          retention: "90d",
+          backend: DURABLE_EVIDENCE_INFO.backend,
+          // `storage` es el SELECTOR (`AnchorOptions`, uvd-x402-sdk: "which
+          // backend to anchor to … omit to take the facilitator's default");
+          // `backend` de arriba es solo "declared, not measured". Sin
+          // `storage`, cada 402 publicaba s3 y cada venta aterrizaba en el
+          // default del facilitador (`ipfs`, medido en `/dx402/stats`), y el
+          // log de "backend real difiere" sonaba el 100 % de las veces
+          // (hallazgo del refutador `protocolo`, ronda 3).
+          storage: DURABLE_EVIDENCE_INFO.backend,
+          retention: DURABLE_EVIDENCE_INFO.retention,
           facilitator: facilitadorDe(cfg, AVALANCHE_MAINNET),
         };
 
@@ -494,11 +612,14 @@ export function crearMiddlewareDurable(
           })
         );
         if (medida.skipped === "too_large") {
+          res.setHeader("X-Durable-Evidence", evidenceHeader({ v: 1, skipped: "too_large" }));
           res.status(413).json({
             error: "too_large_for_durable",
             mensaje:
-              "El lote sellado supera lo que el facilitador puede anclar. Usá POST " +
-              "/api/batch/verificar o partí el lote; no se cobró.",
+              "El lote sellado supera lo que el facilitador puede anclar (64 KiB por request; " +
+              `en la práctica unos ${COMPROBANTES_QUE_ENTRAN} comprobantes de 4 líneas por llamada). ` +
+              "Partí el lote o usá POST /api/batch/verificar; no se cobró.",
+            limite: { requestSelladoBytes: 64 * 1024, comprobantesAprox: COMPROBANTES_QUE_ENTRAN },
           });
           return undefined;
         }
@@ -524,7 +645,8 @@ export function crearMiddlewareDurable(
         // producción) y tiene la misma semántica: la petición dependía de un
         // tercero y ese tercero falló (reparación DX402 punto 2 ronda 2,
         // hallazgo del refutador).
-        if (!anclajeDisponible()) {
+        const noDisponible = (): undefined => {
+          res.setHeader("X-Durable-Evidence", evidenceHeader({ v: 1, skipped: "anchor_failed", error: "circuit_open" }));
           res.status(424).json({
             error: "durable_evidence_unavailable",
             mensaje:
@@ -532,11 +654,33 @@ export function crearMiddlewareDurable(
               "Probá con POST /api/batch/verificar mientras tanto.",
           });
           return undefined;
+        };
+        if (!anclajeDisponible()) return noDisponible();
+        // Medio-abierto: la prueba de que el facilitador volvió es un GET
+        // gratis a `/dx402/stats`, no la venta del siguiente comprador. Antes
+        // el que caía en la ventana pagaba 0,02 por ser la sonda, una venta
+        // cobrada sin evidencia cada 300 s mientras el facilitador siguiera
+        // caído (hallazgo del refutador `dinero`, ronda 3). Si la sonda
+        // falla, cuenta como fallo: reabre la ventana sin cobrar.
+        if (enMedioAbierto()) {
+          const vivo = await sondearFacilitador(opcionesBase.facilitator, fetchConTimeout(3000));
+          if (!vivo) {
+            registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", error: "sonda_medio_abierto" });
+            return noDisponible();
+          }
         }
 
         // 3) Recién acá se cobra.
+        cobroIntentado = true;
         const cap = await context.capture();
-        if (!cap.success) return cap.errorResponse;
+        if (!cap.success) {
+          // La respuesta YA salió: faremeter mandó su 402 desde adentro de
+          // `capture()` y `sendJSONResponse` (arriba) lo convirtió en el 424
+          // `settle_failed`. Acá solo queda el motivo para el registro.
+          const motivo = "errorMessage" in cap && typeof cap.errorMessage === "string" ? cap.errorMessage : undefined;
+          registro.error("x402", "settle fallido en /verificar/durable", undefined, { motivo });
+          return undefined;
+        }
 
         // 4) Anclar y responder. Un reintento inmediato si el primer anchor
         // falla; si el segundo también falla, se agenda un reintento
@@ -558,9 +702,15 @@ export function crearMiddlewareDurable(
           registro.error("x402", "settle sin txHash valido: no se ancla con un id inventado", undefined, {
             transaction: txCruda,
           });
+          // Cuenta contra el cortacircuitos: este camino cobra y NO ancla, y
+          // era el único post-`capture()` que no lo informaba — un facilitador
+          // que deje de devolver `transaction` vendía la garantía rota venta
+          // tras venta sin que el corte se enterara (hallazgo del refutador
+          // `dinero`, ronda 3). Sin `paymentId` no hay reintento posible.
+          registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", error: "settle_sin_txhash" });
           res.setHeader(
             "X-Durable-Evidence",
-            evidenceHeader({ v: 1, skipped: "anchor_failed", error: "settle_sin_txhash" })
+            evidenceHeader({ v: 1, skipped: "anchor_failed", error: "settle_sin_txhash", contentHash: contentHash(cuerpo) })
           );
           res.status(200).type("application/json").send(cuerpo);
           return undefined;
@@ -588,12 +738,26 @@ export function crearMiddlewareDurable(
         // (reparación DX402 punto 2 ronda 2, hallazgo del refutador).
         let resultado = normalizarResultadoAnchor(await anchorEvidence(cuerpo, opcionesAnchor));
         registrarResultadoAnchor(resultado);
+        let diferido = false;
         if (!esExitoOYaAnclado(resultado)) {
           resultado = normalizarResultadoAnchor(await anchorEvidence(cuerpo, opcionesAnchor));
           registrarResultadoAnchor(resultado);
           if (!esExitoOYaAnclado(resultado)) {
-            programarAnclaje(idDePago, cuerpo, opcionesAnchor);
+            diferido = programarAnclaje(idDePago, cuerpo, opcionesAnchor);
           }
+        }
+        // 409 `dx402_already_anchored` en cualquiera de los dos intentos: el
+        // facilitador ya tiene un registro bajo este `paymentId`.
+        // `recuperarEvidenciaAnclada` distingue si es el nuestro (el pointer
+        // real va al header) o AJENO (`skipped` con `error: "registro_ajeno"`
+        // y un log de error) — ver su comentario en `anclajeDiferido.ts`.
+        if (typeof resultado.skipped === "string" && esExitoOYaAnclado(resultado)) {
+          resultado = await recuperarEvidenciaAnclada(
+            opcionesBase.facilitator,
+            idDePago,
+            contentHash(cuerpo),
+            fetchConTimeout(3000)
+          );
         }
 
         // El sobre YA firmó `habeasData.retencionExterna` con
@@ -630,20 +794,13 @@ export function crearMiddlewareDurable(
 
         // Los bytes servidos son los SELLADOS y hasheados — nunca `res.json()`,
         // que reserializaría el objeto y ya no coincidiría con `contentHash`.
-        res.setHeader("X-Durable-Evidence", encabezadoEvidencia(resultado, idDePago, cuerpo));
+        res.setHeader("X-Durable-Evidence", encabezadoEvidencia(resultado, idDePago, cuerpo, diferido));
         registro.info("x402", "sobre durable servido", {
           paymentId: idDePago,
           tx,
-          // Mismo criterio que el header (`encabezadoEvidencia`): un éxito
-          // por 409 se loguea como "already_anchored", no como el
-          // "anchor_failed" crudo del SDK — si no, el log dice justo lo
-          // contrario de lo que pasó.
-          resultado:
-            typeof resultado.skipped === "string"
-              ? esExitoOYaAnclado(resultado)
-                ? "already_anchored"
-                : resultado.skipped
-              : resultado.pointer,
+          resultado: typeof resultado.skipped === "string" ? resultado.skipped : resultado.pointer,
+          ...(typeof resultado.error === "string" ? { error: resultado.error } : {}),
+          diferido,
         });
         res.status(200).type("application/json").send(cuerpo);
         return undefined;
