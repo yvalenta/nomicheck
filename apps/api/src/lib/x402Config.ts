@@ -235,6 +235,25 @@ export const REDES_QUE_CDP_LIQUIDA = new Set([
 
 export interface ConfigX402 {
   activo: boolean;
+  /**
+   * `DX402_ACTIVO=true`: monta `/verificar/durable` (DX402 punto 2) y exige su
+   * configuración (la llave del sobre, Avalanche en `X402_RED`). Default
+   * `false`, y es una flag APARTE de `activo` a propósito: con
+   * `/verificar/durable` en `PRECIOS_USD` sin condición, encender el muro
+   * obligaba a tener la llave del sobre y Avalanche configuradas ANTES de
+   * poder desplegar `main` — el deploy quedaba atado a un secreto que todavía
+   * no existía (pedido de Yonatan, 2026-09-10). Apagada, esa ruta no existe:
+   * no cobra, no se publica en pricing ni en OpenAPI, y su llave pública da
+   * 404 salvo que la llave esté configurada (los sobres ya vendidos siguen
+   * verificando; ver `batchPublico.ts`). Ver `rutasActivas`.
+   *
+   * Es `X402_ACTIVO && DX402_ACTIVO`, no `DX402_ACTIVO` sola: la ruta solo
+   * vive en el muro (no tiene handler gratis en el router), así que con el
+   * muro apagado no existe aunque la flag diga `true` — y publicarle precio
+   * o documentación sería anunciar una puerta que da 404 (hallazgo del
+   * refutador, 2026-09-10).
+   */
+  dx402Activo: boolean;
   facilitatorURL: string;
   /**
    * Facilitador por nombre de red, cuando una red NO va por el default.
@@ -300,8 +319,10 @@ export function leerConfigX402(): ConfigX402 {
     if (valor !== undefined && valor.length > 0) facilitadoresPorRed[red.nombre] = valor;
   }
 
+  const activo = process.env.X402_ACTIVO === "true";
   return {
-    activo: process.env.X402_ACTIVO === "true",
+    activo,
+    dx402Activo: activo && process.env.DX402_ACTIVO === "true",
     facilitatorURL:
       process.env.X402_FACILITATOR ?? "https://facilitator.ultravioletadao.xyz",
     facilitadoresPorRed,
@@ -624,8 +645,34 @@ export function extensionBazaar(ruta: string): Record<string, unknown> | undefin
   };
 }
 
-/** Rutas con muro, en el orden en que se montan. */
+/**
+ * Rutas con precio declarado, en el orden en que se montan. Es la tabla
+ * COMPLETA: incluye las que solo existen con `DX402_ACTIVO=true`. Lo que se
+ * monta, publica y exige de verdad sale de `rutasActivas(cfg)` — este const
+ * no se muta nunca (lo leen `pricingService`, `openApiService`,
+ * `validacionPrevia` y los tests como la lista de precios que hay que
+ * justificar y validar, exista o no la ruta hoy).
+ */
 export const RUTAS_CON_MURO = Object.keys(PRECIOS_USD);
+
+/**
+ * Rutas que solo existen con `DX402_ACTIVO=true`. Hoy una sola: la que vende
+ * el sobre anclado. Apagada la flag, no está montada, no se publica y nada
+ * de su configuración se exige — es lo que permite desplegar `main` sin la
+ * llave del sobre.
+ */
+export const RUTAS_DX402: ReadonlySet<string> = new Set(["/verificar/durable"]);
+
+/**
+ * Las rutas con muro que existen con ESTA configuración: `RUTAS_CON_MURO`
+ * menos las de DX402 cuando `dx402Activo` es false. Una función y no un
+ * const mutado: cinco módulos leen la tabla, y mutar el const desde uno
+ * dejaría a los otros cuatro viendo una lista distinta según el orden de
+ * import.
+ */
+export function rutasActivas(cfg: Pick<ConfigX402, "dx402Activo">): string[] {
+  return RUTAS_CON_MURO.filter((ruta) => cfg.dx402Activo || !RUTAS_DX402.has(ruta));
+}
 
 /**
  * Motivos por los que la configuración no está lista. Vacío = lista.
@@ -642,7 +689,12 @@ export const RUTAS_CON_MURO = Object.keys(PRECIOS_USD);
  * tarea pide explícitamente evitarlo. Quien conoce si `/verificar/durable`
  * está montada (`RUTAS_CON_MURO`) Y el resultado de `sobreConfigurado()` es
  * el llamador (`montarMuroX402`, `x402Muro.ts`); acá solo se empuja lo que
- * llega. `undefined`/`null` = nada que empujar.
+ * llega. `undefined`/`null` = nada que empujar. La decisión de CUÁNDO
+ * computarlo es del llamador y no de `dx402Activo`: `montarMuroX402` lo
+ * computa con la flag encendida O con la llave declarada en el entorno
+ * (declarada y rota se acusa aunque no se venda — sirve la verificación de
+ * los sobres ya vendidos); apagada y sin llave, no lo pasa. Acá se empuja
+ * lo que llega, también con la flag apagada.
  */
 export function problemasDeConfig(cfg: ConfigX402, sobreProblema?: string | null): string[] {
   const p: string[] = [];
@@ -701,9 +753,11 @@ export function problemasDeConfig(cfg: ConfigX402, sobreProblema?: string | null
   // 402 de esa ruta queda sin `accepts` — no es un error de arranque visible,
   // es un comprador que no tiene con qué pagar y una venta que nunca ocurre
   // sin que nada acá lo grite. Hoy solo aplica a `/verificar/durable`
-  // (Avalanche), y solo si esa ruta está montada de verdad.
+  // (Avalanche), y solo si esa ruta está montada de verdad — con
+  // `DX402_ACTIVO=false` no lo está, y `X402_RED` puede seguir sin Avalanche.
+  const activas = rutasActivas(cfg);
   for (const [ruta, permitidas] of Object.entries(REDES_POR_RUTA)) {
-    if (!RUTAS_CON_MURO.includes(ruta)) continue;
+    if (!activas.includes(ruta)) continue;
     if (!cfg.redes.some((r) => permitidas.includes(r.caip2))) {
       p.push(
         `${ruta} exige alguna de estas redes: ${permitidas.join(", ")}. ` +

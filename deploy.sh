@@ -42,39 +42,88 @@ if grep -q 'cambia_esto_ahora' "$APP_DIR/.env"; then
   echo "ERROR: $APP_DIR/.env aún tiene placeholders — edita DB_PASSWORD y JWT_SECRET" >&2
   exit 1
 fi
+# ── Lectura del .env como la hace Compose, no como un grep literal ──────────
+# Producción entrega las variables al contenedor por env_file de Compose, así
+# que lo que vale es lo que Compose lee: acepta `export `, sangría, espacios
+# alrededor del `=`, comillas, un comentario al final (solo tras espacio en
+# valores sin comillas), CRLF y BOM en la primera línea; entre líneas
+# repetidas gana la ÚLTIMA; una línea comentada no cuenta. Un grep literal
+# `^X=true` divergía en todo eso, y en cada divergencia la guarda se saltaba
+# (crash-loop) o bloqueaba en falso (dos rondas del refutador, 2026-09-10).
+# Medido contra `docker compose config` 5.x sobre 25 formatos.
+valor_en_env() {  # valor_en_env NOMBRE ARCHIVO → imprime el valor que Compose entregaría
+  local bom=$'\xEF\xBB\xBF'
+  tr -d '\r' < "$2" \
+    | sed -nE "s/^(${bom})?[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=[[:space:]]*//p" \
+    | tail -n 1 \
+    | sed -E -e 's/^"([^"]*)".*$/\1/' -e t -e "s/^'([^']*)'.*$/\1/" -e t \
+             -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//'
+  # (`-e t` separado y no `t;`: BSD sed toma lo que sigue al `;` como etiqueta.)
+}
+flag_en_env() {  # flag_en_env NOMBRE ARCHIVO → 0 si la app la va a leer como exactamente "true"
+  [[ "$(valor_en_env "$1" "$2")" == "true" ]]
+}
+var_con_valor_en_env() {  # var_con_valor_en_env NOMBRE ARCHIVO → 0 si está declarada con valor no vacío
+  [[ -n "$(valor_en_env "$1" "$2")" ]]
+}
+red_en_env() {  # red_en_env RED ARCHIVO → 0 si X402_RED lista exactamente esa red
+  # Elemento exacto tras partir por comas y recortar, NO subcadena: con
+  # `*avalanche*`, `avalanche-fuji` (eip155:43113) pasaba la guarda y
+  # `/verificar/durable`, que exige eip155:43114, reventaba el arranque
+  # (tercer refutador, 2026-09-10; el grep anterior tenía el mismo agujero).
+  valor_en_env X402_RED "$2" | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | grep -qx -- "$1"
+}
+
 # El PEM de firma debe venir completo por env_file. Si se pierde, el wrapper
 # firma con un keypair efímero y los outputs dejan de verificar tras el redeploy.
-if ! grep -q 'NOMICHECK_BATCH_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
+# Con valor, no solo presente: `NOMICHECK_BATCH_SIGNING_KEY_PEM=` vacía o
+# comentada es la misma pérdida.
+if ! var_con_valor_en_env NOMICHECK_BATCH_SIGNING_KEY_PEM "$APP_DIR/.env"; then
   echo "ERROR: falta NOMICHECK_BATCH_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
   exit 1
 fi
 # `/verificar/durable` (DX402 punto 2) firma su cuerpo con una llave Ed25519
 # PROPIA, NOMICHECK_SOBRE_SIGNING_KEY_PEM — distinta de la del batch de
-# arriba (sobreSignatureService.ts). Esa ruta está en PRECIOS_USD sin
-# condición, así que en cuanto X402_ACTIVO=true el arranque exige esta
+# arriba (sobreSignatureService.ts). Esa ruta solo se monta con
+# DX402_ACTIVO=true (flag aparte, default false — x402Config.ts
+# `rutasActivas`), y con las dos flags encendidas el arranque exige esta
 # llave (problemasDeConfig -> montarMuroX402 revienta si falta, igual que
-# sinEsquema) y sin este chequeo previo el pull+up de más abajo entraba
+# sinEsquema); sin este chequeo previo el pull+up de más abajo entraba
 # igual: los healthchecks pasaban, el contenedor quedaba en crash-loop, y
 # recién se notaba con la API entera abajo (reparación DX402 punto 2 ronda
-# 1, hallazgo del refutador). Condicional a X402_ACTIVO=true: mientras el
-# muro siga apagado, esta llave no hace falta y no hay que exigirla.
-if grep -q '^X402_ACTIVO=true' "$APP_DIR/.env" && ! grep -q 'NOMICHECK_SOBRE_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
-  echo "ERROR: X402_ACTIVO=true pero falta NOMICHECK_SOBRE_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
+# 1, hallazgo del refutador). Condicional a AMBAS flags: con el muro
+# apagado, o encendido pero sin DX402, esta llave no hace falta y no hay que
+# exigirla — es lo que permite desplegar main sin la llave y encender DX402
+# después, con la llave puesta.
+#
+# Las tres guardas de DX402 leen el .env con `valor_en_env` (arriba): un
+# `DX402_ACTIVO="true"` escrito a mano encendía la flag en el contenedor y
+# NO la guarda — se saltaban las dos y el crash-loop volvía; una llave
+# comentada o vacía pasaba un `grep 'NOMBRE='`; y `export X402_RED=avalanche`
+# bloqueaba en falso (dos rondas del refutador, 2026-09-10).
+DX402_ENCENDIDO=0
+if flag_en_env X402_ACTIVO "$APP_DIR/.env" && flag_en_env DX402_ACTIVO "$APP_DIR/.env"; then
+  DX402_ENCENDIDO=1
+fi
+if [[ "$DX402_ENCENDIDO" == 1 ]] && ! var_con_valor_en_env NOMICHECK_SOBRE_SIGNING_KEY_PEM "$APP_DIR/.env"; then
+  echo "ERROR: X402_ACTIVO=true y DX402_ACTIVO=true pero falta NOMICHECK_SOBRE_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
   echo "  /verificar/durable no arranca sin ella (llave NUEVA, nunca la de NOMICHECK_BATCH_SIGNING_KEY_PEM)." >&2
+  echo "  Para desplegar sin ella: DX402_ACTIVO=false (o la línea ausente)." >&2
   exit 1
 fi
-# `/verificar/durable` solo liquida en Avalanche (eip155:43114) y está en
-# PRECIOS_USD sin condición: si X402_RED no incluye "avalanche" —incluyendo
-# el caso en que la línea falta del todo, porque ahí x402Config.ts cae al
-# default "base"—, `problemasDeConfig` revienta el arranque (x402Config.ts:676)
-# y se lleva puesta la API ENTERA, incluidas las cinco rutas que ya facturan.
-# Por eso la guarda exige la línea PRESENTE y con avalanche adentro, no solo
-# "que no la contradiga" (mismo modo de falla que la llave del sobre arriba,
-# reparación DX402 punto 2 ronda 2, hallazgo del refutador).
-if grep -q '^X402_ACTIVO=true' "$APP_DIR/.env" && ! grep -qE '^X402_RED=.*avalanche' "$APP_DIR/.env"; then
-  echo "ERROR: X402_ACTIVO=true pero X402_RED no incluye avalanche en $APP_DIR/.env" >&2
-  echo "  /verificar/durable solo liquida en eip155:43114 y esta en PRECIOS_USD sin condicion:" >&2
-  echo "  montarMuroX402 revienta al arrancar y se lleva la API entera (x402Config.ts:676)." >&2
+# `/verificar/durable` solo liquida en Avalanche (eip155:43114): si X402_RED
+# no incluye "avalanche" —incluyendo el caso en que la línea falta del todo,
+# porque ahí x402Config.ts cae al default "base"—, `problemasDeConfig`
+# revienta el arranque y se lleva puesta la API ENTERA, incluidas las cinco
+# rutas que ya facturan. Por eso la guarda exige la línea PRESENTE y con
+# avalanche adentro, no solo "que no la contradiga" (mismo modo de falla que
+# la llave del sobre arriba, reparación DX402 punto 2 ronda 2, hallazgo del
+# refutador). Misma condición doble: solo con DX402_ACTIVO=true.
+if [[ "$DX402_ENCENDIDO" == 1 ]] && ! red_en_env avalanche "$APP_DIR/.env"; then
+  echo "ERROR: X402_ACTIVO=true y DX402_ACTIVO=true pero X402_RED no incluye avalanche en $APP_DIR/.env" >&2
+  echo "  /verificar/durable solo liquida en eip155:43114:" >&2
+  echo "  montarMuroX402 revienta al arrancar y se lleva la API entera (x402Config.ts, problemasDeConfig)." >&2
+  echo "  Para desplegar sin Avalanche: DX402_ACTIVO=false (o la línea ausente)." >&2
   exit 1
 fi
 
@@ -213,11 +262,42 @@ for _ in $(seq 1 30); do
     # desde `d95cd19` una ruta paga contesta su 402 a cualquier verbo, que es
     # justo lo que hacen el facilitador y los crawlers. Un cuerpo de ejemplo
     # habría vuelto a atar esta guarda a un esquema que puede cambiar.
-    if grep -qE '^X402_ACTIVO=true' "$APP_DIR/.env" 2>/dev/null; then
+    # La llave del sobre se sirve siempre que esté declarada, con DX402
+    # encendida o no (los sobres ya vendidos verifican contra esa URL 90
+    # días). Es el único estado sin otro instrumento — "no vendo pero sigo
+    # verificando" — y su falla es una revocación silenciosa: se sondea.
+    if var_con_valor_en_env NOMICHECK_SOBRE_SIGNING_KEY_PEM "$APP_DIR/.env" 2>/dev/null; then
+      CODIGO_LLAVE="$(curl -s -o /dev/null -w '%{http_code}' \
+        http://localhost:3002/api/batch/verificar/durable/sobre-publickey 2>/dev/null || true)"
+      if [[ "$CODIGO_LLAVE" == "200" ]]; then
+        echo "✓ la llave del sobre se sirve: GET /api/batch/verificar/durable/sobre-publickey responde 200"
+      else
+        echo "⚠ $APP_DIR/.env declara NOMICHECK_SOBRE_SIGNING_KEY_PEM pero la llave pública NO se sirve" >&2
+        echo "  (/api/batch/verificar/durable/sobre-publickey responde ${CODIGO_LLAVE:-sin respuesta}, no 200)." >&2
+        echo "  Los sobres ya vendidos verifican contra esa URL: revisá la llave en el contenedor." >&2
+      fi
+    fi
+
+    if flag_en_env X402_ACTIVO "$APP_DIR/.env" 2>/dev/null; then
       CODIGO_402="$(curl -s -o /dev/null -w '%{http_code}' \
         http://localhost:3002/api/batch/verificar 2>/dev/null || true)"
       if [[ "$CODIGO_402" == "402" ]]; then
         echo "✓ el muro x402 cobra: un GET a /api/batch/verificar responde 402 sin pago"
+        # La misma sonda para DX402: con la flag encendida, /verificar/durable
+        # contesta 402; un 404 dice que la variable no llegó al contenedor
+        # (Compose solo entrega lo que el servicio lista) y la venta del sobre
+        # quedó apagada en silencio con el deploy en verde.
+        if [[ "$DX402_ENCENDIDO" == 1 ]]; then
+          CODIGO_DX402="$(curl -s -o /dev/null -w '%{http_code}' \
+            http://localhost:3002/api/batch/verificar/durable 2>/dev/null || true)"
+          if [[ "$CODIGO_DX402" == "402" ]]; then
+            echo "✓ DX402 encendida: un GET a /api/batch/verificar/durable responde 402"
+          else
+            echo "⚠ $APP_DIR/.env pide DX402_ACTIVO=true pero /verificar/durable NO se vende" >&2
+            echo "  (responde ${CODIGO_DX402:-sin respuesta}, no 402). Revisá que DX402_ACTIVO llegue al contenedor:" >&2
+            echo "      docker compose exec nomicheck-api env | grep DX402" >&2
+          fi
+        fi
       else
         echo "⚠ $APP_DIR/.env pide X402_ACTIVO=true pero lo servido NO cobra" >&2
         echo "  (/api/batch/verificar responde ${CODIGO_402:-sin respuesta}, no 402)." >&2

@@ -25,7 +25,7 @@ import {
   extensionBazaar,
   declaracionDurableEvidence,
   facilitadorDe,
-  RUTAS_CON_MURO,
+  rutasActivas,
   perfilFacilitador,
   type ConfigX402,
   type PerfilFacilitador,
@@ -38,10 +38,10 @@ import { muroDurableDe } from "./x402MuroDurable.js";
 // Único punto donde `lib/` importa de `services/` en todo el repo (Parte 1
 // dejó `problemasDeConfig` sin este import a propósito, ver x402Config.ts).
 // Acá SÍ hace falta: `montarMuroX402` es quien conoce a la vez si
-// `/verificar/durable` está montada (`RUTAS_CON_MURO`) y el resultado de
+// `/verificar/durable` está montada (`rutasActivas`, DX402_ACTIVO) y el resultado de
 // `sobreConfigurado()`, y es el único lugar donde juntar los dos no infla la
 // superficie de `x402Config.ts` con un chequeo que le es ajeno.
-import { sobreConfigurado } from "../services/sobreSignatureService.js";
+import { llaveDelSobreDeclarada, sobreConfigurado } from "../services/sobreSignatureService.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
 const PREFIJO = "/api/batch";
@@ -53,10 +53,15 @@ const PREFIJO = "/api/batch";
  * `/verificar/durable`: lo que esa ruta vende es un SOBRE firmado (spec
  * `sobre/SPEC.md`) sellado y anclado — un CSV no es un sobre, y no hay forma
  * de servir esa garantía en ese formato.
+ *
+ * Recibe la config porque la lista depende de ella: con `DX402_ACTIVO=false`
+ * `/verificar/durable` no existe (`rutasActivas`, x402Config.ts).
  */
-export function rutasPublicasConMuro(): { publica: string; precio: string }[] {
+export function rutasPublicasConMuro(
+  cfg: Pick<ConfigX402, "dx402Activo">,
+): { publica: string; precio: string }[] {
   const salida: { publica: string; precio: string }[] = [];
-  for (const ruta of RUTAS_CON_MURO) {
+  for (const ruta of rutasActivas(cfg)) {
     salida.push({ publica: `${PREFIJO}${ruta}`, precio: ruta });
     if (ruta !== "/comprobante" && ruta !== "/verificar/durable") {
       salida.push({ publica: `${PREFIJO}${ruta}/csv`, precio: ruta });
@@ -487,11 +492,32 @@ export function montarMuroX402(app: Express): void {
   const cfg = leerConfigX402();
   if (!cfg.activo) return;
 
-  const problemas = problemasDeConfig(cfg, sobreConfigurado());
+  // `sobreConfigurado()` corre si la llave IMPORTA: con `DX402_ACTIVO=true`
+  // (la ruta se monta y firma con ella: rota, revienta el arranque como
+  // cualquier config rota), o con la llave declarada en el entorno aunque la
+  // flag esté apagada. En ese segundo caso NO es fatal: la llave solo sirve
+  // la verificación de los sobres ya vendidos, y tumbar la API entera —las
+  // cinco rutas que facturan incluidas— por una llave que no es precondición
+  // de nada que se venda es desproporcionado; además la sonda post-deploy que
+  // la vigila nunca correría, porque la API no llegaría sana (tercer
+  // refutador, 2026-09-10). Se avisa acá, `GET …/sobre-publickey` contesta
+  // 503 con el motivo, y `deploy.sh` grita al sondearla. Apagada y sin
+  // llave: no se exige nada — es lo que deja desplegar `main` con el muro
+  // encendido y sin la llave del sobre.
+  const problemaSobre = cfg.dx402Activo || llaveDelSobreDeclarada() ? sobreConfigurado() : null;
+  const problemas = problemasDeConfig(cfg, cfg.dx402Activo ? problemaSobre : null);
+  if (!cfg.dx402Activo && problemaSobre) {
+    registro.warn(
+      "x402",
+      "la llave del sobre está declarada pero no sirve: GET /api/batch/verificar/durable/sobre-publickey " +
+        "contesta 503 hasta arreglarla, y los sobres ya vendidos no verifican mientras tanto. " +
+        `DX402 está apagada, así que el muro arranca igual. Motivo: ${problemaSobre}`,
+    );
+  }
   // Una ruta que cobra sin esquema de validacion previa vuelve a abrir el
   // agujero del "typo pagado". Se revienta al arrancar, no con el primer
   // comprador.
-  const sinEsquema = rutasPagasSinEsquema(RUTAS_CON_MURO);
+  const sinEsquema = rutasPagasSinEsquema(rutasActivas(cfg));
   if (sinEsquema.length > 0) {
     problemas.push(
       `estas rutas cobran sin validacion previa: ${sinEsquema.join(", ")} ` +
@@ -513,7 +539,7 @@ export function montarMuroX402(app: Express): void {
 
   const publico = new URL(cfg.origenPublico);
   const cache = new Map<string, Promise<RequestHandler>>();
-  const porRuta = new Map(rutasPublicasConMuro().map((r) => [r.publica, r.precio]));
+  const porRuta = new Map(rutasPublicasConMuro(cfg).map((r) => [r.publica, r.precio]));
 
   // Un solo `use` SIN prefijo, filtrando por `req.path` adentro. Montarlo como
   // `app.use("/api/batch/verificar", ...)` volvería a romper lo mismo que este
@@ -624,6 +650,7 @@ export function montarMuroX402(app: Express): void {
   console.log(
     `[x402] muro activo en ${gruposPorFacilitador(cfg)
       .map((g) => `${g.redes.map((r) => r.nombre).join(",")}→${new URL(g.url).host}`)
-      .join(" · ")} · cobra a ${cfg.payTo} · ${rutasPublicasConMuro().length} rutas`,
+      .join(" · ")} · cobra a ${cfg.payTo} · ${rutasPublicasConMuro(cfg).length} rutas` +
+      (cfg.dx402Activo ? " · DX402 activo" : " · DX402 apagado"),
   );
 }

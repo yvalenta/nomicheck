@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CONTACTO } from "../../lib/contacto.js";
-import { PRECIOS_USD, RUTAS_CON_MURO } from "../../lib/x402Config.js";
+import { PRECIOS_USD, leerConfigX402, rutasActivas } from "../../lib/x402Config.js";
 import {
   construirAboutHtml,
   construirAboutMd,
@@ -94,7 +94,7 @@ describe("la portada en markdown", () => {
 describe("la página de precios", () => {
   it("cada ruta paga aparece con SU precio — el de la constante que cobra", () => {
     const md = construirPricingMd();
-    for (const ruta of RUTAS_CON_MURO) {
+    for (const ruta of rutasActivas(leerConfigX402())) {
       expect(md).toContain(`/api/batch${ruta}`);
       expect(md).toContain(`**${PRECIOS_USD[ruta]} USDC**`);
     }
@@ -109,10 +109,12 @@ describe("la página de precios", () => {
 
   it("ningún precio vive en esta página como texto propio: si la constante cambia, la página cambia", () => {
     // La aserción es indirecta pero suficiente: el markdown menciona exactamente
-    // tantas rutas pagas como RUTAS_CON_MURO — ni una tabla vieja de más.
+    // tantas rutas pagas como `rutasActivas` (RUTAS_CON_MURO menos
+    // /verificar/durable si DX402_ACTIVO está apagada) — ni una tabla vieja
+    // de más, ni una ruta que hoy contesta 404.
     const md = construirPricingMd();
     const seccionPagado = md.slice(md.indexOf("## What is paid"));
-    expect(seccionPagado.match(/per call/g)?.length).toBe(RUTAS_CON_MURO.length);
+    expect(seccionPagado.match(/per call/g)?.length).toBe(rutasActivas(leerConfigX402()).length);
   });
 });
 

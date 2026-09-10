@@ -98,12 +98,23 @@ describe("NOMICHECK_SOBRE_SIGNING_KEY_PEM válida", () => {
     expect(svc.obtenerSobrePublicKeyId()).toBe(idDeLlave(svc.obtenerSobrePublicKeyPem()));
   });
 
-  it("es singleton: dos llamadas devuelven el mismo publicKeyId sin releer la env", async () => {
+  it("la caché sigue a la env: misma env, mismo keypair; env distinta, recarga", async () => {
+    // Antes (hasta 62f7e44) era un singleton que leía la env una sola vez, y
+    // el primer test que cargaba una llave fijaba la de todos los que venían
+    // después. Ahora el PEM cacheado es la clave: en producción la env no
+    // cambia (una comparación de strings por firma); en tests cada uno pone
+    // la suya. El título viejo («sin releer la env») pasaba por otro motivo:
+    // `publicKeyId` es determinista, así que dos llamadas coinciden con o sin
+    // caché (tercer refutador, 2026-09-10).
     const { privado } = pemEd25519();
     const svc = await cargarServicio(privado);
     const a = svc.obtenerSobrePublicKeyId();
-    const b = svc.obtenerSobrePublicKeyId();
-    expect(a).toBe(b);
+    expect(svc.obtenerSobrePublicKeyId()).toBe(a);
+    const { privado: otra } = pemEd25519();
+    process.env[ENV_SOBRE] = otra;
+    expect(svc.obtenerSobrePublicKeyId()).not.toBe(a);
+    process.env[ENV_SOBRE] = privado;
+    expect(svc.obtenerSobrePublicKeyId()).toBe(a);
   });
 
   it("sin NOMICHECK_BATCH_SIGNING_KEY_PEM configurada, sobreConfigurado() da null (nada que comparar)", async () => {

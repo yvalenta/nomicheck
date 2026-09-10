@@ -28,7 +28,13 @@ const ENV_LLAVE_SOBRE = "NOMICHECK_SOBRE_SIGNING_KEY_PEM";
 const ENV_LLAVE_BATCH = "NOMICHECK_BATCH_SIGNING_KEY_PEM";
 
 interface KeypairSobre {
-  /** El PEM crudo, cacheado para no releer `process.env` en cada firma. */
+  /**
+   * El PEM crudo: es la CLAVE de la caché. `obtenerKeypairSobre` recarga si
+   * la env ya no trae exactamente este valor (o no trae nada). En producción
+   * la env no cambia nunca, así que cuesta una comparación de strings por
+   * firma; en tests evita que el primer archivo que carga una llave fije la
+   * de todos los que vienen después (hallazgo del refutador, 2026-09-10).
+   */
   pem: string;
   publicKeyPem: string;
   publicKeyId: string;
@@ -67,9 +73,24 @@ function cargarKeypairSobre(): KeypairSobre {
 }
 
 function obtenerKeypairSobre(): KeypairSobre {
-  if (singleton) return singleton;
+  if (singleton && singleton.pem === process.env[ENV_LLAVE_SOBRE]) return singleton;
   singleton = cargarKeypairSobre();
   return singleton;
+}
+
+/**
+ * `true` si `NOMICHECK_SOBRE_SIGNING_KEY_PEM` está en el entorno, valga lo que
+ * valga. Es la señal de "el operador quiere que la llave del sobre exista":
+ * con `DX402_ACTIVO` apagada la llave no se exige, pero si está declarada
+ * tiene que ser válida — sirve la verificación de los sobres ya vendidos, y
+ * una llave rota ahí es una revocación silenciosa de esos 90 días. Quien la
+ * declara y está rota se entera por tres vías, ninguna fatal con la flag
+ * apagada (la llave no es precondición de nada que se venda): un warn al
+ * arrancar (`montarMuroX402`), 503 con el motivo en
+ * `GET /verificar/durable/sobre-publickey` (no 404), y la sonda de `deploy.sh`.
+ */
+export function llaveDelSobreDeclarada(): boolean {
+  return Boolean(process.env[ENV_LLAVE_SOBRE]);
 }
 
 /**
