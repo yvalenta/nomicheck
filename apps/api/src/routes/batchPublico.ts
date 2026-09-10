@@ -362,18 +362,23 @@ batchPublicoRouter.get("/verificar/ejemplo", async (_req: Request, res: Response
 // `problemasDeConfig` es quien revienta el arranque si /verificar/durable
 // está activa sin esta llave (ver x402Config.ts).
 //
-// 404 con `DX402_ACTIVO=false`, antes de mirar la llave: apagada la flag,
-// /verificar/durable no existe y un 503 acá diría "existe pero está rota" —
-// y además delataría si hay llave o no en un deploy que no vende sobres.
+// Con la llave configurada se sirve SIEMPRE, esté la flag `DX402_ACTIVO`
+// encendida o no: un sobre vendido promete 90 días de verificación offline
+// contra esta URL, y apagar la venta (la ruta paga da 404) no puede revocar
+// lo ya cobrado — "no vendo" y "no verifico" son dos estados distintos
+// (hallazgo del refutador, 2026-09-10). Sin llave: 404 con la flag apagada
+// (la ruta no existe y un 503 diría "existe pero está rota") y 503 con la
+// flag encendida (existe y está rota; `problemasDeConfig` no debería haber
+// dejado arrancar así).
 batchPublicoRouter.get("/verificar/durable/sobre-publickey", (_req: Request, res: Response) => {
-  if (!leerConfigX402().dx402Activo) {
-    return res.status(404).json({
-      error: "not_found",
-      mensaje: "/verificar/durable no está habilitada en este servidor (DX402_ACTIVO).",
-    });
-  }
   const problema = sobreConfigurado();
   if (problema) {
+    if (!leerConfigX402().dx402Activo) {
+      return res.status(404).json({
+        error: "not_found",
+        mensaje: "/verificar/durable no está habilitada en este servidor (DX402_ACTIVO).",
+      });
+    }
     return res.status(503).json({ error: "sobre_key_missing", mensaje: problema });
   }
   res.setHeader("Cache-Control", "public, max-age=86400");

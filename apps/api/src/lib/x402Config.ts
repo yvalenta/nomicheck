@@ -244,7 +244,14 @@ export interface ConfigX402 {
    * poder desplegar `main` — el deploy quedaba atado a un secreto que todavía
    * no existía (pedido de Yonatan, 2026-09-10). Apagada, esa ruta no existe:
    * no cobra, no se publica en pricing ni en OpenAPI, y su llave pública da
-   * 404. Ver `rutasActivas`.
+   * 404 salvo que la llave esté configurada (los sobres ya vendidos siguen
+   * verificando; ver `batchPublico.ts`). Ver `rutasActivas`.
+   *
+   * Es `X402_ACTIVO && DX402_ACTIVO`, no `DX402_ACTIVO` sola: la ruta solo
+   * vive en el muro (no tiene handler gratis en el router), así que con el
+   * muro apagado no existe aunque la flag diga `true` — y publicarle precio
+   * o documentación sería anunciar una puerta que da 404 (hallazgo del
+   * refutador, 2026-09-10).
    */
   dx402Activo: boolean;
   facilitatorURL: string;
@@ -312,9 +319,10 @@ export function leerConfigX402(): ConfigX402 {
     if (valor !== undefined && valor.length > 0) facilitadoresPorRed[red.nombre] = valor;
   }
 
+  const activo = process.env.X402_ACTIVO === "true";
   return {
-    activo: process.env.X402_ACTIVO === "true",
-    dx402Activo: process.env.DX402_ACTIVO === "true",
+    activo,
+    dx402Activo: activo && process.env.DX402_ACTIVO === "true",
     facilitatorURL:
       process.env.X402_FACILITATOR ?? "https://facilitator.ultravioletadao.xyz",
     facilitadoresPorRed,

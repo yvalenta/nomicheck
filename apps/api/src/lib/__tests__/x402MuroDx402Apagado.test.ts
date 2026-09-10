@@ -29,12 +29,10 @@ beforeAll(async () => {
   process.env.X402_RED = "base";
   process.env.X402_FACILITATOR = "https://facilitator.ultravioletadao.xyz";
   process.env.NOMICHECK_PUBLIC_ORIGIN = "https://nomicheck.ynt.codes";
-  // Con llave del sobre PRESENTE, para que el 404 de abajo sea por la flag y
-  // no por la llave — es la diferencia que el test tiene que poder ver.
-  const { privateKey } = generateKeyPairSync("ed25519");
-  process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = privateKey
-    .export({ format: "pem", type: "pkcs8" })
-    .toString();
+  // SIN llave del sobre al arrancar: es el deploy de `main` sin la llave, el
+  // que la flag vino a permitir. El test de la llave presente la pone después
+  // (el keypair se cachea recién cuando carga bien, así que el orden importa).
+  delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
 
   const app = express();
   app.use(express.json());
@@ -73,14 +71,30 @@ describe("DX402_ACTIVO apagada, muro encendido", () => {
     expect(res.headers.get("payment-required")).toBeNull();
   });
 
-  it("GET /verificar/durable/sobre-publickey da 404 aunque la llave esté configurada", async () => {
+  it("sin llave configurada, GET /verificar/durable/sobre-publickey da 404 (no 503: la ruta no existe)", async () => {
     const res = await fetch(`${base}/api/batch/verificar/durable/sobre-publickey`);
     expect(res.status).toBe(404);
     const cuerpo = (await res.json()) as { error: string; mensaje: string };
     expect(cuerpo.error).toBe("not_found");
     expect(cuerpo.mensaje).toContain("DX402_ACTIVO");
-    // Y no filtra la llave ni su id: un deploy que no vende sobres no la publica.
     expect(JSON.stringify(cuerpo)).not.toContain("publicKey");
+  });
+
+  it("con la llave configurada, la llave se sigue sirviendo: apagar la venta no revoca lo ya vendido", async () => {
+    // Un sobre vendido promete 90 días de verificación offline contra esta
+    // URL. "No vendo" (la ruta paga da 404) y "no verifico" son dos estados
+    // distintos, y la flag solo apaga el primero (hallazgo del refutador).
+    const { privateKey } = generateKeyPairSync("ed25519");
+    process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = privateKey
+      .export({ format: "pem", type: "pkcs8" })
+      .toString();
+    const res = await fetch(`${base}/api/batch/verificar/durable/sobre-publickey`);
+    expect(res.status).toBe(200);
+    const cuerpo = (await res.json()) as { algo: string; publicKeyId: string; publicKeyPem: string };
+    expect(cuerpo.algo).toBe("ed25519");
+    expect(cuerpo.publicKeyPem).toContain("BEGIN PUBLIC KEY");
+    // Y la ruta paga sigue sin existir: la llave no la resucita.
+    expect((await fetch(`${base}/api/batch/verificar/durable`)).status).toBe(404);
   });
 
   it("las demás rutas pagas siguen cobrando: el muro entero no se apagó", async () => {

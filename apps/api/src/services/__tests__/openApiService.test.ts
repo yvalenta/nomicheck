@@ -13,11 +13,17 @@ import { construirOpenApi } from "../openApiService.js";
 import { PRECIOS_USD } from "../../lib/x402Config.js";
 
 // `/verificar/durable` y su llave pública solo se documentan con
-// `DX402_ACTIVO=true` (2026-09-10): el documento de acá es el COMPLETO. La
-// flag apagada tiene su describe al final.
+// `X402_ACTIVO=true` Y `DX402_ACTIVO=true` (2026-09-10): el documento de acá
+// es el COMPLETO. La flag apagada tiene su describe al final; los tests que
+// necesitan el muro apagado usan `conMuro(false)` explícitamente.
+const ANTES = { X402_ACTIVO: process.env.X402_ACTIVO, DX402_ACTIVO: process.env.DX402_ACTIVO };
+process.env.X402_ACTIVO = "true";
 process.env.DX402_ACTIVO = "true";
 afterAll(() => {
-  delete process.env.DX402_ACTIVO;
+  for (const [k, v] of Object.entries(ANTES)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
 });
 
 const doc = construirOpenApi() as {
@@ -302,5 +308,35 @@ describe("documento OpenAPI con DX402_ACTIVO apagada", () => {
     const { "/verificar/durable": _durable, "/verificar/durable/sobre-publickey": _llave, ...restoEncendido } = doc.paths;
     expect(d.paths).toEqual(restoEncendido);
     expect(d.components).toEqual(doc.components);
+  });
+
+  it("apagada pero con la llave configurada, documenta la llave (se sirve) y no la ruta paga", async () => {
+    // Los sobres ya vendidos verifican contra esa URL durante 90 días: si se
+    // sirve, se documenta; la ruta paga sigue sin existir.
+    const { generateKeyPairSync } = await import("node:crypto");
+    const antes = process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+    process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = generateKeyPairSync("ed25519")
+      .privateKey.export({ format: "pem", type: "pkcs8" })
+      .toString();
+    try {
+      const d = sinFlag();
+      expect(d.paths).toHaveProperty("/verificar/durable/sobre-publickey");
+      expect(d.paths).not.toHaveProperty("/verificar/durable");
+    } finally {
+      if (antes === undefined) delete process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM;
+      else process.env.NOMICHECK_SOBRE_SIGNING_KEY_PEM = antes;
+    }
+  });
+
+  it("DX402_ACTIVO=true con el muro apagado NO documenta la ruta: vive solo en el muro", () => {
+    const antes = process.env.X402_ACTIVO;
+    process.env.X402_ACTIVO = "false";
+    try {
+      const d = construirOpenApi() as typeof doc;
+      expect(d.paths).not.toHaveProperty("/verificar/durable");
+    } finally {
+      if (antes === undefined) delete process.env.X402_ACTIVO;
+      else process.env.X402_ACTIVO = antes;
+    }
   });
 });

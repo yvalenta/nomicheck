@@ -429,14 +429,27 @@ describe("descripciones publicadas", () => {
 // `54e4d22` mergeó.
 describe("DX402_ACTIVO (la flag de /verificar/durable)", () => {
   beforeEach(() => {
+    process.env.X402_ACTIVO = "true";
     delete process.env.DX402_ACTIVO;
   });
   afterEach(() => {
+    delete process.env.X402_ACTIVO;
     delete process.env.DX402_ACTIVO;
   });
 
   it("apagada por default: sin la variable, dx402Activo es false", () => {
     expect(leerConfigX402().dx402Activo).toBe(false);
+  });
+
+  it("sin el muro (X402_ACTIVO), DX402_ACTIVO=true no enciende nada", () => {
+    // La ruta vive solo en el muro: con él apagado no existe, y publicarle
+    // precio o documentación sería anunciar una puerta que da 404.
+    process.env.DX402_ACTIVO = "true";
+    for (const v of [undefined, "false", "1"]) {
+      if (v === undefined) delete process.env.X402_ACTIVO;
+      else process.env.X402_ACTIVO = v;
+      expect(leerConfigX402().dx402Activo).toBe(false);
+    }
   });
 
   it("solo la cadena exacta `true` la enciende", () => {

@@ -10,11 +10,17 @@ import { RUTAS_CON_MURO } from "../../lib/x402Config.js";
 
 // `/verificar/durable` solo existe con `DX402_ACTIVO=true` (2026-09-10): estas
 // pruebas son las del pricing COMPLETO. La flag apagada, abajo.
+const ANTES = { X402_ACTIVO: process.env.X402_ACTIVO, DX402_ACTIVO: process.env.DX402_ACTIVO };
 beforeAll(() => {
+  // Las dos: `dx402Activo` es `X402_ACTIVO && DX402_ACTIVO`.
+  process.env.X402_ACTIVO = "true";
   process.env.DX402_ACTIVO = "true";
 });
 afterAll(() => {
-  delete process.env.DX402_ACTIVO;
+  for (const [k, v] of Object.entries(ANTES)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
 });
 
 describe("construirPricing con DX402_ACTIVO apagada", () => {

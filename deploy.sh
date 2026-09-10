@@ -61,8 +61,18 @@ fi
 # apagado, o encendido pero sin DX402, esta llave no hace falta y no hay que
 # exigirla — es lo que permite desplegar main sin la llave y encender DX402
 # después, con la llave puesta.
+#
+# `flag_en_env` lee la flag como la leen dotenv y Compose, no como un grep
+# literal: acepta `export `, espacios alrededor del `=`, comillas y un
+# comentario al final, y exige que el valor sea exactamente `true` (sin
+# ancla, `DX402_ACTIVO=truena` daba match). Un `DX402_ACTIVO="true"` escrito
+# a mano encendía la flag en el contenedor y NO la guarda — se saltaban las
+# dos, y el crash-loop que cierran volvía (hallazgo del refutador, 2026-09-10).
+flag_en_env() {  # flag_en_env NOMBRE ARCHIVO → 0 si la app la va a leer como "true"
+  grep -qE "^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=[[:space:]]*(true|\"true\"|'true')[[:space:]]*(#.*)?$" "$2"
+}
 DX402_ENCENDIDO=0
-if grep -q '^X402_ACTIVO=true' "$APP_DIR/.env" && grep -q '^DX402_ACTIVO=true' "$APP_DIR/.env"; then
+if flag_en_env X402_ACTIVO "$APP_DIR/.env" && flag_en_env DX402_ACTIVO "$APP_DIR/.env"; then
   DX402_ENCENDIDO=1
 fi
 if [[ "$DX402_ENCENDIDO" == 1 ]] && ! grep -q 'NOMICHECK_SOBRE_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
@@ -222,11 +232,26 @@ for _ in $(seq 1 30); do
     # desde `d95cd19` una ruta paga contesta su 402 a cualquier verbo, que es
     # justo lo que hacen el facilitador y los crawlers. Un cuerpo de ejemplo
     # habría vuelto a atar esta guarda a un esquema que puede cambiar.
-    if grep -qE '^X402_ACTIVO=true' "$APP_DIR/.env" 2>/dev/null; then
+    if flag_en_env X402_ACTIVO "$APP_DIR/.env" 2>/dev/null; then
       CODIGO_402="$(curl -s -o /dev/null -w '%{http_code}' \
         http://localhost:3002/api/batch/verificar 2>/dev/null || true)"
       if [[ "$CODIGO_402" == "402" ]]; then
         echo "✓ el muro x402 cobra: un GET a /api/batch/verificar responde 402 sin pago"
+        # La misma sonda para DX402: con la flag encendida, /verificar/durable
+        # contesta 402; un 404 dice que la variable no llegó al contenedor
+        # (Compose solo entrega lo que el servicio lista) y la venta del sobre
+        # quedó apagada en silencio con el deploy en verde.
+        if [[ "$DX402_ENCENDIDO" == 1 ]]; then
+          CODIGO_DX402="$(curl -s -o /dev/null -w '%{http_code}' \
+            http://localhost:3002/api/batch/verificar/durable 2>/dev/null || true)"
+          if [[ "$CODIGO_DX402" == "402" ]]; then
+            echo "✓ DX402 encendida: un GET a /api/batch/verificar/durable responde 402"
+          else
+            echo "⚠ $APP_DIR/.env pide DX402_ACTIVO=true pero /verificar/durable NO se vende" >&2
+            echo "  (responde ${CODIGO_DX402:-sin respuesta}, no 402). Revisá que DX402_ACTIVO llegue al contenedor:" >&2
+            echo "      docker compose exec nomicheck-api env | grep DX402" >&2
+          fi
+        fi
       else
         echo "⚠ $APP_DIR/.env pide X402_ACTIVO=true pero lo servido NO cobra" >&2
         echo "  (/api/batch/verificar responde ${CODIGO_402:-sin respuesta}, no 402)." >&2

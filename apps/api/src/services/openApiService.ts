@@ -19,6 +19,7 @@ import { batchPagoOnchainSchema } from "../validation/batchPagoOnchain.js";
 import { batchLiquidacionFinalSchema } from "../validation/batchLiquidacionFinal.js";
 import { REGLAS_VERIFICADAS_AL } from "./reglasVerificadasService.js";
 import { PRECIOS_USD, leerConfigX402, rutasActivas, AVALANCHE_MAINNET } from "../lib/x402Config.js";
+import { sobreConfigurado } from "./sobreSignatureService.js";
 import { CONTACTO } from "../lib/contacto.js";
 
 const BASE_URL = "https://nomicheck.ynt.codes/api/batch";
@@ -301,7 +302,13 @@ export function construirOpenApi(): Record<string, unknown> {
         },
       },
     };
+  }
 
+  // La llave del sobre se documenta si se SIRVE: con la flag encendida, o
+  // apagada pero con la llave configurada — los sobres ya vendidos siguen
+  // verificando contra esta URL (ver `batchPublico.ts`). Sin ninguna de las
+  // dos, la ruta da 404 y no se publica.
+  if (muro.dx402Activo || sobreConfigurado() === null) {
     paths["/verificar/durable/sobre-publickey"] = {
     get: {
       operationId: "durable-envelope-public-key",
