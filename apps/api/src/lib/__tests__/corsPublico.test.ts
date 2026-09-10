@@ -33,6 +33,10 @@ describe("corsPublico", () => {
       expect(opcionesPara(pedido("/api/batch/publickey")).origin).toBe("*");
     });
 
+    it("la llave pública del sobre de /verificar/durable también", () => {
+      expect(opcionesPara(pedido("/api/batch/verificar/durable/sobre-publickey")).origin).toBe("*");
+    });
+
     it("los ejemplos firmados y sus esquemas también", () => {
       for (const ruta of [
         "/api/batch/verificar/ejemplo",
@@ -132,8 +136,11 @@ describe("corsPublico", () => {
     it("abrir una ruta nueva es deliberado: la lista es explícita", () => {
       // Guarda de intención. Si alguien agrega una ruta, este test lo obliga a
       // pasar por acá y a mirar la lista completa.
-      expect(RUTAS_PUBLICAS.size).toBe(21);
+      expect(RUTAS_PUBLICAS.size).toBe(22);
       expect(RUTAS_PUBLICAS.has("/api/batch/publickey")).toBe(true);
+      // La llave del sobre de /verificar/durable (DX402 punto 2): distinta de
+      // la de arriba, mismo criterio de apertura.
+      expect(RUTAS_PUBLICAS.has("/api/batch/verificar/durable/sobre-publickey")).toBe(true);
       // Las cinco de descubrimiento (2026-08-23): GET puro, sin credenciales,
       // y el ARD exige `*` — revisadas contra las tres condiciones de la lista.
       expect(RUTAS_PUBLICAS.has("/.well-known/api-catalog")).toBe(true);

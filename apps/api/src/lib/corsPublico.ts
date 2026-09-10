@@ -47,6 +47,11 @@ export const RUTAS_PUBLICAS = new Set([
   // importante de la lista: sin ella no hay verificación de terceros posible.
   "/api/batch/publickey",
 
+  // La llave del SOBRE de /verificar/durable (DX402 punto 2) — distinta de
+  // la de arriba a propósito (ver sobreSignatureService.ts). Mismo criterio:
+  // sin ella un tercero no puede verificar el sobre por su cuenta.
+  "/api/batch/verificar/durable/sobre-publickey",
+
   // Contratos: permiten integrar antes de pagar.
   "/api/batch/schema/v1.json",
   "/api/batch/retencion/schema/v1.json",

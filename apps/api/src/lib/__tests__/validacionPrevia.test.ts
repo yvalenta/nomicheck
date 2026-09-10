@@ -57,6 +57,29 @@ describe("validar antes de cobrar", () => {
   it("TODA ruta que cobra tiene esquema de validación previa", () => {
     expect(rutasPagasSinEsquema(RUTAS_CON_MURO)).toEqual([]);
   });
+
+  // /verificar/durable (DX402 punto 2) reusa el esquema de /verificar: lo que
+  // cambia es qué se hace con el resultado después, no la forma del cuerpo.
+  it("/verificar/durable valida con el MISMO esquema que /verificar", () => {
+    const malformado = { comprobantes: "esto no es una lista" };
+    expect(problemaDeEntrada("/verificar/durable", malformado)?.error).toBe("invalid_input");
+
+    const valido = {
+      version: "1",
+      buyer: { noExternalLlm: true },
+      comprobantes: [
+        {
+          externalId: "T-1",
+          salarioBasicoMensual: 2000000,
+          recibeAuxilioTransporte: true,
+          periodoDesde: "2026-07-01",
+          periodoHasta: "2026-07-31",
+          declarado: [{ nombre: "Salario básico", valor: 2000000 }],
+        },
+      ],
+    };
+    expect(problemaDeEntrada("/verificar/durable", valido)).toBeNull();
+  });
 });
 
 describe("pricing", () => {

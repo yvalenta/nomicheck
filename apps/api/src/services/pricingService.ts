@@ -24,7 +24,7 @@
 // Mismo motivo y mismo bump que el quickstart: la audiencia medida son
 // máquinas en inglés, y el v1 (claves en español) no tenía integradores.
 import { origenPublico } from "../lib/pagosConfig.js";
-import { PRECIOS_USD, RUTAS_CON_MURO } from "../lib/x402Config.js";
+import { PRECIOS_USD, RUTAS_CON_MURO, REDES_POR_RUTA, nombreDeRed } from "../lib/x402Config.js";
 
 // El porqué de cada ruta paga. La clave es la MISMA de `PRECIOS_USD`: si se
 // agrega una ruta con precio y sin motivo, la guarda de abajo lo nombra.
@@ -46,6 +46,12 @@ const WHY_IT_CHARGES: Record<string, string> = {
     "Payment receipt: cross-checks the settlement, the frozen FX snapshot and the on-chain " +
     "transfer. It costs more than the rest because it crosses three layers and makes an RPC " +
     "call to the chain — the price follows the real cost, not what the data is worth to the caller.",
+  "/verificar/durable":
+    "Same recomputation as /verificar, same price. What is charged for here is not the " +
+    "calculation, it is the envelope: the response is sealed to your key, anchored with the " +
+    "facilitator's signed receipt, and the ciphertext stays hosted for 90 days so you can " +
+    "verify it later without calling us again. About 50 payslips per batch (larger ones get " +
+    "413 without charge). Avalanche C-Chain only.",
 };
 
 // Lo gratis, y por qué lo es. Esta lista es la que hace honesta a la otra:
@@ -140,12 +146,24 @@ export function construirPricing() {
       why: g.why,
     })),
 
-    paid: RUTAS_CON_MURO.map((ruta) => ({
-      route: `/api/batch${ruta}`,
-      priceUsd: PRECIOS_USD[ruta],
-      method: "POST",
-      why: WHY_IT_CHARGES[ruta] ?? "(no reason declared — an omission, not a secret)",
-    })),
+    paid: RUTAS_CON_MURO.map((ruta) => {
+      const redesPermitidas = REDES_POR_RUTA[ruta];
+      return {
+        route: `/api/batch${ruta}`,
+        priceUsd: PRECIOS_USD[ruta],
+        method: "POST",
+        why: WHY_IT_CHARGES[ruta] ?? "(no reason declared — an omission, not a secret)",
+        // Solo cuando esta ruta liquida en MENOS redes que el sitio entero
+        // (hoy, únicamente `/verificar/durable`, fija a Avalanche): sin esto,
+        // un agente que arma un pago leyendo el `networks` GLOBAL de este
+        // documento firma en Base y se lleva un 402 cuyo `accepts` trae una
+        // sola entrada, en Avalanche — el descubrimiento le mintió
+        // (reparación DX402 punto 2 ronda 2, hallazgo del refutador). Las
+        // rutas sin restricción no repiten el campo: el `networks` de nivel
+        // superior ya vale para ellas.
+        ...(redesPermitidas ? { networks: redesPermitidas.map(nombreDeRed) } : {}),
+      };
+    }),
   };
 }
 

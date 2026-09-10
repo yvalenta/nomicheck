@@ -43,9 +43,18 @@ async function calcularLineasLegales(c: ComprobanteInput) {
   return resultado;
 }
 
-export async function ejecutarBatchVerificacion(
+/**
+ * Todo lo que hoy es `sinFirma`, extraído para que `/verificar/durable`
+ * (DX402 punto 2) calcule el MISMO output y lo envuelva en un sobre propio
+ * (`sobreSignatureService.ts`) en vez de en `firmarPayload` — sin este split,
+ * reusar el cálculo era duplicarlo, o firmar dos veces con dos llaves
+ * distintas y colgarle al batch normal una firma que nadie pidió.
+ */
+export type BatchVerificacionSinFirma = Omit<BatchVerificacionOutput, "signature">;
+
+export async function calcularBatchVerificacion(
   input: BatchVerificacionInput
-): Promise<BatchVerificacionOutput> {
+): Promise<BatchVerificacionSinFirma> {
   const { reglas, festivos } = await obtenerReglasYFestivos();
   const reglasHash = hashCatalogo(reglas, festivos);
 
@@ -62,7 +71,7 @@ export async function ejecutarBatchVerificacion(
     });
   }
 
-  const sinFirma = {
+  return {
     version: "1" as const,
     generadoEn: new Date().toISOString(),
     reglasVerificadasAl: REGLAS_VERIFICADAS_AL,
@@ -71,6 +80,12 @@ export async function ejecutarBatchVerificacion(
     habeasData: construirHabeasData(),
     resultados,
   };
+}
+
+export async function ejecutarBatchVerificacion(
+  input: BatchVerificacionInput
+): Promise<BatchVerificacionOutput> {
+  const sinFirma = await calcularBatchVerificacion(input);
   return { ...sinFirma, signature: firmarPayload(sinFirma) };
 }
 

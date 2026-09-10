@@ -157,6 +157,11 @@ export const PRECIOS_USD: Record<string, number> = {
   "/verificar": 0.02,
   "/pago-onchain": 0.02,
   "/comprobante": 0.05, // cruza tres capas y hace una llamada RPC
+  // Mismo precio que /verificar (decisión fija de Yonatan, DX402 punto 2,
+  // opción A del plano): lo que cambia no es el cálculo, es que la salida
+  // queda hospedada 90 días para verificarse sin este servidor. Ver
+  // `REDES_POR_RUTA` y `DURABLE_EVIDENCE_INFO` más abajo.
+  "/verificar/durable": 0.02,
 };
 
 /**
@@ -197,6 +202,8 @@ export const DESCRIPCIONES: Record<string, string> = {
     "NomiCheck on-chain payment batch (EIP-681 links + Safe batch). Ed25519-signed output with the legal-rules hash and the date they were verified.",
   "/comprobante":
     "NomiCheck payment receipt: cross-checks the liquidation, the frozen FX snapshot and the on-chain transfer. Ed25519-signed output with the legal-rules hash and the date they were verified.",
+  "/verificar/durable":
+    "NomiCheck batch verification with durable evidence (DX402). The response is an envelope signed with NomiCheck's Ed25519 envelope key (GET /api/batch/verificar/durable/sobre-publickey), sealed to the payer's key and anchored with the facilitator's signed receipt; the ciphertext is hosted for 90 days and then stops being served (no early deletion on request). Keep the response: the signed envelope and the receipt verify offline after that. About 50 payslips per call (the sealed request must stay under the facilitator's 64 KiB cap); larger batches get 413 without charge. Avalanche C-Chain only, same price as /verificar.",
 };
 
 /** Lo que `btoa` puede serializar sin romperse. */
@@ -377,6 +384,115 @@ export function perfilFacilitador(url: string): PerfilFacilitador {
 }
 
 /**
+ * Redes permitidas por ruta, cuando una ruta NO puede vender en todas las que
+ * `cfg.redes` anuncia. Ausente de la tabla = sin restricción, que es el
+ * comportamiento de siempre para toda ruta que no está acá.
+ *
+ * Hoy solo `/verificar/durable`: decisión fija de Yonatan (DX402 punto 2) de
+ * anclar el sobre SOLO en Avalanche C-Chain. No es un capricho — es el único
+ * facilitador que hoy sabe anclar evidencia durable (`/dx402/stats` del
+ * facilitador de Ultravioleta, informe `muro`), así que anunciar otra red acá
+ * sería vender una promesa que esa red no puede cumplir.
+ */
+export const REDES_POR_RUTA: Record<string, readonly string[]> = {
+  "/verificar/durable": [AVALANCHE_MAINNET.caip2],
+};
+
+/**
+ * El nombre legible (`X402_RED`, `REDES_X402`) de un CAIP-2 — la inversa de
+ * `REDES_X402[nombre].caip2`. Existe para publicar `REDES_POR_RUTA` en
+ * documentos de cara al comprador (`/api/batch/pricing`) con el mismo
+ * vocabulario que `networks` de nivel superior (`["base","avalanche"]`), en
+ * vez del CAIP-2 crudo que esa tabla usa internamente.
+ */
+export function nombreDeRed(caip2: string): string {
+  return Object.values(REDES_X402).find((r) => r.caip2 === caip2)?.nombre ?? caip2;
+}
+
+/**
+ * La config de retención declarada para `/verificar/durable`. Decisión fija
+ * de Yonatan (DX402 punto 2, `tareas/2026-09-08-nomicheck-vendedor-dx402-con-sobre.md`):
+ * retención "90d" (no permanente: vence, y no hay borrado a pedido), modo "direct" (sin escrow del lado del
+ * facilitador), backend "s3", pagado por el vendedor (nosotros, no el
+ * comprador). `maxBodyBytes: 47000` es MEDIDO, no elegido: el SDK sella el
+ * sobre y lo mide contra el tope real de 64 KiB del request al facilitador —
+ * 47 KB de texto plano entra, 48 no (brief DX402 punto 2).
+ *
+ * Misma forma exacta que `DurableEvidenceConfig` del facilitador (x402-rs
+ * 31b5e9f4919b, `src/dx402/types.rs:182-183`, informe `declaracion` §2) —
+ * ambos lados hablan el mismo shape a propósito.
+ */
+export const DURABLE_EVIDENCE_INFO = {
+  mode: "direct",
+  backend: "s3",
+  retention: "90d",
+  maxBodyBytes: 47000,
+  paidBy: "seller",
+} as const;
+
+/**
+ * Cuántos comprobantes entran, en la práctica, en una llamada a
+ * `/verificar/durable`. MEDIDO, no elegido (refutador `dinero`, ronda 3,
+ * `ventana.test.ts`): 50 comprobantes × 4 líneas dan un sobre de 47.164 B que
+ * todavía entra bajo `maxBodyBytes`; 200 → `too_large`. El esquema de entrada
+ * admite hasta 500 (`validation/batchVerificacion.ts`) porque es el mismo de
+ * `/verificar` plano — el 413 de la ruta durable nombra este número para
+ * que el comprador no lo descubra a prueba y error. Aproximado a propósito:
+ * depende del largo de los campos declarados, no solo de la cantidad.
+ */
+export const COMPROBANTES_QUE_ENTRAN = 50;
+
+/**
+ * El JSON schema que se publica junto a `info`, informativo para quien lo lea
+ * (ningún facilitador lo valida en runtime — informe `declaracion` §4, no
+ * hay `deny_unknown_fields` ni `jsonschema` corriendo del lado del
+ * facilitador). Copiado EXACTO del que emite `DurableEvidenceInfo::declare`
+ * (x402-rs 31b5e9f4919b, `src/dx402/types.rs:303-317`) porque publicar un
+ * schema que ni el propio autor cumple es peor que no publicar ninguno.
+ */
+const ESQUEMA_DURABLE_EVIDENCE = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  properties: {
+    mode: { type: "string", enum: ["direct", "escrowed"] },
+    backend: { type: "string", enum: ["s3", "ipfs", "arweave"] },
+    retention: { type: "string", enum: ["90d", "1y", "permanent"] },
+    maxBodyBytes: { type: "integer", minimum: 0 },
+    paidBy: { type: "string", enum: ["seller", "buyer"] },
+    acceptIndexes: { type: "array", items: { type: "integer", minimum: 0 } },
+  },
+  additionalProperties: false,
+} as const;
+
+/**
+ * La declaración de NIVEL SUPERIOR del 402: `extensions["durable-evidence"]`,
+ * hermana de `accepts` (informe `declaracion` §1, x402-rs
+ * `src/dx402/types.rs:283-289`). Es la forma canónica hoy — distinta de la
+ * v0.2/fallback que `requisitoDePago` mete en `extra.extensions` de cada
+ * accept — y las dos se publican a la vez porque el facilitador lee ambas.
+ *
+ * `acceptIndexes` la pasa el LLAMADOR, nunca `[0]` fijo adentro de esta
+ * función — `/verificar/durable` normalmente no declara ninguna oferta plana
+ * antes de la durable (es la ÚNICA oferta de esa ruta, así que en el caso
+ * normal es `[0]`: informe `declaracion` §1, x402-rs
+ * `crates/x402-axum/src/layer.rs:518-524`), pero con `[0]` HARDCODEADO acá
+ * adentro la declaración apunta al índice 0 aunque el `accepts` que de
+ * verdad se publique venga vacío (el facilitador no ecoó ningún accept
+ * propio) — una promesa de evidencia durable señalando una oferta que no
+ * existe (reparación DX402 punto 2 ronda 2, hallazgo del refutador). El
+ * llamador es quien sabe cuántos `accepts` se publican de verdad en ESTA
+ * respuesta.
+ */
+export function declaracionDurableEvidence(acceptIndexes: number[]): Record<string, unknown> {
+  return {
+    "durable-evidence": {
+      info: { ...DURABLE_EVIDENCE_INFO, acceptIndexes },
+      schema: ESQUEMA_DURABLE_EVIDENCE,
+    },
+  };
+}
+
+/**
  * Construye el `accepts` que el middleware publica en la respuesta 402.
  * Es también, campo por campo, lo que hay que mandarle a
  * `POST /discovery/register` del facilitador para aparecer en el Bazaar.
@@ -384,6 +500,21 @@ export function perfilFacilitador(url: string): PerfilFacilitador {
 export function requisitoDePago(cfg: ConfigX402, ruta: string, red: RedX402) {
   const usd = PRECIOS_USD[ruta];
   if (usd === undefined) throw new Error(`x402: no hay precio definido para ${ruta}`);
+
+  const extra: Record<string, unknown> = {
+    ...red.eip712,
+    assetTransferMethod: "eip3009",
+  };
+  // La forma v0.2/fallback de la declaración de evidencia durable
+  // (`extra.extensions["durable-evidence"]`, informe `declaracion` §2): va
+  // POR ACCEPT, a diferencia de la de nivel superior que arma
+  // `declaracionDurableEvidence()` (esa es hermana de `accepts`, no vive acá
+  // adentro). El facilitador escribe y lee AMBAS formas a la vez —no hay que
+  // elegir una—, así que esta es la mitad que le toca a `requisitoDePago`
+  // porque es quien arma cada entrada de `accepts`.
+  if (ruta === "/verificar/durable") {
+    extra.extensions = { "durable-evidence": DURABLE_EVIDENCE_INFO };
+  }
 
   return {
     scheme: "exact" as const,
@@ -407,22 +538,25 @@ export function requisitoDePago(cfg: ConfigX402, ruta: string, red: RedX402) {
     // redes —Base Sepolia dice "USDC" donde las otras tres dicen "USD Coin"— y
     // entra al dominio EIP-712. Un `extra` copiado entre entradas produce una
     // firma que el token rechaza, sin error de configuración de por medio.
-    extra: {
-      ...red.eip712,
-      assetTransferMethod: "eip3009",
-    },
+    extra,
   };
 }
 
 /**
- * El `accepts` completo: una entrada por red configurada.
+ * El `accepts` completo: una entrada por red configurada, salvo que la ruta
+ * esté en `REDES_POR_RUTA` — ahí se filtra `cfg.redes` a las permitidas
+ * ANTES de mapear, así que una ruta restringida nunca hereda una red que no
+ * puede cumplir aunque el sitio entero la anuncie (`/verificar/durable` con
+ * `X402_RED=base,avalanche` no vende en Base).
  *
  * Devuelve un array porque eso es lo que x402 anuncia — el comprador elige una.
  * Antes devolvía un objeto solo y quien llamaba lo envolvía en `[...]`, que
  * escondía la decisión de cuántas redes hay en el sitio equivocado.
  */
 export function requisitosDePago(cfg: ConfigX402, ruta: string) {
-  return cfg.redes.map((red) => requisitoDePago(cfg, ruta, red));
+  const permitidas = REDES_POR_RUTA[ruta];
+  const redes = permitidas ? cfg.redes.filter((r) => permitidas.includes(r.caip2)) : cfg.redes;
+  return redes.map((red) => requisitoDePago(cfg, ruta, red));
 }
 
 /**
@@ -498,8 +632,19 @@ export const RUTAS_CON_MURO = Object.keys(PRECIOS_USD);
  * Se comprueba al arrancar y no en la primera petición: un muro de pago mal
  * configurado que falla recién cuando llega un comprador es peor que uno que
  * no arranca.
+ *
+ * `sobreProblema` es el chequeo de `/verificar/durable` (DX402 punto 2:
+ * `sobreConfigurado()` de `services/sobreSignatureService.ts`), pasado por
+ * PARÁMETRO en vez de importado acá. Es deliberado: nada en `lib/` importa
+ * hoy de `services/` (services SÍ importa de `lib/`, ver `PRECIOS_USD` en
+ * `descubrimientoService.ts` y otros) — invertir esa dirección solo para este
+ * chequeo habría sido el primer caso de esa dependencia, y el brief de la
+ * tarea pide explícitamente evitarlo. Quien conoce si `/verificar/durable`
+ * está montada (`RUTAS_CON_MURO`) Y el resultado de `sobreConfigurado()` es
+ * el llamador (`montarMuroX402`, `x402Muro.ts`); acá solo se empuja lo que
+ * llega. `undefined`/`null` = nada que empujar.
  */
-export function problemasDeConfig(cfg: ConfigX402): string[] {
+export function problemasDeConfig(cfg: ConfigX402, sobreProblema?: string | null): string[] {
   const p: string[] = [];
   if (!cfg.activo) return p;
   if (cfg.redesInvalidas.length > 0) {
@@ -550,6 +695,24 @@ export function problemasDeConfig(cfg: ConfigX402): string[] {
           `X402_FACILITATOR_${red.nombre.toUpperCase().replace(/-/g, "_")}=https://...`,
       );
     }
+  }
+  // Toda ruta en `REDES_POR_RUTA` exige al menos una de sus redes permitidas
+  // configurada. Sin esto, `requisitosDePago` filtra a un array VACÍO y el
+  // 402 de esa ruta queda sin `accepts` — no es un error de arranque visible,
+  // es un comprador que no tiene con qué pagar y una venta que nunca ocurre
+  // sin que nada acá lo grite. Hoy solo aplica a `/verificar/durable`
+  // (Avalanche), y solo si esa ruta está montada de verdad.
+  for (const [ruta, permitidas] of Object.entries(REDES_POR_RUTA)) {
+    if (!RUTAS_CON_MURO.includes(ruta)) continue;
+    if (!cfg.redes.some((r) => permitidas.includes(r.caip2))) {
+      p.push(
+        `${ruta} exige alguna de estas redes: ${permitidas.join(", ")}. ` +
+          `X402_RED hoy trae: ${cfg.redes.map((r) => r.nombre).join(", ") || "(ninguna)"}.`,
+      );
+    }
+  }
+  if (sobreProblema) {
+    p.push(sobreProblema);
   }
   return p;
 }

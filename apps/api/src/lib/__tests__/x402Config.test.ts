@@ -17,6 +17,8 @@ import {
   BASE_SEPOLIA,
   AVALANCHE_MAINNET,
   REDES_X402,
+  REDES_POR_RUTA,
+  DURABLE_EVIDENCE_INFO,
   facilitadorDe,
   DESCRIPCIONES,
   PRECIOS_USD,
@@ -31,11 +33,16 @@ import { rutasPublicasConMuro } from "../x402Muro.js";
 
 const LIMPIA = "0x1111111111111111111111111111111111111111";
 
+// Avalanche va en el default a propósito, no solo Base: desde que existe
+// `/verificar/durable` (DX402 punto 2), `problemasDeConfig` exige esa red
+// para CUALQUIER config con el muro activo (ver el describe de más abajo,
+// "requisitos de red por ruta"). Sin ella acá, cada test genérico de esta
+// config tendría que saber de una ruta que no está probando.
 const base = (over: Partial<ReturnType<typeof leerConfigX402>> = {}) => ({
   activo: true,
   facilitatorURL: "https://facilitator.ultravioletadao.xyz",
   facilitadoresPorRed: {},
-  redes: [BASE_MAINNET],
+  redes: [BASE_MAINNET, AVALANCHE_MAINNET],
   redesInvalidas: [],
   payTo: LIMPIA,
   origenPublico: "https://nomicheck.ynt.codes",
@@ -82,6 +89,53 @@ describe("problemasDeConfig", () => {
     const p = problemasDeConfig(base({ facilitatorURL: "http://facilitator.local" }));
     expect(p).toHaveLength(1);
     expect(p[0]).toMatch(/https/);
+  });
+
+  // El chequeo de la llave del sobre (DX402 punto 2, /verificar/durable) NO
+  // se importa acá — lo trae el llamador por parámetro, precisamente para
+  // que `lib/x402Config.ts` no pase a depender de `services/` (ver el
+  // comentario grande sobre `problemasDeConfig` en el archivo). Estos tests
+  // solo sujetan CÓMO se combina lo que llega, no de dónde sale.
+  describe("sobreProblema (el chequeo de /verificar/durable pasado por parámetro)", () => {
+    it("sin segundo argumento, el comportamiento no cambia", () => {
+      expect(problemasDeConfig(base())).toEqual([]);
+    });
+
+    it("null (sobreConfigurado() dijo que está todo bien) no agrega nada", () => {
+      expect(problemasDeConfig(base(), null)).toEqual([]);
+    });
+
+    it("un string lo empuja tal cual a la lista de problemas", () => {
+      expect(problemasDeConfig(base(), "la llave del sobre no está configurada")).toEqual([
+        "la llave del sobre no está configurada",
+      ]);
+    });
+
+    it("con el muro apagado, ni siquiera un sobreProblema real revienta nada", () => {
+      // Mismo criterio que el resto de la función: apagado = nada exige.
+      expect(problemasDeConfig(base({ activo: false }), "cualquier cosa")).toEqual([]);
+    });
+  });
+
+  // `/verificar/durable` vive en `PRECIOS_USD` sin condición, así que está en
+  // `RUTAS_CON_MURO` siempre que el muro esté activo — no hace falta "activarla"
+  // aparte. Sin Avalanche en `cfg.redes`, `requisitosDePago` la filtra a un
+  // array vacío y el 402 de esa ruta queda sin `accepts`: nadie puede pagar y
+  // nada lo grita, salvo este chequeo.
+  describe("requisitos de red por ruta (/verificar/durable exige Avalanche)", () => {
+    it("revienta si /verificar/durable está activa y Avalanche no está en cfg.redes", () => {
+      const p = problemasDeConfig(base({ redes: [BASE_MAINNET] }));
+      expect(p).toEqual([expect.stringMatching(/verificar\/durable.*eip155:43114/)]);
+    });
+
+    it("con Avalanche presente (aunque no sea la única red) no hay problema", () => {
+      expect(problemasDeConfig(base({ redes: [BASE_MAINNET, AVALANCHE_MAINNET] }))).toEqual([]);
+      expect(problemasDeConfig(base({ redes: [AVALANCHE_MAINNET] }))).toEqual([]);
+    });
+
+    it("con el muro apagado, la falta de Avalanche no revienta nada", () => {
+      expect(problemasDeConfig(base({ activo: false, redes: [BASE_MAINNET] }))).toEqual([]);
+    });
   });
 });
 
@@ -130,8 +184,11 @@ describe("leerConfigX402", () => {
 
   it("un nombre desconocido NO se descarta en silencio", () => {
     // Es el modo de falla del multired: el 402 se sigue viendo perfecto, solo
-    // que sin la red por la que alguien iba a pagar.
-    process.env.X402_RED = "base,avalancha";
+    // que sin la red por la que alguien iba a pagar. `avalanche` (bien
+    // escrita) va en la lista además del typo para que el único problema que
+    // se afirme sea el del typo — sin ella, `/verificar/durable` sumaría un
+    // segundo problema (le falta Avalanche) que no es lo que este test mide.
+    process.env.X402_RED = "base,avalanche,avalancha";
     const cfg = leerConfigX402();
     expect(cfg.redesInvalidas).toEqual(["avalancha"]);
     expect(problemasDeConfig({ ...cfg, activo: true, payTo: LIMPIA })).toEqual([
@@ -237,6 +294,45 @@ describe("requisitosDePago", () => {
   });
 });
 
+// `/verificar/durable` es la única ruta hoy en `REDES_POR_RUTA`: DX402 punto
+// 2 decide que el sobre solo se ancla en Avalanche, y estas pruebas son las
+// que impiden que herede Base (o cualquier otra) por venir en `cfg.redes`.
+describe("requisitosDePago con REDES_POR_RUTA (/verificar/durable)", () => {
+  it("declara Avalanche como la única red permitida", () => {
+    expect(REDES_POR_RUTA["/verificar/durable"]).toEqual([AVALANCHE_MAINNET.caip2]);
+  });
+
+  it("con Base + Avalanche configuradas, solo ofrece Avalanche", () => {
+    const cfg = base({ redes: [BASE_MAINNET, AVALANCHE_MAINNET] });
+    const accepts = requisitosDePago(cfg, "/verificar/durable");
+    expect(accepts).toHaveLength(1);
+    expect(accepts[0].network).toBe(AVALANCHE_MAINNET.caip2);
+  });
+
+  it("el accept durable declara durable-evidence en su extra, con el shape exacto", () => {
+    const cfg = base({ redes: [BASE_MAINNET, AVALANCHE_MAINNET] });
+    const [accept] = requisitosDePago(cfg, "/verificar/durable");
+    expect(accept.extra.extensions).toEqual({ "durable-evidence": DURABLE_EVIDENCE_INFO });
+  });
+
+  it("/verificar (no restringida) sigue devolviendo todas las redes, sin extensions", () => {
+    const cfg = base({ redes: [BASE_MAINNET, AVALANCHE_MAINNET] });
+    const accepts = requisitosDePago(cfg, "/verificar");
+    expect(accepts.map((a) => a.network)).toEqual([BASE_MAINNET.caip2, AVALANCHE_MAINNET.caip2]);
+    for (const a of accepts) {
+      expect(a.extra).not.toHaveProperty("extensions");
+    }
+  });
+
+  it("sin Avalanche configurada, /verificar/durable queda sin accepts", () => {
+    // No es el estado deseado en producción —`problemasDeConfig` revienta
+    // antes de llegar acá— pero `requisitosDePago` en sí no inventa una red:
+    // se queda vacía en vez de ofrecer algo que no puede cumplir.
+    const cfg = base({ redes: [BASE_MAINNET] });
+    expect(requisitosDePago(cfg, "/verificar/durable")).toEqual([]);
+  });
+});
+
 describe("cobertura de rutas", () => {
   it("toda ruta con muro tiene precio", () => {
     // `RUTAS_CON_MURO` se deriva de `PRECIOS_USD`, así que esto sujeta la
@@ -270,13 +366,19 @@ describe("cobertura de rutas", () => {
 
   it("cubre el /csv de cada ruta que lo tiene", () => {
     // El CSV entrega el mismo cálculo en otro formato: sin muro sería la forma
-    // gratis de saltárselo. `/comprobante` no tiene variante CSV.
+    // gratis de saltárselo. `/comprobante` no tiene variante CSV, y tampoco
+    // `/verificar/durable`: lo que esa vende es un sobre firmado, y un CSV no
+    // es un sobre.
     const publicas = rutasPublicasConMuro().map((r) => r.publica);
     expect(publicas).toContain("/api/batch/verificar");
     expect(publicas).toContain("/api/batch/verificar/csv");
     expect(publicas).toContain("/api/batch/comprobante");
     expect(publicas).not.toContain("/api/batch/comprobante/csv");
-    expect(publicas).toHaveLength(9);
+    expect(publicas).toContain("/api/batch/verificar/durable");
+    expect(publicas).not.toContain("/api/batch/verificar/durable/csv");
+    // 5 rutas base + 4 /csv (todas menos /comprobante y /verificar/durable) +
+    // la propia /verificar/durable = 10.
+    expect(publicas).toHaveLength(10);
   });
 
   it("el /csv cuesta lo mismo que su ruta base", () => {

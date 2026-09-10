@@ -20,6 +20,13 @@ x-env: &app-env
   # repo — solo las variables listadas aquí (que Compose sí resuelve desde
   # la raíz) llegan al proceso. Ver batchSignatureService.ts.
   NOMICHECK_BATCH_SIGNING_KEY_PEM: ${NOMICHECK_BATCH_SIGNING_KEY_PEM:-}
+  # `/verificar/durable` (DX402 punto 2) firma su cuerpo con una llave
+  # Ed25519 PROPIA, distinta de la de arriba (sobreSignatureService.ts) —
+  # sin esto en el mapa de env, ni poniéndola en el `.env` de la raíz llega
+  # nunca al contenedor (mismo motivo que el comentario de arriba: Compose
+  # solo pasa lo que está listado acá). Default vacío a propósito: sin
+  # X402_ACTIVO=true el muro no monta nada y esta llave no hace falta.
+  NOMICHECK_SOBRE_SIGNING_KEY_PEM: ${NOMICHECK_SOBRE_SIGNING_KEY_PEM:-}
   CORS_ORIGIN: http://localhost:5173
   PORT: 3001
   # Existe en producción desde el commit de performance, pero el compose no la

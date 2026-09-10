@@ -48,6 +48,35 @@ if ! grep -q 'NOMICHECK_BATCH_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
   echo "ERROR: falta NOMICHECK_BATCH_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
   exit 1
 fi
+# `/verificar/durable` (DX402 punto 2) firma su cuerpo con una llave Ed25519
+# PROPIA, NOMICHECK_SOBRE_SIGNING_KEY_PEM — distinta de la del batch de
+# arriba (sobreSignatureService.ts). Esa ruta está en PRECIOS_USD sin
+# condición, así que en cuanto X402_ACTIVO=true el arranque exige esta
+# llave (problemasDeConfig -> montarMuroX402 revienta si falta, igual que
+# sinEsquema) y sin este chequeo previo el pull+up de más abajo entraba
+# igual: los healthchecks pasaban, el contenedor quedaba en crash-loop, y
+# recién se notaba con la API entera abajo (reparación DX402 punto 2 ronda
+# 1, hallazgo del refutador). Condicional a X402_ACTIVO=true: mientras el
+# muro siga apagado, esta llave no hace falta y no hay que exigirla.
+if grep -q '^X402_ACTIVO=true' "$APP_DIR/.env" && ! grep -q 'NOMICHECK_SOBRE_SIGNING_KEY_PEM=' "$APP_DIR/.env"; then
+  echo "ERROR: X402_ACTIVO=true pero falta NOMICHECK_SOBRE_SIGNING_KEY_PEM en $APP_DIR/.env" >&2
+  echo "  /verificar/durable no arranca sin ella (llave NUEVA, nunca la de NOMICHECK_BATCH_SIGNING_KEY_PEM)." >&2
+  exit 1
+fi
+# `/verificar/durable` solo liquida en Avalanche (eip155:43114) y está en
+# PRECIOS_USD sin condición: si X402_RED no incluye "avalanche" —incluyendo
+# el caso en que la línea falta del todo, porque ahí x402Config.ts cae al
+# default "base"—, `problemasDeConfig` revienta el arranque (x402Config.ts:676)
+# y se lleva puesta la API ENTERA, incluidas las cinco rutas que ya facturan.
+# Por eso la guarda exige la línea PRESENTE y con avalanche adentro, no solo
+# "que no la contradiga" (mismo modo de falla que la llave del sobre arriba,
+# reparación DX402 punto 2 ronda 2, hallazgo del refutador).
+if grep -q '^X402_ACTIVO=true' "$APP_DIR/.env" && ! grep -qE '^X402_RED=.*avalanche' "$APP_DIR/.env"; then
+  echo "ERROR: X402_ACTIVO=true pero X402_RED no incluye avalanche en $APP_DIR/.env" >&2
+  echo "  /verificar/durable solo liquida en eip155:43114 y esta en PRECIOS_USD sin condicion:" >&2
+  echo "  montarMuroX402 revienta al arrancar y se lleva la API entera (x402Config.ts:676)." >&2
+  exit 1
+fi
 
 # ── --down ───────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--down" ]]; then

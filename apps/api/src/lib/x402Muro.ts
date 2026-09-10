@@ -23,6 +23,7 @@ import {
   problemasDeConfig,
   requisitosDePago,
   extensionBazaar,
+  declaracionDurableEvidence,
   facilitadorDe,
   RUTAS_CON_MURO,
   perfilFacilitador,
@@ -33,6 +34,14 @@ import {
 import { credencialesCdp, jwtCdp } from "./cdpAuth.js";
 import { registro } from "./registro.js";
 import { problemaDeEntrada, rutasPagasSinEsquema } from "./validacionPrevia.js";
+import { muroDurableDe } from "./x402MuroDurable.js";
+// Único punto donde `lib/` importa de `services/` en todo el repo (Parte 1
+// dejó `problemasDeConfig` sin este import a propósito, ver x402Config.ts).
+// Acá SÍ hace falta: `montarMuroX402` es quien conoce a la vez si
+// `/verificar/durable` está montada (`RUTAS_CON_MURO`) y el resultado de
+// `sobreConfigurado()`, y es el único lugar donde juntar los dos no infla la
+// superficie de `x402Config.ts` con un chequeo que le es ajeno.
+import { sobreConfigurado } from "../services/sobreSignatureService.js";
 
 /** Prefijo público de los wrappers, el mismo que arma `requisitosDePago`. */
 const PREFIJO = "/api/batch";
@@ -40,13 +49,16 @@ const PREFIJO = "/api/batch";
 /**
  * Rutas con muro, en ruta pública completa. El `/csv` entrega el mismo cálculo
  * en otro formato y cuesta igual: sin él, pedir el CSV sería la forma gratis de
- * saltarse el muro. `/comprobante` no tiene variante CSV.
+ * saltarse el muro. `/comprobante` no tiene variante CSV, y tampoco
+ * `/verificar/durable`: lo que esa ruta vende es un SOBRE firmado (spec
+ * `sobre/SPEC.md`) sellado y anclado — un CSV no es un sobre, y no hay forma
+ * de servir esa garantía en ese formato.
  */
 export function rutasPublicasConMuro(): { publica: string; precio: string }[] {
   const salida: { publica: string; precio: string }[] = [];
   for (const ruta of RUTAS_CON_MURO) {
     salida.push({ publica: `${PREFIJO}${ruta}`, precio: ruta });
-    if (ruta !== "/comprobante") {
+    if (ruta !== "/comprobante" && ruta !== "/verificar/durable") {
       salida.push({ publica: `${PREFIJO}${ruta}/csv`, precio: ruta });
     }
   }
@@ -75,9 +87,29 @@ export function rutasPublicasConMuro(): { publica: string; precio: string }[] {
  * Medido el 2026-08-15 pidiéndole v2 por tres cabeceras distintas — faremeter
  * anuncia v1 en el desafío igual. Anunciar 2 acá haría que el desafío de
  * descubrimiento y el que enfrenta el comprador no coincidan.
+ *
+ * `extensions` de nivel superior SOLO aparece para `/verificar/durable`
+ * (`declaracionDurableEvidence()`, informe `declaracion` §1: hermana de
+ * `accepts`, no una clave más adentro de cada entrada). Las demás rutas no
+ * prometen evidencia durable, así que agregarles la clave sería publicar una
+ * promesa que nadie cumple — se omite entera, no se manda vacía.
  */
-export function desafioDeDescubrimiento(cfg: ConfigX402, precio: string, publica: string) {
-  return {
+export function desafioDeDescubrimiento(
+  cfg: ConfigX402,
+  precio: string,
+  publica: string,
+): {
+  x402Version: number;
+  accepts: ReturnType<typeof requisitosDePago>;
+  error: string;
+  extensions?: Record<string, unknown>;
+} {
+  const desafio: {
+    x402Version: number;
+    accepts: ReturnType<typeof requisitosDePago>;
+    error: string;
+    extensions?: Record<string, unknown>;
+  } = {
     x402Version: 1,
     accepts: requisitosDePago(cfg, precio),
     // El campo `error` ya existe en el 402 del muro (vacío cuando no hay). Se
@@ -88,6 +120,80 @@ export function desafioDeDescubrimiento(cfg: ConfigX402, precio: string, publica
       "Esta respuesta es el desafío de pago para descubrimiento: anuncia el " +
       "precio real, y no liquida nada.",
   };
+  // `desafio.accepts.length > 0` en vez de `[0]` fijo: hoy `requisitosDePago`
+  // siempre devuelve exactamente una entrada para esta ruta (Avalanche es su
+  // única red permitida, y `problemasDeConfig` revienta el arranque si no
+  // está configurada), pero la declaración señala los índices que ESTA
+  // respuesta publica de verdad, no un valor fijo que quedaría mintiendo el
+  // día que `accepts` viniera vacío (reparación DX402 punto 2 ronda 2,
+  // hallazgo del refutador — ver `declaracionDurableEvidence`).
+  if (precio === "/verificar/durable" && desafio.accepts.length > 0) {
+    desafio.extensions = declaracionDurableEvidence(desafio.accepts.map((_, i) => i));
+  }
+  return desafio;
+}
+
+/**
+ * Un accept de `requisitosDePago` (forma v1: `maxAmountRequired`) pasado a
+ * forma v2 (`amount`) — mismo renombre de campos que
+ * `common.relaxedRequirementsToV2` de `@faremeter/middleware` (`common.js`),
+ * reescrito acá SIN el import: `desafioDeDescubrimiento`/el GET de
+ * descubrimiento son deliberadamente sync y livianos (miden igual que
+ * cualquier otra ruta gratis — comentario grande de `desafioDeDescubrimiento`
+ * sobre el 97% de crawlers que sondea con GET), y traer el módulo async
+ * entero de faremeter para esto sería más costoso que replicar cuatro
+ * renombres de campo que no cambian (son los que exige el propio protocolo
+ * x402 v2).
+ */
+function aAcceptV2(a: ReturnType<typeof requisitosDePago>[number]): Record<string, unknown> {
+  return {
+    scheme: a.scheme,
+    network: a.network,
+    amount: a.maxAmountRequired,
+    asset: a.asset,
+    payTo: a.payTo,
+    maxTimeoutSeconds: a.maxTimeoutSeconds,
+    extra: a.extra,
+  };
+}
+
+/**
+ * El header `PAYMENT-REQUIRED` (v2) para el desafío de un GET/HEAD de
+ * descubrimiento — `undefined` cuando el desafío no tiene nada que declarar
+ * (todas las rutas salvo `/verificar/durable`, que siguen sin este header,
+ * igual que hoy).
+ *
+ * POR QUÉ HACE FALTA, si el CUERPO del GET ya trae `extensions` (v1 +
+ * `extensions` agregado a mano en `desafioDeDescubrimiento`): la forma
+ * CANÓNICA de la declaración vive en `extensions` del 402 **v2**, hermana de
+ * `accepts` (x402-rs `src/dx402/types.rs:283-289`) — el tipo v1 no tiene ese
+ * campo (`adaptPaymentRequiredResponseV2ToV1` nunca mapea `extensions`,
+ * informe `faremeter` §6), así que un cliente que parsee el cuerpo como v1
+ * ESTRICTO lo descarta. Y el GET existe justamente para el facilitador y los
+ * crawlers de catálogo (comentario de `desafioDeDescubrimiento`), que son
+ * quienes leerían el header — sin él, lo único que sobrevive es la forma
+ * v0.2 por accept (`extra.extensions["durable-evidence"]`, sin
+ * `acceptIndexes` ni `schema`) (reparación DX402 punto 2 ronda 2, hallazgo
+ * del refutador).
+ */
+function paymentRequiredHeaderDeDesafio(
+  desafio: ReturnType<typeof desafioDeDescubrimiento>,
+  cfg: ConfigX402,
+  rutaPublica: string
+): string | undefined {
+  if (!desafio.extensions) return undefined;
+  const primero = desafio.accepts[0] as { resource?: string; description?: string; mimeType?: string } | undefined;
+  const v2 = {
+    x402Version: 2,
+    resource: {
+      url: primero?.resource ?? `${cfg.origenPublico}${rutaPublica}`,
+      ...(primero?.description ? { description: primero.description } : {}),
+      ...(primero?.mimeType ? { mimeType: primero.mimeType } : {}),
+    },
+    accepts: desafio.accepts.map(aAcceptV2),
+    extensions: desafio.extensions,
+  };
+  return btoa(JSON.stringify(v2));
 }
 
 /**
@@ -187,8 +293,13 @@ export function redDelPago(redes: RedX402[], cuerpo: Record<string, unknown>): R
  * Es un remiendo de interoperabilidad, no un diseño. Se quita el día que el
  * facilitador devuelva `resource`; la prueba de que hace falta es pedirle
  * `/accepts` y mirar si el campo está.
+ *
+ * Exportada porque `x402MuroDurable.ts#muroDurableDe` construye sus
+ * `x402Handlers` EXACTAMENTE como acá abajo (brief DX402 punto 2, Parte 3) —
+ * duplicar este remiendo en dos archivos es el lugar exacto donde diverge
+ * sin que nadie lo note.
  */
-function fetchDelFacilitador(
+export function fetchDelFacilitador(
   redes: RedX402[],
   perfil: PerfilFacilitador,
   recursoDe: () => string,
@@ -297,6 +408,35 @@ export function gruposPorFacilitador(cfg: ConfigX402): { url: string; redes: Red
 }
 
 /**
+ * `gruposPorFacilitador` filtrado a los grupos que tienen algo que settlear.
+ *
+ * Un grupo sin accepts para su red (`propios.length === 0`) no tiene nada que
+ * settlear: construirle igual un handler con `deriveCapabilities([])`/
+ * `acceptsOverride: []` sería anunciar un facilitador que nunca puede
+ * matchear nada. Hoy esto NUNCA filtra nada para una ruta que pase por
+ * `muroDe`: todas cobran en todas las redes de `cfg.redes`, así que cada
+ * grupo siempre tiene al menos un accept propio (ver el describe
+ * "gruposConPropios" en `x402Muro.test.ts`, que lo prueba directo en vez de
+ * depender de que algún día deje de ser cierto). SÍ filtra para
+ * `/verificar/durable` (`muroDurableDe`, `x402MuroDurable.ts`): esa ruta
+ * restringe `accepts` a Avalanche vía `REDES_POR_RUTA`, así que el grupo de
+ * cualquier otro facilitador (Base vía CDP, por ejemplo) llega acá con
+ * `propios: []` y se descarta. Compartir la función es lo que evita que
+ * `muroDe` y `muroDurableDe` diverjan en este filtro sin que nadie lo note.
+ */
+export function gruposConPropios(
+  cfg: ConfigX402,
+  accepts: ReturnType<typeof requisitosDePago>,
+): { url: string; redes: RedX402[]; propios: ReturnType<typeof requisitosDePago> }[] {
+  return gruposPorFacilitador(cfg)
+    .map(({ url, redes }) => {
+      const caip2 = new Set(redes.map((r) => r.caip2));
+      return { url, redes, propios: accepts.filter((a) => caip2.has(a.network)) };
+    })
+    .filter((g) => g.propios.length > 0);
+}
+
+/**
  * Middleware real para una ruta, resuelto una sola vez y cacheado.
  *
  * UN handler por facilitador, no uno global: producción cobra Base por CDP
@@ -312,27 +452,26 @@ function muroDe(cfg: ConfigX402, precio: string, publica: string): Promise<Reque
       // acá era decidir "cuántas redes hay" en el sitio equivocado.
       const accepts = requisitosDePago(cfg, precio);
 
-      const handlers = gruposPorFacilitador(cfg).map(({ url, redes }) => {
-        const caip2 = new Set(redes.map((r) => r.caip2));
-        const propios = accepts.filter((a) => caip2.has(a.network));
-        return createHTTPFacilitatorHandler(url, {
-          capabilities: common.deriveCapabilities(propios),
-          schemes: common.deriveSchemes(propios),
-          // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
-          // manda al facilitador lo que realmente configuramos.
-          acceptsOverride: propios.map(common.relaxedRequirementsToV2),
-          // La extensión del Bazaar va SOLO al perfil que la entiende: mandarla
-          // a Ultravioleta no rompe nada, pero registrar la liquidación como
-          // "con extensión declarada" cuando ningún catálogo la va a leer
-          // ensucia la única señal que existe de si el Bazaar nos aceptó.
-          fetch: fetchDelFacilitador(
-            redes,
-            perfilFacilitador(url),
-            () => `${cfg.origenPublico}${publica}`,
-            perfilFacilitador(url).autenticaCdp ? extensionBazaar(precio) : undefined,
-          ),
-        });
-      });
+      const handlers = gruposConPropios(cfg, accepts)
+        .map(({ url, redes, propios }) =>
+          createHTTPFacilitatorHandler(url, {
+            capabilities: common.deriveCapabilities(propios),
+            schemes: common.deriveSchemes(propios),
+            // `acceptsToPricing` no arrastra `extra` ni `mimeType`; el override
+            // manda al facilitador lo que realmente configuramos.
+            acceptsOverride: propios.map(common.relaxedRequirementsToV2),
+            // La extensión del Bazaar va SOLO al perfil que la entiende: mandarla
+            // a Ultravioleta no rompe nada, pero registrar la liquidación como
+            // "con extensión declarada" cuando ningún catálogo la va a leer
+            // ensucia la única señal que existe de si el Bazaar nos aceptó.
+            fetch: fetchDelFacilitador(
+              redes,
+              perfilFacilitador(url),
+              () => `${cfg.origenPublico}${publica}`,
+              perfilFacilitador(url).autenticaCdp ? extensionBazaar(precio) : undefined,
+            ),
+          })
+        );
 
       return createMiddleware({
         x402Handlers: handlers,
@@ -348,7 +487,7 @@ export function montarMuroX402(app: Express): void {
   const cfg = leerConfigX402();
   if (!cfg.activo) return;
 
-  const problemas = problemasDeConfig(cfg);
+  const problemas = problemasDeConfig(cfg, sobreConfigurado());
   // Una ruta que cobra sin esquema de validacion previa vuelve a abrir el
   // agujero del "typo pagado". Se revienta al arrancar, no con el primer
   // comprador.
@@ -389,11 +528,15 @@ export function montarMuroX402(app: Express): void {
 
     // ── GET/HEAD: desafío de descubrimiento, nunca una venta ────────────────
     if (req.method === "GET" || req.method === "HEAD") {
-      // Un GET con `X-PAYMENT` NO se liquida. Es la ley `cobrar-antes-de-servir`
-      // en su forma más cruda: por GET no hay cuerpo que procesar, así que
-      // aceptar el pago sería cobrar por algo que no podemos entregar, y el
-      // pago x402 es inmediato y final — no habría cómo devolverlo.
-      if (req.headers["x-payment"]) {
+      // Un GET con `X-PAYMENT` (v1) o `PAYMENT-SIGNATURE` (v2) NO se liquida.
+      // Es la ley `cobrar-antes-de-servir` en su forma más cruda: por GET no
+      // hay cuerpo que procesar, así que aceptar el pago sería cobrar por
+      // algo que no podemos entregar, y el pago x402 es inmediato y final —
+      // no habría cómo devolverlo. La guarda miraba solo v1: un pago v2 por
+      // GET (el comprador previsto usa `@x402/fetch` v2) recibía otro 402 y
+      // el cliente reintentaba firmando, nunca el 405 que explica qué pasó
+      // (hallazgo del refutador `protocolo`, ronda 3).
+      if (req.headers["x-payment"] || req.headers["payment-signature"]) {
         return res.status(405).set("Allow", "POST").json({
           error: "wrong_method",
           mensaje:
@@ -403,7 +546,11 @@ export function montarMuroX402(app: Express): void {
             "Reintentá el POST con la misma autorización.",
         });
       }
-      return res.status(402).set("Allow", "POST").json(desafioDeDescubrimiento(cfg, precio, req.path));
+      const desafio = desafioDeDescubrimiento(cfg, precio, req.path);
+      res.status(402).set("Allow", "POST");
+      const paymentRequired = paymentRequiredHeaderDeDesafio(desafio, cfg, req.path);
+      if (paymentRequired) res.set("PAYMENT-REQUIRED", paymentRequired);
+      return res.json(desafio);
     }
 
     if (req.method !== "POST") return next();
@@ -427,7 +574,13 @@ export function montarMuroX402(app: Express): void {
 
     let m = cache.get(req.path);
     if (!m) {
-      m = muroDe(cfg, precio, req.path);
+      // `/verificar/durable` no es un wrapper más: vende un SOBRE sellado y
+      // anclado, con su propio orden de fases (decisión 4 del brief DX402
+      // punto 2) — `muroDurableDe` es el único que lo sabe hacer.
+      // `problemasDeConfig` ya reventó el arranque si esta ruta está
+      // montada sin `NOMICHECK_SOBRE_SIGNING_KEY_PEM`, así que acá siempre
+      // hay llave con la que sellar.
+      m = precio === "/verificar/durable" ? muroDurableDe(cfg, req.path) : muroDe(cfg, precio, req.path);
       cache.set(req.path, m);
     }
     m.then((muro) => muro(req, res, next)).catch((err: unknown) => {
