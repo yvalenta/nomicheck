@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { hexToBytes } from "viem";
-import { payerKeyFromEvmSignature, type AnchorOptions } from "uvd-x402-sdk";
+import { payerKeyFromEvmSignature, contentHash, type AnchorOptions } from "uvd-x402-sdk";
 import {
   programarAnclaje,
   tareasEnColaParaTest,
@@ -20,7 +20,8 @@ import {
   normalizarResultadoAnchor,
   envejecerUltimoFalloParaTest,
   type RelojDeReintentos,
-  enMedioAbierto,
+  reservarMedioAbierto,
+  liberarIntentoMedioAbierto,
   sondearFacilitador,
   recuperarEvidenciaAnclada,
 } from "../anclajeDiferido.js";
@@ -272,19 +273,52 @@ describe("programarAnclaje", () => {
     expect(tareasEnColaParaTest()).toBe(0); // 200 sin `skipped` = éxito, sale de la cola
   });
 
-  it("un 409 con `already_anchored` cuenta como éxito, no como fallo", async () => {
+  // Refutador de cierre, ronda 3: la cola aceptaba cualquier 409 como "el
+  // facilitador volvió" sin cruzar el contentHash, y el comprador (que tiene
+  // el texto plano desde t=0) podía anclar bajo nuestro paymentId en la
+  // ventana de 30/120/300 s. Ahora el 409 se cruza con GET /dx402/evidence.
+  it("un 409 con `already_anchored` se cruza con GET /dx402/evidence: registro PROPIO = éxito", async () => {
     const payerKey = await claveDePagadorValida();
-    const fetchDoble = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 })
-    );
+    const body = new TextEncoder().encode("{}");
+    const fetchDoble = vi.fn(async (input: unknown) => {
+      if (String(input).includes("/dx402/evidence/")) {
+        return new Response(JSON.stringify({ pointer: "s3+https://f/e/propio", contentHash: contentHash(body) }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 });
+    });
     const reloj = relojManual();
 
-    programarAnclaje("pago-3", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    programarAnclaje("pago-3", body, opciones(fetchDoble as unknown as typeof fetch, payerKey), reloj);
     await reloj.dispararProximo();
 
     expect(tareasEnColaParaTest()).toBe(0);
     expect(lineas.some((l) => l.mensaje === "anclaje diferido logrado")).toBe(true);
+  });
+
+  it("un 409 cuyo registro es AJENO (otro contentHash) no es éxito: sale de la cola con error y NO cierra el corte", async () => {
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    expect(anclajeDisponible()).toBe(false);
+    const payerKey = await claveDePagadorValida();
+    const body = new TextEncoder().encode("{}");
+    const fetchDoble = vi.fn(async (input: unknown) => {
+      if (String(input).includes("/dx402/evidence/")) {
+        return new Response(JSON.stringify({ pointer: "s3+https://f/e/ajeno", contentHash: "0x" + "ff".repeat(32) }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 });
+    });
+    const reloj = relojManual();
+
+    programarAnclaje("pago-4", body, opciones(fetchDoble as unknown as typeof fetch, payerKey), reloj);
+    await reloj.dispararProximo();
+
+    expect(tareasEnColaParaTest()).toBe(0);
+    expect(lineas.some((l) => l.mensaje === "anclaje diferido logrado")).toBe(false);
+    expect(lineas.some((l) => l.nivel === "error" && l.mensaje.includes("sin registro propio"))).toBe(true);
+    expect(anclajeDisponible()).toBe(false);
   });
 
   it("agota sus tres reintentos y sale de la cola logueando el error, sin loguear éxito", async () => {
@@ -391,17 +425,55 @@ describe("programarAnclaje dice si quedó en cola", () => {
   });
 });
 
-describe("enMedioAbierto", () => {
-  it("false cerrado, false recién abierto, true pasada la ventana, false tras un reset", () => {
-    expect(enMedioAbierto()).toBe(false);
+describe("reservarMedioAbierto (single-flight) y la ventana por política", () => {
+  // Refutador de cierre, ronda 3: entre `anclajeDisponible()` y `capture()`
+  // hay varios await, y N ventas concurrentes pasada la ventana veían todas
+  // el corte disponible y cobraban todas. Ahora la ventana la usa UNA.
+  it("cerrado → 'cerrado'; abierto y pasada la ventana → una sola reserva, las demás 'ocupado'; registrar o liberar la sueltan", () => {
+    expect(reservarMedioAbierto()).toBe("cerrado");
     for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
     expect(anclajeDisponible()).toBe(false);
-    expect(enMedioAbierto()).toBe(false);
     envejecerUltimoFalloParaTest(300_000);
     expect(anclajeDisponible()).toBe(true);
-    expect(enMedioAbierto()).toBe(true);
+    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    expect(reservarMedioAbierto()).toBe("ocupado");
+    expect(reservarMedioAbierto()).toBe("ocupado");
+    // La venta/sonda que la usaba falló: libera y rearma la ventana.
+    registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    // La request murió sin informar: el `finally` del adaptador libera.
+    liberarIntentoMedioAbierto();
+    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    // Un anclaje que prende cierra el corte del todo.
     registrarResultadoAnchor({ v: 1, paymentId: "p", pointer: "s3+https://x/y" });
-    expect(enMedioAbierto()).toBe(false);
+    expect(reservarMedioAbierto()).toBe("cerrado");
+  });
+
+  // Refutador de cierre, ronda 3: la sonda gratis mira /dx402/stats, que
+  // sigue en 200 cuando /dx402/anchor rechaza por POLÍTICA (402
+  // dx402_proof_rejected en fase 2, 422 backend). Para eso no hay sonda
+  // gratis: lo que acota el costo es una ventana de una hora, no de 300 s.
+  it("un rechazo por política del anchor (402/422) abre una ventana de una hora, no de cinco minutos", () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
+    }
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(3_300_000);
+    expect(anclajeDisponible()).toBe(true);
+    // Un 422 de backend cuenta igual que política; una caída (503) vuelve a 300 s.
+    resetContadorFallosParaTest();
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 422, error: "dx402_backend_unavailable" });
+    }
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(false);
+    resetContadorFallosParaTest();
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
   });
 });
 

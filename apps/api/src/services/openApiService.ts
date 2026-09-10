@@ -251,7 +251,11 @@ export function construirOpenApi(): Record<string, unknown> {
               "operations return. Verify it with the envelope public key from GET " +
               "/verificar/durable/sobre-publickey, never with GET /publickey. Carries " +
               "X-Durable-Evidence with the anchor receipt (or a `skipped` reason when " +
-              "anchoring failed and was deferred; the envelope is still delivered either way).",
+              "anchoring failed; the envelope is still delivered either way). A skipped header " +
+              "also carries `paymentId`, `contentHash` and `deferred` (true when this server will " +
+              "retry the anchor in the background) -- note the reference SDK's parseEvidenceHeader " +
+              "throws EvidenceSkipped(reason) before reading them, so decode the base64url header " +
+              "yourself to see them, then poll GET {facilitator}/dx402/evidence/{paymentId}.",
           },
           "400": { description: "`invalid_input` -- the body does not meet the v1 contract." },
           "402": {

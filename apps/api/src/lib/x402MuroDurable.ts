@@ -59,7 +59,8 @@ import {
   esExitoOYaAnclado,
   registrarResultadoAnchor,
   anclajeDisponible,
-  enMedioAbierto,
+  reservarMedioAbierto,
+  liberarIntentoMedioAbierto,
   sondearFacilitador,
   recuperarEvidenciaAnclada,
   normalizarResultadoAnchor,
@@ -329,6 +330,11 @@ export function crearMiddlewareDurable(
     // lo escribe, no el `if (!cap.success)` de más abajo (ahí la respuesta
     // ya salió).
     let cobroIntentado = false;
+    // `true` si ESTA request reservó la ventana del medio-abierto
+    // (`reservarMedioAbierto`): el `finally` de abajo la libera aunque la
+    // request muera antes de informar un resultado (single-flight sin
+    // deadlock — hallazgo del refutador de cierre, ronda 3).
+    let reservoMedioAbierto = false;
     const reqArgs: ArgsDurable = {
       x402Handlers: handlersFiltrados,
       pricing,
@@ -363,8 +369,9 @@ export function crearMiddlewareDurable(
             error: "settle_failed",
             mensaje:
               "El facilitador reportó la liquidación como fallida (el motivo viene en PAYMENT-RESPONSE). " +
-              "No se entregó el recurso. Antes de volver a pagar, mirá ese header y el tx: si la " +
-              "autorización llegó a liquidarse, un pago nuevo cobra dos veces.",
+              "No se entregó el recurso. Si PAYMENT-RESPONSE no trae `transaction`, nada se liquidó y " +
+              "podés pagar de nuevo con una autorización nueva; si trae una, mirá ese tx antes: un " +
+              "pago nuevo sobre una autorización que sí liquidó cobra dos veces.",
           });
         }
         let cuerpo = body as Record<string, unknown> | undefined;
@@ -675,13 +682,21 @@ export function crearMiddlewareDurable(
           return undefined;
         };
         if (!anclajeDisponible()) return noDisponible();
-        // Medio-abierto: la prueba de que el facilitador volvió es un GET
-        // gratis a `/dx402/stats`, no la venta del siguiente comprador. Antes
-        // el que caía en la ventana pagaba 0,02 por ser la sonda, una venta
-        // cobrada sin evidencia cada 300 s mientras el facilitador siguiera
-        // caído (hallazgo del refutador `dinero`, ronda 3). Si la sonda
-        // falla, cuenta como fallo: reabre la ventana sin cobrar.
-        if (enMedioAbierto()) {
+        // Medio-abierto, UNA venta a la vez (`reservarMedioAbierto`: las
+        // demás que lleguen mientras esta lo usa reciben 424 sin cobrar).
+        // La prueba de que el facilitador volvió de una CAÍDA es un GET
+        // gratis a `/dx402/stats`, no la venta del siguiente comprador (antes
+        // el que caía en la ventana pagaba 0,02 por ser la sonda — hallazgo
+        // del refutador `dinero`, ronda 3). Si la sonda falla, cuenta como
+        // fallo y rearma la ventana sin cobrar. Lo que la sonda NO ve es un
+        // rechazo por POLÍTICA del anchor (402/422 con stats en 200): para
+        // eso `anclajeDisponible` usa una ventana de una hora
+        // (`VENTANA_MEDIO_ABIERTO_POLITICA_MS`), y esta venta única es la
+        // sonda cara — no hay una gratis (refutador de cierre, ronda 3).
+        const admision = reservarMedioAbierto();
+        if (admision === "ocupado") return noDisponible();
+        if (admision === "medio-abierto") {
+          reservoMedioAbierto = true;
           const vivo = await sondearFacilitador(opcionesBase.facilitator, fetchConTimeout(3000));
           if (!vivo) {
             registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", error: "sonda_medio_abierto" });
@@ -755,28 +770,38 @@ export function crearMiddlewareDurable(
         // TypeError DESPUÉS de `capture()` (el pago ya liquidó), y un
         // `123`/`[]`/`"ok"` se cuela como éxito sin haber anclado nada
         // (reparación DX402 punto 2 ronda 2, hallazgo del refutador).
-        let resultado = normalizarResultadoAnchor(await anchorEvidence(cuerpo, opcionesAnchor));
+        // Un 409 `dx402_already_anchored` se RESUELVE antes de registrarse:
+        // `recuperarEvidenciaAnclada` distingue si el registro es el nuestro
+        // (pointer real al header, éxito) o AJENO / irrecuperable (`skipped`
+        // con `paymentId` + `contentHash`, y `error: "registro_ajeno"` si se
+        // supo). Registrar el 409 crudo reseteaba el cortacircuitos ANTES de
+        // saber que la venta quedó sin evidencia propia (hallazgo del
+        // refutador de cierre, ronda 3). Con registro de por medio no se
+        // reintenta ni se difiere: un anclaje provisional nunca lo supera.
+        const resolver = async (
+          crudo: unknown
+        ): Promise<{ resultado: Record<string, unknown>; huboRegistro: boolean }> => {
+          const r = normalizarResultadoAnchor(crudo);
+          if (typeof r.skipped !== "string" || !esExitoOYaAnclado(r)) return { resultado: r, huboRegistro: false };
+          return {
+            resultado: await recuperarEvidenciaAnclada(
+              opcionesBase.facilitator,
+              idDePago,
+              contentHash(cuerpo),
+              fetchConTimeout(3000)
+            ),
+            huboRegistro: true,
+          };
+        };
+        let { resultado, huboRegistro } = await resolver(await anchorEvidence(cuerpo, opcionesAnchor));
         registrarResultadoAnchor(resultado);
         let diferido = false;
-        if (!esExitoOYaAnclado(resultado)) {
-          resultado = normalizarResultadoAnchor(await anchorEvidence(cuerpo, opcionesAnchor));
+        if (!esExitoOYaAnclado(resultado) && !huboRegistro) {
+          ({ resultado, huboRegistro } = await resolver(await anchorEvidence(cuerpo, opcionesAnchor)));
           registrarResultadoAnchor(resultado);
-          if (!esExitoOYaAnclado(resultado)) {
+          if (!esExitoOYaAnclado(resultado) && !huboRegistro) {
             diferido = programarAnclaje(idDePago, cuerpo, opcionesAnchor);
           }
-        }
-        // 409 `dx402_already_anchored` en cualquiera de los dos intentos: el
-        // facilitador ya tiene un registro bajo este `paymentId`.
-        // `recuperarEvidenciaAnclada` distingue si es el nuestro (el pointer
-        // real va al header) o AJENO (`skipped` con `error: "registro_ajeno"`
-        // y un log de error) — ver su comentario en `anclajeDiferido.ts`.
-        if (typeof resultado.skipped === "string" && esExitoOYaAnclado(resultado)) {
-          resultado = await recuperarEvidenciaAnclada(
-            opcionesBase.facilitator,
-            idDePago,
-            contentHash(cuerpo),
-            fetchConTimeout(3000)
-          );
         }
 
         // El sobre YA firmó `habeasData.retencionExterna` con
@@ -825,7 +850,9 @@ export function crearMiddlewareDurable(
         return undefined;
       },
     };
-    return common.handleMiddlewareRequest(reqArgs);
+    return common.handleMiddlewareRequest(reqArgs).finally(() => {
+      if (reservoMedioAbierto) liberarIntentoMedioAbierto();
+    });
   };
 }
 

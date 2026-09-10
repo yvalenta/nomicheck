@@ -990,6 +990,7 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
         )
     );
     const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
+    const registrarSpy = vi.spyOn(anclajeDiferidoModule, "registrarResultadoAnchor");
     const lineas: LineaDeRegistro[] = [];
     usarEmisor((l) => lineas.push(l));
 
@@ -1014,6 +1015,10 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
     // reintenta (nunca lo va a superar) y sí se grita.
     expect(programarSpy).not.toHaveBeenCalled();
     expect(lineas.some((l) => l.nivel === "error" && l.mensaje.includes("AJENO"))).toBe(true);
+    // El corte se entera DESPUÉS de resolver el 409, y de que la venta quedó
+    // sin evidencia propia -- no del 409 crudo como éxito (refutador de
+    // cierre, ronda 3).
+    expect(registrarSpy.mock.calls.at(-1)?.[0]).toMatchObject({ skipped: "already_anchored", error: "registro_ajeno" });
   });
 
   it("si GET /dx402/evidence no contesta, se degrada a already_anchored con paymentId + contentHash, sin reintento", async () => {
@@ -1403,6 +1408,68 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     // El anclaje real que sí prendió cierra el corte del todo, no solo para
     // esta venta.
     expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+  });
+
+  // Refutador de cierre, ronda 3: sin single-flight, 20 POST concurrentes
+  // pasada la ventana veían todos el corte disponible, sondeaban todos y
+  // cobraban todos. Ahora la ventana la usa UNA venta; las demás reciben
+  // 424 sin cobrar mientras esa no informe su resultado.
+  it("single-flight: en medio-abierto entra UNA venta; las concurrentes reciben 424 sin cobrar", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+
+    let soltar: () => void = () => {};
+    const bloqueo = new Promise<void>((r) => {
+      soltar = r;
+    });
+    let anchors = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: { body?: string }) => {
+        const url = String(input);
+        if (url.endsWith("/dx402/stats")) return new Response("{}", { status: 200 });
+        if (url.endsWith("/dx402/anchor")) {
+          anchors += 1;
+          // La venta que reservó la ventana queda acá mientras llegan las otras.
+          await bloqueo;
+          const enviado = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          return new Response(
+            JSON.stringify({ v: 1, paymentId: enviado.paymentId, pointer: "s3+https://f/e/1", contentHash: enviado.contentHash }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return fetchOriginal(input as never, init as never);
+      })
+    );
+    const settle = vi.fn(
+      async (req: Record<string, unknown>, pay: Record<string, unknown>) => ({
+        success: true,
+        transaction: `0x${randomBytes(32).toString("hex")}`,
+        network: req.network,
+        payer: (pay.payload as CargaDePago).authorization.from,
+      })
+    );
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const base = await construirApp(handlerFalso({ handleSettle: settle }));
+    const cargas = await Promise.all([1, 2, 3, 4, 5].map(() => firmarCarga(pagador)));
+
+    const enVuelo = cargas.map((c) => postFirmado(base, batchChico(), c));
+    // Esperar a que la que reservó llegue al anchor (bloqueado) y las demás
+    // choquen con "ocupado".
+    for (let i = 0; i < 400 && anchors < 1; i++) await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 50));
+    soltar();
+    const respuestas = await Promise.all(enVuelo);
+
+    expect(respuestas.map((r) => r.status).sort()).toEqual([200, 424, 424, 424, 424]);
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(anchors).toBe(1);
+    // La única venta ancló: el corte se cierra del todo.
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+    expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("cerrado");
   });
 });
 

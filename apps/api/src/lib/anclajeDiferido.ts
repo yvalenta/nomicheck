@@ -16,7 +16,7 @@
 // aceptable: el anchor es EVIDENCIA ADICIONAL sobre un pago que ya liquidó,
 // no el pago en sí. El comprador se queda con el sobre firmado que ya tiene;
 // solo falta que también quede hospedado.
-import { anchorEvidence, type AnchorOptions } from "uvd-x402-sdk";
+import { anchorEvidence, contentHash, type AnchorOptions } from "uvd-x402-sdk";
 import { registro } from "./registro.js";
 
 /** Tope de tareas en cola — sin esto un facilitador caído de forma sostenida
@@ -35,6 +35,9 @@ interface TareaAnclaje {
 }
 
 const cola = new Map<string, TareaAnclaje>();
+
+/** El mismo default que `anchorEvidence` del SDK cuando `opts.facilitator` falta. */
+const FACILITADOR_POR_DEFECTO = "https://facilitator.ultravioletadao.xyz";
 
 /** El reloj que agenda los reintentos — inyectable para que un test no tenga
  * que esperar minutos reales. Referencia el `setTimeout` GLOBAL en cada
@@ -175,18 +178,54 @@ let ultimoFalloMs = 0;
  */
 const VENTANA_MEDIO_ABIERTO_MS = 300_000;
 
+/**
+ * Ventana del medio-abierto cuando el último fallo fue de POLÍTICA del
+ * facilitador (402 `dx402_proof_rejected` — fase 2 de `DX402_REQUIRE_PROOF` —
+ * o 422 `dx402_backend_unavailable` / `dx402_signature_not_verified`), no
+ * una caída. Es la razón de ser del cortacircuitos (ver
+ * `UMBRAL_FALLOS_CONSECUTIVOS`) y NO se arregla sola en cinco minutos:
+ * `/dx402/stats` sigue en 200 mientras `/dx402/anchor` rechaza, así que la
+ * sonda gratis de `sondearFacilitador` no la ve (hallazgo del refutador de
+ * cierre, ronda 3). No hay sonda gratis posible para el anchor (exige un
+ * pago liquidado de verdad), así que lo único que acota el costo es dejar
+ * pasar UNA venta por hora — no una cada 300 s — mientras la política siga
+ * cambiada; un anclaje que sí prende (esa venta, o la cola diferida) cierra
+ * el corte del todo.
+ */
+const VENTANA_MEDIO_ABIERTO_POLITICA_MS = 3_600_000;
+
+/** `true` cuando el último fallo que subió el contador fue un rechazo por
+ * política (402/422 del anchor), no una caída (5xx, timeout, red). */
+let ultimoFalloDePolitica = false;
+
+/**
+ * Single-flight del medio-abierto: mientras UNA venta esté usando la ventana
+ * (desde que la reserva hasta que su anclaje informa el resultado o la
+ * request termina), ninguna otra entra. Sin esto, entre `anclajeDisponible()`
+ * y `capture()` hay varios `await`, y 20 POST concurrentes que llegaran
+ * pasada la ventana verían todos el corte "disponible", sondearían todos y
+ * cobrarían todos: N ventas sin evidencia por ventana, no una (hallazgo del
+ * refutador de cierre, ronda 3).
+ */
+let intentoMedioAbiertoEnCurso = false;
+
 /** Actualiza el contador con el resultado de un anclaje REAL de una venta
  * NUEVA (el inmediato + su único reintento en `x402MuroDurable.ts` — nunca
  * el de la medición previa al cobro, que usa un `fetch` que no sale a la
  * red, y nunca los reintentos de `intentarAhora`, que NO cuentan contra este
  * contador — ver el comentario ahí abajo sobre por qué). */
 export function registrarResultadoAnchor(resultado: Record<string, unknown>): void {
+  // Cualquier resultado real libera la ventana del medio-abierto, la haya
+  // usado esta venta o no (liberar dos veces es inocuo).
+  intentoMedioAbiertoEnCurso = false;
   if (esExitoOYaAnclado(resultado)) {
     fallosConsecutivos = 0;
+    ultimoFalloDePolitica = false;
     return;
   }
   fallosConsecutivos += 1;
   ultimoFalloMs = Date.now();
+  ultimoFalloDePolitica = resultado.status === 402 || resultado.status === 422;
 }
 
 /**
@@ -202,7 +241,31 @@ export function registrarResultadoAnchor(resultado: Record<string, unknown>): vo
  */
 export function anclajeDisponible(): boolean {
   if (fallosConsecutivos < UMBRAL_FALLOS_CONSECUTIVOS) return true;
-  return Date.now() - ultimoFalloMs >= VENTANA_MEDIO_ABIERTO_MS;
+  const ventana = ultimoFalloDePolitica ? VENTANA_MEDIO_ABIERTO_POLITICA_MS : VENTANA_MEDIO_ABIERTO_MS;
+  return Date.now() - ultimoFalloMs >= ventana;
+}
+
+/**
+ * Reserva la ventana del medio-abierto para ESTA venta, si corresponde.
+ * `"cerrado"`: el corte está cerrado, venta normal. `"medio-abierto"`: el
+ * corte estaba abierto, la ventana pasó y esta venta es LA que la usa (el
+ * llamador sondea al facilitador antes de cobrar, y libera con
+ * `registrarResultadoAnchor` o `liberarIntentoMedioAbierto`). `"ocupado"`:
+ * otra venta ya está usando la ventana — no se cobra. Se llama DESPUÉS de
+ * `anclajeDisponible()` (que sigue siendo la guarda, y la que un test puede
+ * espiar); acá solo se decide quién de los que pasaron esa guarda entra.
+ */
+export function reservarMedioAbierto(): "cerrado" | "medio-abierto" | "ocupado" {
+  if (fallosConsecutivos < UMBRAL_FALLOS_CONSECUTIVOS) return "cerrado";
+  if (intentoMedioAbiertoEnCurso) return "ocupado";
+  intentoMedioAbiertoEnCurso = true;
+  return "medio-abierto";
+}
+
+/** Libera la ventana del medio-abierto sin registrar resultado — para el
+ * `finally` de la request que la reservó, por si murió antes de informar. */
+export function liberarIntentoMedioAbierto(): void {
+  intentoMedioAbiertoEnCurso = false;
 }
 
 /** Solo para tests: vuelve el contador (y el reloj del medio-abierto) a
@@ -210,6 +273,8 @@ export function anclajeDisponible(): boolean {
 export function resetContadorFallosParaTest(): void {
   fallosConsecutivos = 0;
   ultimoFalloMs = 0;
+  ultimoFalloDePolitica = false;
+  intentoMedioAbiertoEnCurso = false;
 }
 
 /** Solo para tests: mueve `ultimoFalloMs` al pasado en `ms`, para probar el
@@ -255,19 +320,6 @@ export function programarAnclaje(
 }
 
 /**
- * `true` solo en la ventana de medio-abierto: el corte se abrió (umbral
- * agotado) y ya pasó `VENTANA_MEDIO_ABIERTO_MS` desde el último fallo.
- * `anclajeDisponible()` también da `true` ahí — esta función existe para que
- * el llamador sepa que está en la ventana y SONDEE al facilitador antes de
- * cobrar: sin la sonda, el comprador que caía en la ventana pagaba 0,02 por
- * ser la prueba de que el facilitador seguía caído, una venta cobrada sin
- * evidencia cada 300 s (hallazgo del refutador `dinero`, ronda 3).
- */
-export function enMedioAbierto(): boolean {
-  return fallosConsecutivos >= UMBRAL_FALLOS_CONSECUTIVOS && anclajeDisponible();
-}
-
-/**
  * Sonda GRATIS del facilitador para la ventana de medio-abierto: un GET a
  * `/dx402/stats` (solo lectura, sin pago) con el `fetch` con timeout del
  * llamador. `true` si contesta 2xx. Nunca lanza.
@@ -300,6 +352,17 @@ export async function sondearFacilitador(facilitator: string, doFetch: typeof fe
  * para que el comprador vuelva a preguntar (hallazgo del refutador
  * `protocolo`, ronda 3 — el comentario anterior afirmaba que no existía un
  * GET para recuperar el pointer).
+ *
+ * LÍMITE CONOCIDO (refutador de cierre, ronda 3): `contentHash` igual prueba
+ * que el registro tiene NUESTRO texto plano, no que su blob esté sellado a
+ * la llave del pagador — el 200 de `/dx402/evidence` no expone `payer`, así
+ * que no hay otro cruce posible. El único actor que puede producir ese
+ * registro es quien tiene el texto plano: el propio pagador (lo recibió en
+ * t=0) o nosotros. Un pagador que ancle su propia copia antes que nosotros
+ * recibe en el header el pointer de su propio registro — nada que no
+ * pudiera abrir ya. El resultado recuperado se marca `recuperadoPorGet` en
+ * el registro del vendedor, nunca en el header (el vocabulario DX402 no lo
+ * tiene).
  */
 export async function recuperarEvidenciaAnclada(
   facilitator: string,
@@ -367,7 +430,32 @@ function agendar(paymentId: string, reloj: RelojDeReintentos): void {
 async function intentarAhora(paymentId: string, reloj: RelojDeReintentos): Promise<void> {
   const tarea = cola.get(paymentId);
   if (!tarea) return;
-  const resultado = normalizarResultadoAnchor(await anchorEvidence(tarea.body, tarea.opts));
+  let resultado = normalizarResultadoAnchor(await anchorEvidence(tarea.body, tarea.opts));
+  if (typeof resultado.skipped === "string" && esExitoOYaAnclado(resultado)) {
+    // 409: alguien ancló bajo este `paymentId` en la ventana de 30/120/300 s.
+    // El comprador tiene el texto plano desde t=0 y el tx es público, así
+    // que "alguien" puede no ser el facilitador que volvió: se cruza el
+    // `contentHash` igual que el camino inmediato (hallazgo del refutador de
+    // cierre, ronda 3). Sea propio o ajeno, reintentar no lo supera: la
+    // tarea sale de la cola.
+    resultado = await recuperarEvidenciaAnclada(
+      tarea.opts.facilitator ?? FACILITADOR_POR_DEFECTO,
+      paymentId,
+      contentHash(tarea.body),
+      tarea.opts.fetch ?? fetch
+    );
+    cola.delete(paymentId);
+    if (esExitoOYaAnclado(resultado)) {
+      fallosConsecutivos = 0;
+      registro.info("x402", "anclaje diferido logrado", { paymentId, resultado, recuperadoPorGet: true });
+    } else {
+      registro.error("x402", "anclaje diferido: 409 sin registro propio (ajeno o GET caído); se abandona", undefined, {
+        paymentId,
+        resultado,
+      });
+    }
+    return;
+  }
   if (esExitoOYaAnclado(resultado)) {
     // Un anclaje que SÍ prende es la señal más fuerte de que el facilitador
     // volvió: cierra el cortacircuitos igual que `registrarResultadoAnchor`
