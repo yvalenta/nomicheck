@@ -223,6 +223,19 @@ let intentoMedioAbiertoEnCurso = false;
 let reservaDesdeMs = 0;
 
 /**
+ * Identidad de la reserva vigente: sube cada vez que se toma una. Existe
+ * porque una reserva VENCIDA (`RESERVA_MAX_MS`) y reemplazada por otra venta
+ * sigue teniendo una request viva detrás — un `/settle` colgado que undici
+ * corta a ~300 s — y cuando esa request por fin termina, su `finally`
+ * llamaba a `liberarIntentoMedioAbierto()` sin saber de quién era la
+ * reserva: soltaba la de la venta NUEVA, todavía en vuelo, y una tercera
+ * entraba al medio-abierto. Dos ventas en la ventana en vez de una
+ * (sesión fría 2026-09-10, leyendo quién libera la reserva). Con identidad,
+ * solo la request que tomó la reserva vigente puede liberarla.
+ */
+let reservaVigente = 0;
+
+/**
  * Una reserva más vieja que esto se considera vencida y otra venta puede
  * tomarla: `capture()` no tiene timeout propio (`fetch` pelado en
  * `x402Muro.ts`), y un `/settle` colgado dejaba la reserva tomada hasta que
@@ -240,7 +253,14 @@ const RESERVA_MAX_MS = 60_000;
  * contador — ver el comentario ahí abajo sobre por qué). */
 export function registrarResultadoAnchor(resultado: Record<string, unknown>): void {
   // Cualquier resultado real libera la ventana del medio-abierto, la haya
-  // usado esta venta o no (liberar dos veces es inocuo).
+  // usado esta venta o no — y acá NO hace falta la identidad de la reserva
+  // (a diferencia de `liberarIntentoMedioAbierto`): después de un resultado
+  // real la bandera deja de ser la guarda, porque lo que sigue o cierra el
+  // corte (éxito: `fallosConsecutivos = 0`, todo pasa como "cerrado") o
+  // rearma la ventana (fallo, o 409 neutro con el corte abierto:
+  // `ultimoFalloMs = ahora`, `anclajeDisponible()` vuelve a ser `false`).
+  // La bandera solo decide cuando la request muere SIN resultado, y ese
+  // camino es el del `finally`, que sí lleva identidad.
   intentoMedioAbiertoEnCurso = false;
   if (esExitoOYaAnclado(resultado)) {
     fallosConsecutivos = 0;
@@ -281,27 +301,41 @@ export function anclajeDisponible(): boolean {
   return Date.now() - ultimoFalloMs >= ventana;
 }
 
+/** Lo que decide `reservarMedioAbierto` para una venta. Solo
+ * `"medio-abierto"` trae `reserva`: la identidad que el `finally` de esa
+ * request devuelve a `liberarIntentoMedioAbierto`. */
+export type AdmisionMedioAbierto =
+  | { admision: "cerrado" }
+  | { admision: "ocupado" }
+  | { admision: "medio-abierto"; reserva: number };
+
 /**
  * Reserva la ventana del medio-abierto para ESTA venta, si corresponde.
  * `"cerrado"`: el corte está cerrado, venta normal. `"medio-abierto"`: el
  * corte estaba abierto, la ventana pasó y esta venta es LA que la usa (el
  * llamador sondea al facilitador antes de cobrar, y libera con
- * `registrarResultadoAnchor` o `liberarIntentoMedioAbierto`). `"ocupado"`:
- * otra venta ya está usando la ventana — no se cobra. Se llama DESPUÉS de
- * `anclajeDisponible()` (que sigue siendo la guarda, y la que un test puede
- * espiar); acá solo se decide quién de los que pasaron esa guarda entra.
+ * `registrarResultadoAnchor` o `liberarIntentoMedioAbierto` con la
+ * `reserva` que recibe acá). `"ocupado"`: otra venta ya está usando la
+ * ventana — no se cobra. Se llama DESPUÉS de `anclajeDisponible()` (que
+ * sigue siendo la guarda, y la que un test puede espiar); acá solo se
+ * decide quién de los que pasaron esa guarda entra. Todo síncrono: entre
+ * la guarda y la reserva no hay `await`, así que no hay dos que la tomen.
  */
-export function reservarMedioAbierto(): "cerrado" | "medio-abierto" | "ocupado" {
-  if (fallosConsecutivos < UMBRAL_FALLOS_CONSECUTIVOS) return "cerrado";
-  if (intentoMedioAbiertoEnCurso && Date.now() - reservaDesdeMs < RESERVA_MAX_MS) return "ocupado";
+export function reservarMedioAbierto(): AdmisionMedioAbierto {
+  if (fallosConsecutivos < UMBRAL_FALLOS_CONSECUTIVOS) return { admision: "cerrado" };
+  if (intentoMedioAbiertoEnCurso && Date.now() - reservaDesdeMs < RESERVA_MAX_MS) return { admision: "ocupado" };
   intentoMedioAbiertoEnCurso = true;
   reservaDesdeMs = Date.now();
-  return "medio-abierto";
+  reservaVigente += 1;
+  return { admision: "medio-abierto", reserva: reservaVigente };
 }
 
 /** Libera la ventana del medio-abierto sin registrar resultado — para el
- * `finally` de la request que la reservó, por si murió antes de informar. */
-export function liberarIntentoMedioAbierto(): void {
+ * `finally` de la request que la reservó, por si murió antes de informar.
+ * Solo libera si `reserva` es la vigente: la de una request cuya reserva
+ * venció y ya la tomó otra venta es letra muerta (ver `reservaVigente`). */
+export function liberarIntentoMedioAbierto(reserva: number): void {
+  if (reserva !== reservaVigente) return;
   intentoMedioAbiertoEnCurso = false;
 }
 

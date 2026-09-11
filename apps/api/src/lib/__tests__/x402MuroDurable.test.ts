@@ -1022,7 +1022,7 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
     // ...y es NEUTRO para el corte: un tercero con cinco compras no puede
     // apagar la ruta para todos (segundo refutador de cierre, ronda 3).
     expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
-    expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("cerrado");
+    expect(anclajeDiferidoModule.reservarMedioAbierto().admision).toBe("cerrado");
   });
 
   it("si GET /dx402/evidence no contesta, se degrada a already_anchored con paymentId + contentHash, sin reintento", async () => {
@@ -1460,11 +1460,29 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     const base = await construirApp(handlerFalso({ handleSettle: settle }));
     const cargas = await Promise.all([1, 2, 3, 4, 5].map(() => firmarCarga(pagador)));
 
-    const enVuelo = cargas.map((c) => postFirmado(base, batchChico(), c));
-    // Esperar a que la que reservó llegue al anchor (bloqueado) y las demás
-    // choquen con "ocupado".
-    for (let i = 0; i < 400 && anchors < 1; i++) await new Promise((r) => setTimeout(r, 5));
-    await new Promise((r) => setTimeout(r, 50));
+    const terminadas: number[] = [];
+    const enVuelo = cargas.map((c) =>
+      postFirmado(base, batchChico(), c).then((r) => {
+        terminadas.push(r.status);
+        return r;
+      })
+    );
+    // La barrera es un HECHO, no el reloj: la que reservó está parada en el
+    // anchor (bloqueado) y las otras cuatro YA volvieron con "ocupado". Un
+    // `setTimeout(50)` acá no probaba nada: en un runner lento las
+    // rezagadas seguían en la criptografía previa a la admisión (llave del
+    // pagador, sellado de medida) cuando se soltaba el anchor, llegaban con
+    // el corte ya CERRADO por el éxito de la primera y cobraban como ventas
+    // normales, anclaje incluido — [200, 200, 200, 424, 424] 2/2 en GitHub
+    // Actions y 25/25 local bajo inanición de CPU, con una sola admisión
+    // "medio-abierto" por corrida (bitácora 2026-09-10). Cuatro 424 en mano
+    // ANTES de soltar es exactamente lo que el título afirma.
+    for (let i = 0; i < 800 && !(anchors >= 1 && terminadas.length >= 4); i++) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(anchors).toBe(1);
+    expect(terminadas).toEqual([424, 424, 424, 424]);
+    expect(settle).toHaveBeenCalledTimes(1);
     soltar();
     const respuestas = await Promise.all(enVuelo);
 
@@ -1473,7 +1491,7 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     expect(anchors).toBe(1);
     // La única venta ancló: el corte se cierra del todo.
     expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
-    expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("cerrado");
+    expect(anclajeDiferidoModule.reservarMedioAbierto().admision).toBe("cerrado");
   });
 
   // Segundo refutador de cierre, ronda 3: un 422 dx402_backend_unavailable
@@ -1549,7 +1567,7 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     // La ventana sigue pasada (nadie registró un fallo) y la reserva quedó
     // libre: la siguiente venta puede tomarla.
     expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
-    expect(anclajeDiferidoModule.reservarMedioAbierto()).toBe("medio-abierto");
+    expect(anclajeDiferidoModule.reservarMedioAbierto().admision).toBe("medio-abierto");
   });
 });
 
