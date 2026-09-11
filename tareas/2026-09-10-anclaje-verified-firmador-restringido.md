@@ -148,3 +148,86 @@ negaría a firmar cualquier otra cosa.
   - **Lo que hace la sesión fría:** leer del journal el retorno del agente `sintetizar:final` (campos `ranking`, `recomendacion`, `sin_dato`, `pregunta_a_yonatan`, `informe_md`), pegar `informe_md` en este archivo bajo «## Fase 1c — variantes y refutaciones (workflow)», **contrastar** contra los verificadores del propio journal lo que la síntesis afirme (regla #1 del vault: se escribe lo que el run dijo, no lo que iba a decir), y recién entonces llevarle a Yonatan la pregunta de la decisión 7. Si el journal muestra que la síntesis no corrió o volvió vacía, se relanza el workflow desde el script guardado.
   - **Fuentes de la fase 1a copiadas** en el scratchpad de esta sesión (se pierden al cerrar): se rebajan con `gh api -H 'Accept: application/vnd.github.raw' repos/UltravioletaDAO/x402-rs/contents/<ruta>` — `src/dx402/service.rs`, `src/dx402/gate.rs`, `src/erc8004/proof.rs`, `src/erc8004/types.rs`, `src/types.rs` — pinneando el sha **`b5f345652a7e`** (2026-09-11T00:40Z), más `curl -s https://facilitator.ultravioletadao.xyz/openapi.json`.
   - Estado: `en-curso`. Sin GO pedido ni dado; nada de producción tocado por esta tarea.
+
+## Fase 1c — resultado parcial del workflow (2026-09-10)
+
+El run `wf_3873f00a-1d1` terminó **a mitad de camino**: los 8 agentes de
+verificación y lectura (sonnet) volvieron completos; **los 5 diseñadores de
+variantes y la síntesis final murieron con «You've reached your Fable limit»**
+y los 15 refutadores nunca llegaron a correr (sin diseños que refutar). 9 de 15
+agentes terminaron, 1,79 M tokens, 20 min. Journal con el retorno de cada
+agente: `…/subagents/workflows/wf_3873f00a-1d1/journal.jsonl`.
+
+**Dos de los cuatro hallazgos de la fase 1a quedaron refutados**, y eso cambia
+el diseño. Lo que la verificación midió:
+
+- **H1 se sostiene entero.** `verified = gate_verdict.is_none()`
+  (`service.rs:553`); sin proof → `ProofMissing` (`gate.rs:653`), sin firma →
+  `SellerSignatureMissing` (`gate.rs:663`); la firma se coteja contra
+  `facts.payee` leído del recibo (`gate.rs:761-770`); `signed` es diagnóstico
+  (`service.rs:512-518`, `:665`); ventana `DEFAULT_ANCHOR_MAX_AGE_SECS = 900`
+  (`gate.rs:70`, aplicada en `:711` → `proof.rs:529-535`). Los verdicts
+  `RpcUnavailable`, `UnverifiableChain` y `EscrowNotDeployed` nunca bloquean ni
+  en fase 2 (`gate.rs:196-203`).
+- **H2 REFUTADO: `/settle` SÍ puede devolver `proofOfPayment`.** El struct
+  `SettleResponse` que usa el handler tiene el campo opcional
+  `proof_of_payment`, y su `Serialize` a mano lo emite como `proofOfPayment`
+  cuando está presente (`src/types.rs:1601-1622`, `:1644-1685`); el
+  doc-comment (`:1592-1598`) dice que se incluye **«when the `8004-reputation`
+  extension is active in `PaymentRequirements.extra`»**. El openapi vivo no lo
+  documenta: la cadena `8004-reputation` tiene **0 apariciones** en sus 128 KB y
+  el schema del 200 es un `{"type":"object"}` genérico. Leer solo el openapi fue
+  lo que produjo el error de la fase 1a.
+- **H3 REFUTADO en su titular («el proof lo arma el vendedor»).** Hay una vía
+  server-side donde lo arma **el facilitador**: `create_proof_of_payment` en
+  `src/chain/evm.rs:1676-1727` llama a `ProofOfPayment::new` con el recibo real
+  y el resultado va a `SettleResponse.proof_of_payment` (`:1595-1611`). El
+  encoding de `paymentHash` y el resto de la mecánica de H3 siguen valiendo para
+  el caso en que haya que armarlo a mano.
+- **H4 se sostiene con una cita corregida:** la interfaz `SigningWalletAdapter`
+  vive en `dist/wallet-w7BnImDG.d.ts:93-133`, no en `dist/ows-*.d.ts` (ahí están
+  `EnvKeyAdapter` y `OWSWalletAdapter`, que la implementan).
+
+Lo que agregaron las lecturas:
+
+- **El dominio EIP-712 exacto:** `struct Dx402AnchorAuthorization {bytes32
+  paymentId; bytes32 contentHash; string pointer; address payee}`
+  (`gate.rs:88-100`), domain `{name: "DX402 Anchor", version: "1", chainId}`
+  **sin `verifyingContract`** (`gate.rs:256-260`); la firma es secp256k1 **cruda
+  sobre el digest, sin prefijo** (`gate.rs:287-289`), y el lado JS es idéntico
+  (`dx402.ts:568-572`, `:629-653`). Eso decide qué firmadores sirven: uno que
+  solo exponga `personal_sign` no sirve.
+- **La cola diferida guarda `body` y `opts` verbatim** y los reenvía en los tres
+  reintentos sin recalcular (`anclajeDiferido.ts:31-35`, `:383-410`,
+  `:531-577`); `sign` es un callable, así que **sí podría re-invocarse**.
+  `ESPERAS_MS = [30000, 120000, 300000]` suma 450 s: entra en la ventana de 900 s.
+- **Dónde engancharía:** `x402MuroDurable.ts:609-625` y `:762-773` arman las
+  opciones sin `sign` ni `proofOfPayment`; en mano ya hay `tx` (`:741-742`),
+  `network` (`:611`), `payer` (`:608`), `amount` (`llaveDelPagador.ts:29`),
+  `token` (`x402Config.ts:98`) y `payee` (`:613`).
+- **Ultravioleta ya eligió que firme el vendedor:** `docs/DX402.md:224-227`
+  («solo la firma del anchor necesita la clave de payTo, porque esa firma es el
+  reclamo») y `05-DISENO-v0.2.md:47-58` («A. El vendedor firma el anchor
+  (recomendada)… Va la A»), sobre la alternativa de comparar el payee declarado,
+  que «convierte el anti-replay en un arma». El PR #3377 **no discute custodia
+  ni KMS** del vendedor en ninguno de sus 4 comentarios.
+- **La casa no tiene firmador declarado:** `LINEA_ROJA.md:63-65` es la ÚNICA
+  mención de OWS y del Llavero en todo `sigilo` (no están en su README ni en
+  AUTONOMIA.md ni en timon). `OWSWalletAdapter` del SDK **no es browser-only**
+  («works with browser wallets, agent vaults, and hardware-backed signers»), pero
+  su código no importa `@open-wallet-standard/core` pese al docstring.
+
+**Lo que sigue (sesión fría).** Relanzar la fase 1c con los hechos corregidos y
+en un modelo con cupo: el script está en
+`…/workflows/scripts/firmador-restringido-verified-wf_3873f00a-1d1.js` y se
+edita en su bloque `HECHOS` (H2 y H3 como quedaron acá) antes de correrlo.
+**Antes de diseñar nada**, cerrar la pregunta que H2 abrió y que ahora es la más
+barata de todas: **¿alcanza con declarar la extensión `8004-reputation` en
+`PaymentRequirements.extra` para que el `/settle` de Ultravioleta devuelva el
+`proofOfPayment` ya armado?** Si la respuesta es sí, la mitad del trabajo
+desaparece: no hacen falta lecturas RPC ni recomputar `paymentHash`, y queda
+solo la firma del anchor, que es exactamente la decisión 7. Se mide leyendo
+`Erc8004Extension::from_extra` (`erc8004/types.rs:769-784`, `EXTENSION_ID =
+"8004-reputation"` en `erc8004/mod.rs:72`) y el camino del settle en
+`src/chain/evm.rs:1595-1727`, y se confirma con un settle real (que es de
+Yonatan, porque paga).
