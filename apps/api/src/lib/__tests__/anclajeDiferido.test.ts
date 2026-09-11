@@ -376,6 +376,66 @@ describe("programarAnclaje", () => {
     expect(anclajeDisponible()).toBe(true);
   });
 
+  // Refutador acotado (sesión fría 2026-09-10): la cola reseteaba solo el
+  // contador y dejaba `hayPoliticaEnRacha` pegada; la racha siguiente,
+  // aunque fuera de puras caídas, heredaba la ventana de una hora.
+  it("un éxito de la cola limpia también la racha de política: la siguiente racha de caídas vuelve a la ventana de 300 s", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
+    }
+    expect(anclajeDisponible()).toBe(false);
+
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(
+      async () => new Response(JSON.stringify({ v: 1, paymentId: "p", pointer: "s3+https://x/y" }), { status: 200 })
+    );
+    const reloj = relojManual();
+    programarAnclaje("pago-politica", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    await reloj.dispararProximo();
+    expect(anclajeDisponible()).toBe(true);
+
+    // Racha nueva de puras caídas: ventana corta, no la de política.
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  // Segunda pasada del refutador: la otra rama de éxito de la cola — el 409
+  // recuperado por GET con NUESTRO contentHash — quedaba sin test que la
+  // clavara (revertirla a `fallosConsecutivos = 0` dejaba la suite verde).
+  it("un 409 propio recuperado por GET en la cola también limpia la racha de política", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
+    }
+    expect(anclajeDisponible()).toBe(false);
+
+    const payerKey = await claveDePagadorValida();
+    const body = new TextEncoder().encode("{}");
+    const fetchDoble = vi.fn(async (input: unknown) => {
+      if (String(input).includes("/dx402/evidence/")) {
+        return new Response(JSON.stringify({ pointer: "s3+https://f/e/propio", contentHash: contentHash(body) }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 });
+    });
+    const reloj = relojManual();
+    programarAnclaje("pago-politica-409", body, opciones(fetchDoble as unknown as typeof fetch, payerKey), reloj);
+    await reloj.dispararProximo();
+    expect(lineas.some((l) => l.mensaje === "anclaje diferido logrado")).toBe(true);
+    expect(anclajeDisponible()).toBe(true);
+
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+  });
+
   it("no encola una tarea nueva cuando la cola ya está en el tope", async () => {
     const payerKey = await claveDePagadorValida();
     const fetchDoble = vi.fn(async () => new Response(null, { status: 503 }));
@@ -431,25 +491,27 @@ describe("reservarMedioAbierto (single-flight) y la ventana por política", () =
   // hay varios await, y N ventas concurrentes pasada la ventana veían todas
   // el corte disponible y cobraban todas. Ahora la ventana la usa UNA.
   it("cerrado → 'cerrado'; abierto y pasada la ventana → una sola reserva, las demás 'ocupado'; registrar o liberar la sueltan", () => {
-    expect(reservarMedioAbierto()).toBe("cerrado");
+    expect(reservarMedioAbierto().admision).toBe("cerrado");
     for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
     expect(anclajeDisponible()).toBe(false);
     envejecerUltimoFalloParaTest(300_000);
     expect(anclajeDisponible()).toBe(true);
-    expect(reservarMedioAbierto()).toBe("medio-abierto");
-    expect(reservarMedioAbierto()).toBe("ocupado");
-    expect(reservarMedioAbierto()).toBe("ocupado");
+    expect(reservarMedioAbierto().admision).toBe("medio-abierto");
+    expect(reservarMedioAbierto().admision).toBe("ocupado");
+    expect(reservarMedioAbierto().admision).toBe("ocupado");
     // La venta/sonda que la usaba falló: libera y rearma la ventana.
     registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
     expect(anclajeDisponible()).toBe(false);
     envejecerUltimoFalloParaTest(300_000);
-    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    const reserva = reservarMedioAbierto();
+    expect(reserva.admision).toBe("medio-abierto");
+    if (reserva.admision !== "medio-abierto") throw new Error("inalcanzable");
     // La request murió sin informar: el `finally` del adaptador libera.
-    liberarIntentoMedioAbierto();
-    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    liberarIntentoMedioAbierto(reserva.reserva);
+    expect(reservarMedioAbierto().admision).toBe("medio-abierto");
     // Un anclaje que prende cierra el corte del todo.
     registrarResultadoAnchor({ v: 1, paymentId: "p", pointer: "s3+https://x/y" });
-    expect(reservarMedioAbierto()).toBe("cerrado");
+    expect(reservarMedioAbierto().admision).toBe("cerrado");
   });
 
   // Refutador de cierre, ronda 3: la sonda gratis mira /dx402/stats, que
@@ -510,12 +572,12 @@ describe("reservarMedioAbierto (single-flight) y la ventana por política", () =
     const irrecuperable = { v: 1, skipped: "already_anchored", paymentId: "p", contentHash: "0xcc" };
     for (let i = 0; i < 10; i++) registrarResultadoAnchor(i % 2 ? ajeno : irrecuperable);
     expect(anclajeDisponible()).toBe(true);
-    expect(reservarMedioAbierto()).toBe("cerrado");
+    expect(reservarMedioAbierto().admision).toBe("cerrado");
     // Con el corte abierto y la ventana pasada, la venta que probó y salió
     // con un 409 ajeno no demostró nada: se rearma sin sumar.
     for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
     envejecerUltimoFalloParaTest(300_000);
-    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    expect(reservarMedioAbierto().admision).toBe("medio-abierto");
     registrarResultadoAnchor(ajeno);
     expect(anclajeDisponible()).toBe(false);
     envejecerUltimoFalloParaTest(300_000);
@@ -528,12 +590,37 @@ describe("reservarMedioAbierto (single-flight) y la ventana por política", () =
   it("una reserva del medio-abierto vence a los 60 s: otra venta puede tomarla", () => {
     for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
     envejecerUltimoFalloParaTest(300_000);
-    expect(reservarMedioAbierto()).toBe("medio-abierto");
-    expect(reservarMedioAbierto()).toBe("ocupado");
+    expect(reservarMedioAbierto().admision).toBe("medio-abierto");
+    expect(reservarMedioAbierto().admision).toBe("ocupado");
     envejecerReservaParaTest(59_000);
-    expect(reservarMedioAbierto()).toBe("ocupado");
+    expect(reservarMedioAbierto().admision).toBe("ocupado");
     envejecerReservaParaTest(1_000);
-    expect(reservarMedioAbierto()).toBe("medio-abierto");
+    expect(reservarMedioAbierto().admision).toBe("medio-abierto");
+  });
+
+  // Sesión fría 2026-09-10, leyendo quién libera la reserva:
+  // `liberarIntentoMedioAbierto()` soltaba la reserva vigente sin saber de
+  // quién era. Una request cuya reserva VENCIÓ (settle colgado > 60 s) y fue
+  // reemplazada por otra venta termina después (undici corta a ~300 s) y su
+  // `finally` soltaba la reserva de la venta nueva, todavía en vuelo: una
+  // tercera entraba y había dos ventas en la ventana. Cada reserva lleva
+  // identidad y solo la suya la libera.
+  it("el finally tardío de una reserva vencida y reemplazada NO libera la nueva", () => {
+    for (let i = 0; i < 5; i++) registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    envejecerUltimoFalloParaTest(300_000);
+    const vieja = reservarMedioAbierto();
+    expect(vieja.admision).toBe("medio-abierto");
+    envejecerReservaParaTest(60_000);
+    const nueva = reservarMedioAbierto();
+    expect(nueva.admision).toBe("medio-abierto");
+    if (vieja.admision !== "medio-abierto" || nueva.admision !== "medio-abierto") throw new Error("inalcanzable");
+    expect(nueva.reserva).not.toBe(vieja.reserva);
+    // La request vieja termina tarde: su finally no suelta lo que no es suyo.
+    liberarIntentoMedioAbierto(vieja.reserva);
+    expect(reservarMedioAbierto().admision).toBe("ocupado");
+    // La nueva sí.
+    liberarIntentoMedioAbierto(nueva.reserva);
+    expect(reservarMedioAbierto().admision).toBe("medio-abierto");
   });
 });
 

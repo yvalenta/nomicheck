@@ -330,11 +330,14 @@ export function crearMiddlewareDurable(
     // lo escribe, no el `if (!cap.success)` de más abajo (ahí la respuesta
     // ya salió).
     let cobroIntentado = false;
-    // `true` si ESTA request reservó la ventana del medio-abierto
+    // La identidad de la reserva del medio-abierto si ESTA request la tomó
     // (`reservarMedioAbierto`): el `finally` de abajo la libera aunque la
     // request muera antes de informar un resultado (single-flight sin
-    // deadlock — hallazgo del refutador de cierre, ronda 3).
-    let reservoMedioAbierto = false;
+    // deadlock — hallazgo del refutador de cierre, ronda 3). Lleva identidad
+    // y no un booleano para que una reserva vencida y reemplazada no suelte
+    // la de otra venta al terminar tarde (ver `reservaVigente` en
+    // `anclajeDiferido.ts`).
+    let reservaMedioAbierto: number | null = null;
     const reqArgs: ArgsDurable = {
       x402Handlers: handlersFiltrados,
       pricing,
@@ -695,9 +698,9 @@ export function crearMiddlewareDurable(
         // (`VENTANA_MEDIO_ABIERTO_POLITICA_MS`), y esta venta única es la
         // sonda cara — no hay una gratis (refutador de cierre, ronda 3).
         const admision = reservarMedioAbierto();
-        if (admision === "ocupado") return noDisponible();
-        if (admision === "medio-abierto") {
-          reservoMedioAbierto = true;
+        if (admision.admision === "ocupado") return noDisponible();
+        if (admision.admision === "medio-abierto") {
+          reservaMedioAbierto = admision.reserva;
           const vivo = await sondearFacilitador(
             opcionesBase.facilitator,
             fetchConTimeout(3000),
@@ -856,7 +859,7 @@ export function crearMiddlewareDurable(
       },
     };
     return common.handleMiddlewareRequest(reqArgs).finally(() => {
-      if (reservoMedioAbierto) liberarIntentoMedioAbierto();
+      if (reservaMedioAbierto !== null) liberarIntentoMedioAbierto(reservaMedioAbierto);
     });
   };
 }
