@@ -289,3 +289,32 @@ lo respalda; si se reporta, se reporta con el sha y las dos líneas.
 script guardado con `HECHOS` corregido (H2, H3 y esto), o diseñarlas en sesión.
 1d, la pregunta de la decisión 7 a Yonatan, no cambia de forma: sigue siendo la
 firma del anchor y nada más. Estado: `en-curso`.
+
+### Relanzamiento de la fase 1c (2026-09-10)
+
+Workflow `firmador-restringido-verified-v2`, run **`wf_7bde712c-eae`**, 22
+agentes: 5 diseñadores de variantes, 15 refutadores (3 lentes por variante),
+1 crítico de completitud (sonnet) y 1 síntesis. Todo solo lectura por prompt.
+
+Qué cambió respecto del run caído `wf_3873f00a-1d1`:
+
+- **La fase de verificación no se repite.** Sus 8 agentes volvieron completos la
+  primera vez; sus resultados están incorporados al bloque `HECHOS` del script
+  nuevo, ya corregidos (H2 y H3 en su versión refutada, H4 con la cita
+  arreglada) más `H8`, el hallazgo del `timestamp` medido hoy. Los diseñadores
+  arrancan de los hechos verdaderos, que es lo que hundió al run anterior.
+- **Modelo por verbo** (Línea Roja §6): diseñar, refutar y sintetizar heredan el
+  modelo de la sesión, que ahora tiene cupo; criticar va en `sonnet`.
+- **Las fuentes viven en el scratchpad de esta sesión** y el script apunta ahí:
+  `openapi.json` más `gate.rs`, `service.rs`, `dx402_types.rs`, `proof.rs`,
+  `erc8004_types.rs`, `erc8004_mod.rs`, `evm.rs` y `src_types.rs` de x402-rs en
+  `b5f345652a7e`.
+- **Copia durable del script** (el scratchpad muere con la sesión):
+  `~/.claude/projects/-Users-yonatan-Developer-nomicheck/271d5d3d-3b49-41b0-adf4-dbb9a8056af1/workflows/scripts/firmador-restringido-verified-v2-wf_7bde712c-eae.js`.
+  El journal del run cae en el `subagents/workflows/wf_7bde712c-eae/` de la misma
+  sesión. Una sesión fría **lee el journal**, no lo reanuda.
+
+Lo que hace la sesión que reciba la salida: pegar `informe_md` de
+`sintetizar:final` bajo «## Fase 1c — variantes y refutaciones (workflow)»,
+contrastar contra los hechos de arriba lo que la síntesis afirme, y recién
+entonces llevarle a Yonatan la pregunta de la decisión 7.
