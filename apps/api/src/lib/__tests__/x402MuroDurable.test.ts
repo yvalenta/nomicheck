@@ -1477,13 +1477,25 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     // Actions y 25/25 local bajo inanición de CPU, con una sola admisión
     // "medio-abierto" por corrida (bitácora 2026-09-10). Cuatro 424 en mano
     // ANTES de soltar es exactamente lo que el título afirma.
-    for (let i = 0; i < 800 && !(anchors >= 1 && terminadas.length >= 4); i++) {
+    // Acotado por tiempo (10 s de pared, la mitad del timeout del test — por
+    // vueltas de `setTimeout(5)` derivaba bajo carga y podía pasar de largo
+    // el timeout de vitest, que mata el test sin nombrar la aserción), pero
+    // FALLA CERRADO: si las cuatro no vuelven, la aserción de abajo lo dice
+    // con nombre en vez de dejar pasar ventas de más. Y el anchor se suelta
+    // pase lo que pase: con la ganadora parada en `await bloqueo` el
+    // servidor no cierra y los tests siguientes mueren por timeout del hook
+    // (refutador acotado, dos pasadas).
+    const inicio = Date.now();
+    while (!(anchors >= 1 && terminadas.length >= 4) && Date.now() - inicio < 10_000) {
       await new Promise((r) => setTimeout(r, 5));
     }
-    expect(anchors).toBe(1);
-    expect(terminadas).toEqual([424, 424, 424, 424]);
-    expect(settle).toHaveBeenCalledTimes(1);
-    soltar();
+    try {
+      expect(anchors).toBe(1);
+      expect(terminadas).toEqual([424, 424, 424, 424]);
+      expect(settle).toHaveBeenCalledTimes(1);
+    } finally {
+      soltar();
+    }
     const respuestas = await Promise.all(enVuelo);
 
     expect(respuestas.map((r) => r.status).sort()).toEqual([200, 424, 424, 424, 424]);
@@ -1492,7 +1504,7 @@ describe("cortacircuitos de anclaje (fallos consecutivos sostenidos)", () => {
     // La única venta ancló: el corte se cierra del todo.
     expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
     expect(anclajeDiferidoModule.reservarMedioAbierto().admision).toBe("cerrado");
-  });
+  }, 20_000);
 
   // Segundo refutador de cierre, ronda 3: un 422 dx402_backend_unavailable
   // es el backend caído, no política, y /dx402/stats lo expone en

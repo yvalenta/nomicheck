@@ -263,8 +263,7 @@ export function registrarResultadoAnchor(resultado: Record<string, unknown>): vo
   // camino es el del `finally`, que sí lleva identidad.
   intentoMedioAbiertoEnCurso = false;
   if (esExitoOYaAnclado(resultado)) {
-    fallosConsecutivos = 0;
-    hayPoliticaEnRacha = false;
+    cerrarCorte();
     return;
   }
   if (resultado.skipped === "already_anchored") {
@@ -282,6 +281,20 @@ export function registrarResultadoAnchor(resultado: Record<string, unknown>): vo
   fallosConsecutivos += 1;
   ultimoFalloMs = Date.now();
   if (resultado.status === 402) hayPoliticaEnRacha = true;
+}
+
+/**
+ * Un anclaje que SÍ prendió — de una venta nueva o de la cola diferida —
+ * cierra el corte del todo: el contador Y la racha de política. Las dos
+ * juntas siempre: la cola diferida reseteaba solo el contador y dejaba
+ * `hayPoliticaEnRacha` pegada, así que la racha SIGUIENTE, aunque fuera de
+ * puras caídas (cinco 503), heredaba la ventana de una hora: 424 sin cobrar
+ * durante una hora en vez de 300 s (refutador acotado, sesión fría
+ * 2026-09-10; preexistente a esa sesión).
+ */
+function cerrarCorte(): void {
+  fallosConsecutivos = 0;
+  hayPoliticaEnRacha = false;
 }
 
 /**
@@ -534,7 +547,7 @@ async function intentarAhora(paymentId: string, reloj: RelojDeReintentos): Promi
     );
     cola.delete(paymentId);
     if (esExitoOYaAnclado(resultado)) {
-      fallosConsecutivos = 0;
+      cerrarCorte();
       registro.info("x402", "anclaje diferido logrado", { paymentId, resultado, recuperadoPorGet: true });
     } else {
       registro.error("x402", "anclaje diferido: 409 sin registro propio (ajeno o GET caído); se abandona", undefined, {
@@ -554,7 +567,7 @@ async function intentarAhora(paymentId: string, reloj: RelojDeReintentos): Promi
     // — contarlos amplifica la falla de una sola venta contra ventas NUEVAS
     // que no tienen nada que ver (reparación DX402 punto 2 ronda 2, hallazgo
     // del refutador).
-    fallosConsecutivos = 0;
+    cerrarCorte();
     cola.delete(paymentId);
     registro.info("x402", "anclaje diferido logrado", { paymentId, resultado });
     return;

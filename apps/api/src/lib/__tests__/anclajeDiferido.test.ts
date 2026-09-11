@@ -376,6 +376,66 @@ describe("programarAnclaje", () => {
     expect(anclajeDisponible()).toBe(true);
   });
 
+  // Refutador acotado (sesión fría 2026-09-10): la cola reseteaba solo el
+  // contador y dejaba `hayPoliticaEnRacha` pegada; la racha siguiente,
+  // aunque fuera de puras caídas, heredaba la ventana de una hora.
+  it("un éxito de la cola limpia también la racha de política: la siguiente racha de caídas vuelve a la ventana de 300 s", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
+    }
+    expect(anclajeDisponible()).toBe(false);
+
+    const payerKey = await claveDePagadorValida();
+    const fetchDoble = vi.fn(
+      async () => new Response(JSON.stringify({ v: 1, paymentId: "p", pointer: "s3+https://x/y" }), { status: 200 })
+    );
+    const reloj = relojManual();
+    programarAnclaje("pago-politica", new TextEncoder().encode("{}"), opciones(fetchDoble, payerKey), reloj);
+    await reloj.dispararProximo();
+    expect(anclajeDisponible()).toBe(true);
+
+    // Racha nueva de puras caídas: ventana corta, no la de política.
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+  });
+
+  // Segunda pasada del refutador: la otra rama de éxito de la cola — el 409
+  // recuperado por GET con NUESTRO contentHash — quedaba sin test que la
+  // clavara (revertirla a `fallosConsecutivos = 0` dejaba la suite verde).
+  it("un 409 propio recuperado por GET en la cola también limpia la racha de política", async () => {
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 402, error: "dx402_proof_rejected" });
+    }
+    expect(anclajeDisponible()).toBe(false);
+
+    const payerKey = await claveDePagadorValida();
+    const body = new TextEncoder().encode("{}");
+    const fetchDoble = vi.fn(async (input: unknown) => {
+      if (String(input).includes("/dx402/evidence/")) {
+        return new Response(JSON.stringify({ pointer: "s3+https://f/e/propio", contentHash: contentHash(body) }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ error: "dx402_already_anchored" }), { status: 409 });
+    });
+    const reloj = relojManual();
+    programarAnclaje("pago-politica-409", body, opciones(fetchDoble as unknown as typeof fetch, payerKey), reloj);
+    await reloj.dispararProximo();
+    expect(lineas.some((l) => l.mensaje === "anclaje diferido logrado")).toBe(true);
+    expect(anclajeDisponible()).toBe(true);
+
+    for (let i = 0; i < 5; i++) {
+      registrarResultadoAnchor({ v: 1, skipped: "anchor_failed", status: 503 });
+    }
+    expect(anclajeDisponible()).toBe(false);
+    envejecerUltimoFalloParaTest(300_000);
+    expect(anclajeDisponible()).toBe(true);
+  });
+
   it("no encola una tarea nueva cuando la cola ya está en el tope", async () => {
     const payerKey = await claveDePagadorValida();
     const fetchDoble = vi.fn(async () => new Response(null, { status: 503 }));
