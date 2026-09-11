@@ -1,5 +1,5 @@
 ---
-estado: en-curso
+estado: bloqueada
 dueño: ambos
 fecha: 2026-09-08
 tema: nomicheck como primer vendedor externo con durable-evidence (DX402) y un sobre adentro — la cadena completa sin creerle a nadie
@@ -106,6 +106,8 @@ adentro es la evidencia que ningún otro tiene en el hilo de #3377.
 - 2026-09-10 (misma sesión fría, más tarde). **Paso 1 desplegado por Yonatan** desde su terminal con el comando de «Lo que sigue»: el VPS hizo fast-forward `84f2b7b..36cb016` (46 archivos), `deploy.sh` bajó `ghcr.io/yvalenta/nomicheck-api:36cb016…`, recreó `nomicheck-api` y sus cuatro sondas dieron ✓ (API lista, `/api/batch/health`, sha publicado, 402 en `/verificar`). Verificado desde afuera por esta sesión a las 01:07Z: `/api/health` sha `36cb0163d24d…`; `/batch/verificar` 402; `/batch/verificar/durable` 404; `…/sobre-publickey` 404; `/batch/health` 200; `pricing` y `openapi.json` sin `durable`. El standby `homelab-ynt` seguía en `84f2b7b` a las 01:07Z; la paridad a los ≤30 min queda en la línea siguiente.
 
 - 2026-09-10 (cierre de la sesión fría por la regla de 200k; 248k medidos, 5 turnos sobre el umbral). **Paridad del standby medida:** `homelab-ynt` sirvió `36cb016` en su `/api/health` local al **minuto 18** del deploy (monitor con sondas cada 60 s; se trajo solo, no se tocó). Con eso el **paso 1 queda HECHO de punta a punta**: `main` pusheado, CI verde, imagen, deploy de Yonatan, sondas externas verdes y standby en paridad. Quedan -1b (rotación de la llave del batch) y 1(b) (GO de DX402 con la llave del sobre), los dos de Yonatan.
+
+- 2026-09-10: estado `en-curso` → **`bloqueada`**. Todo lo que quedaba es de Yonatan y nadie más lo desbloquea: la rotación de la llave del batch (-1b), la llave Ed25519 del sobre con su GO para encender `DX402_ACTIVO` (1b) y la compra real (2). El código está desplegado y apagado; ninguna sesión puede avanzar esta tarea sin esas tres.
 
 ## Lo que sigue (para una sesión fría: `cd ~/Developer/nomicheck && claude` → `/casa nomicheck`)
 
