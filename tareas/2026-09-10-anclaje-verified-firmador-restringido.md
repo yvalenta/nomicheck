@@ -231,3 +231,61 @@ solo la firma del anchor, que es exactamente la decisión 7. Se mide leyendo
 "8004-reputation"` en `erc8004/mod.rs:72`) y el camino del settle en
 `src/chain/evm.rs:1595-1727`, y se confirma con un settle real (que es de
 Yonatan, porque paga).
+
+## Fase 1c — la pregunta que abrió H2, medida (2026-09-10, solo lectura)
+
+Fuentes: x402-rs pinneado en **`b5f345652a7e`**, bajado con `gh api` —
+`src/erc8004/mod.rs`, `src/erc8004/types.rs`, `src/erc8004/proof.rs`,
+`src/chain/evm.rs`. Nada tocado: ni repo de terceros, ni llave, ni producción.
+
+**La respuesta es sí y no: declarar la extensión alcanza para que el `/settle`
+devuelva el `proofOfPayment` ya armado, y ese proof NO se puede anclar tal cual.**
+
+1. **Dónde va la declaración.** `Erc8004Extension::from_extra` busca la clave en
+   el **primer nivel de `extra`** (`erc8004/types.rs:781-786`; `EXTENSION_ID =
+   "8004-reputation"`, `erc8004/mod.rs:72`), no dentro de `extra.extensions`,
+   que es donde nomicheck pone hoy `durable-evidence`
+   (`apps/api/src/lib/x402Config.ts:537`). El único campo es `includeProof`, con
+   `default = true` (`types.rs:769-779`): `extra["8004-reputation"] = {}` basta.
+2. **Qué hace el settle.** Con la extensión presente, red soportada y
+   `includeProof`, el facilitador arma el proof con el recibo real y lo emite en
+   `SettleResponse.proofOfPayment` (`chain/evm.rs:1595-1611`, `:1676-1727`).
+   Avalanche está en la lista de ERC-8004 (`erc8004/mod.rs:263`, `:296`) y es la
+   única red de la ruta durable (`x402Config.ts:206`).
+3. **El proof que arma el facilitador no pasa su propia puerta de anclaje.**
+   `create_proof_of_payment` pone en `timestamp` la **hora de pared del
+   proceso**, con el comentario de que leer el timestamp del bloque costaría
+   otra llamada RPC (`chain/evm.rs:1704-1709`). La verificación del anchor exige
+   **igualdad estricta** contra el timestamp del bloque —
+   `if block_ts != proof.timestamp { TimestampMismatch }` (`proof.rs:531-533`;
+   verdicto `proof_timestamp_mismatch`, `:193`) — y hay un test que lo fija
+   (`proof.rs:1206-1218`). Que coincidan sería casualidad: el settle responde
+   segundos después del bloque. Anclar el proof del settle verbatim no da
+   `verified`, da `provisional` con `notVerifiedReason:
+   "proof_timestamp_mismatch"`.
+4. **Lo que igual desaparece, que es bastante.** El `paymentHash` viene hecho y
+   la puerta lo **recomputa de los campos del propio proof**
+   (`proof.rs:404-407`) sin comprometer `timestamp` (`:511-513`): pisar ese
+   campo no invalida el hash. Con eso se cae el pin pendiente del `Display` de
+   `MixedAddress` (las direcciones llegan serializadas por el facilitador, y el
+   hash se recomputa sobre ellas) y se cae el `eth_getTransactionReceipt` (el
+   `blockNumber` viene en el proof). **Queda una sola lectura:**
+   `eth_getBlockByNumber(proof.blockNumber)` para corregir `timestamp` — cliente
+   viem ya hay (`services/pagosService.ts`). Y queda la firma del anchor, que es
+   la decisión 7 y no se movió.
+
+**Riesgo a medir con un settle real (de Yonatan, porque paga):** `extra` hoy
+lleva el dominio EIP-712 del token (`name`, `version`) que el comprador usa para
+firmar; agregarle una clave de primer nivel es invisible para un cliente que lea
+solo esas dos, pero eso se confirma mirando el eco del facilitador, que la API
+ya compara (`x402MuroDurable.ts:560-568`).
+
+**Candidato a reporte río arriba, aparcado (lista 2 — publicar es de Yonatan):**
+el `proofOfPayment` que emite el propio facilitador es rechazado por su propia
+puerta de anclaje por el `timestamp`. Es un hallazgo de una línea con test que
+lo respalda; si se reporta, se reporta con el sha y las dos líneas.
+
+**Lo que sigue.** 1c sigue sin sus variantes: relanzar el workflow desde el
+script guardado con `HECHOS` corregido (H2, H3 y esto), o diseñarlas en sesión.
+1d, la pregunta de la decisión 7 a Yonatan, no cambia de forma: sigue siendo la
+firma del anchor y nada más. Estado: `en-curso`.
