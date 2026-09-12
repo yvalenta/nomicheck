@@ -49,7 +49,13 @@ import { AVALANCHE_MAINNET, requisitosDePago, type ConfigX402 } from "../x402Con
 import { verificar } from "../sobre.js";
 import type { AutorizacionEip3009, CargaDePago } from "../llaveDelPagador.js";
 import * as anclajeDiferidoModule from "../anclajeDiferido.js";
-import { resetContadorFallosParaTest, registrarResultadoAnchor, envejecerUltimoFalloParaTest } from "../anclajeDiferido.js";
+import {
+  resetContadorFallosParaTest,
+  registrarResultadoAnchor,
+  envejecerUltimoFalloParaTest,
+  contadorVeredictos,
+  resetContadorVeredictosParaTest,
+} from "../anclajeDiferido.js";
 import * as batchVerificacionServiceModule from "../../services/batchVerificacionService.js";
 import { obtenerSobrePublicKeyPem } from "../../services/sobreSignatureService.js";
 import type { BatchVerificacionInput } from "../../validation/batchVerificacion.js";
@@ -1738,5 +1744,87 @@ describe("el fetch del anchor lanza (red caída o timeout) después del cobro", 
     const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
     expect(evidencia.skipped).toBe("anchor_failed");
     expect(programarSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── 24) El veredicto del facilitador sobre el anclaje (peldaño 0) ─────────
+//
+// Todo anclaje de esta ruta sale HOY provisional: sin `proofOfPayment` ni
+// `sellerSignature` (decisión 7 del brief), el facilitador contesta
+// `verified: false` + `notVerifiedReason: "dx402_proof_missing"`. Eso es
+// éxito para `esExitoOYaAnclado` —hay `pointer`— y así debe seguir siendo:
+// el cortacircuitos mide "ancló o no ancló". Lo que faltaba es que quedara
+// ESCRITO qué vale ese registro, y contado aparte.
+describe("el facilitador ancla pero no verifica (provisional)", () => {
+  afterEach(() => {
+    usarEmisor(() => {});
+    resetContadorVeredictosParaTest();
+  });
+
+  function stubAnchorProvisional(motivo: string) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: { body?: string }) => {
+        const url = String(input);
+        if (!url.endsWith("/dx402/anchor")) return fetchOriginal(input as never, init as never);
+        const enviado = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            v: 1,
+            paymentId: enviado.paymentId,
+            pointer: `s3+https://facilitator.example/evidencia/${String(enviado.paymentId)}`,
+            backend: enviado.backend,
+            contentHash: enviado.contentHash,
+            cipher: "AES-256-GCM",
+            keyAlg: enviado.keyAlg,
+            mode: enviado.mode,
+            retention: enviado.retention,
+            verified: false,
+            notVerifiedReason: motivo,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      })
+    );
+  }
+
+  async function venderDurable(): Promise<{ res: Response; lineas: LineaDeRegistro[] }> {
+    const lineas: LineaDeRegistro[] = [];
+    usarEmisor((l) => lineas.push(l));
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso());
+    return { res: await postFirmado(base, batchChico(), carga), lineas };
+  }
+
+  it("el veredicto queda escrito en la línea del sobre servido, y contado aparte", async () => {
+    resetContadorVeredictosParaTest();
+    stubAnchorProvisional("dx402_proof_missing");
+
+    const { res, lineas } = await venderDurable();
+
+    expect(res.status).toBe(200);
+    const servido = lineas.find((l) => l.mensaje === "sobre durable servido");
+    expect(servido).toMatchObject({
+      verified: false,
+      notVerifiedReason: "dx402_proof_missing",
+      veredictos: { verificados: 0, provisionales: 1, sinVeredicto: 0 },
+    });
+    // El header del comprador NO cambia: el vocabulario DX402 no tiene el
+    // veredicto, y el sobre ya está firmado cuando esto se lee.
+    const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
+    expect(evidencia.skipped).toBeUndefined();
+    expect(evidencia.pointer).toBeTruthy();
+  });
+
+  it("un provisional NO cuenta como fallo: el cortacircuitos sigue cerrado", async () => {
+    resetContadorVeredictosParaTest();
+    stubAnchorProvisional("dx402_seller_signature_missing");
+
+    const { res } = await venderDurable();
+
+    expect(res.status).toBe(200);
+    expect(anclajeDiferidoModule.anclajeDisponible()).toBe(true);
+    expect(contadorVeredictos()).toEqual({ verificados: 0, provisionales: 1, sinVeredicto: 0 });
   });
 });

@@ -376,6 +376,97 @@ export function envejecerUltimoFalloParaTest(ms: number): void {
 }
 
 /**
+ * EL VEREDICTO DEL FACILITADOR, que hasta acá nadie leía.
+ *
+ * Un anclaje que prende trae dos campos que dicen QUÉ VALE ese registro
+ * (openapi vivo de `facilitator.ultravioletadao.xyz`, `POST /dx402/anchor` y
+ * `GET /dx402/evidence/{paymentId}`): `verified` —la cadena confirmó el payee
+ * y el payer— y, cuando no lo está, `notVerifiedReason`. La escalera es
+ * "provisional < signed < verified" y solo `verified` es final.
+ *
+ * Hoy TODOS nuestros anclajes salen provisionales: sin `proofOfPayment` ni
+ * `sellerSignature` (decisión 7 del brief, fija y fuera de este archivo), el
+ * facilitador contesta `notVerifiedReason: "dx402_proof_missing"`. Y como
+ * `esExitoOYaAnclado` da true con un `pointer` no vacío, ese provisional
+ * cuenta como éxito, cierra el cortacircuitos y se sirve sin dejar rastro de
+ * que la cadena no verificó nada: `grep -rn "notVerifiedReason" apps/api/src`
+ * daba cero fuera de tests. Leerlo es la condición para que cualquier cambio
+ * futuro del lado del vendedor se pueda CONFIRMAR una vez desplegado, en vez
+ * de darse por hecho.
+ *
+ * Solo `boolean`: un `"true"` de string, un `1` o un `null` no son un
+ * veredicto — es el mismo criterio de `normalizarResultadoAnchor`, no
+ * inventarle forma a lo que contesta un tercero.
+ */
+export interface VeredictoAnclaje {
+  verified?: boolean;
+  notVerifiedReason?: string;
+}
+
+export function leerVeredicto(resultado: Record<string, unknown>): VeredictoAnclaje {
+  const veredicto: VeredictoAnclaje = {};
+  if (typeof resultado.verified === "boolean") veredicto.verified = resultado.verified;
+  const motivo = resultado.notVerifiedReason;
+  if (typeof motivo === "string" && motivo.length > 0) veredicto.notVerifiedReason = motivo;
+  return veredicto;
+}
+
+/**
+ * Contador de veredictos, SEPARADO del cortacircuitos a propósito. El de
+ * arriba (`fallosConsecutivos`) mide "ancló o no ancló" y decide si se sigue
+ * cobrando; este mide "verificó o no verificó" y no decide nada. Mezclarlos
+ * apagaría `/verificar/durable` entera hoy mismo —cada venta es un
+ * provisional— por algo que no es una falla del facilitador sino una
+ * propiedad conocida de nuestro propio anclaje.
+ *
+ * `sinVeredicto` es su propia fila y no se suma a los provisionales: un
+ * registro sin el campo (un facilitador más viejo, un proxy que recorta) es
+ * falta de dato, no un provisional medido. Regla #1 del vault: se escribe lo
+ * que contestó, no lo que se esperaba.
+ *
+ * En memoria, como todo este archivo, y no se persiste: es una señal
+ * operativa sobre un pago que ya liquidó.
+ */
+export interface ContadorVeredictos {
+  verificados: number;
+  provisionales: number;
+  sinVeredicto: number;
+}
+
+const veredictos: ContadorVeredictos = { verificados: 0, provisionales: 0, sinVeredicto: 0 };
+
+/**
+ * Cuenta el veredicto de un registro anclado y lo devuelve para que el
+ * llamador lo loguee. Sin `pointer` no hay registro del que leer nada —un
+ * fallo, un diferido, un `registro_ajeno`— y no se cuenta: el chequeo vive
+ * acá adentro y no en los llamadores para que los dos caminos (la venta y la
+ * cola diferida) no diverjan en qué es contable, por la misma razón que
+ * `esExitoOYaAnclado` es compartida.
+ */
+export function registrarVeredicto(resultado: Record<string, unknown>): VeredictoAnclaje {
+  if (typeof resultado.pointer !== "string" || resultado.pointer.length === 0) return {};
+  const veredicto = leerVeredicto(resultado);
+  if (veredicto.verified === true) veredictos.verificados += 1;
+  else if (veredicto.verified === false) veredictos.provisionales += 1;
+  else veredictos.sinVeredicto += 1;
+  return veredicto;
+}
+
+/** Copia del contador — copia y no la referencia, para que nadie de afuera
+ * lo mueva. La API no expone métricas por HTTP, así que el único lector real
+ * es la línea de log de `x402MuroDurable.ts` (y los tests). */
+export function contadorVeredictos(): ContadorVeredictos {
+  return { ...veredictos };
+}
+
+/** Solo para tests: vuelve el contador de veredictos a cero entre casos. */
+export function resetContadorVeredictosParaTest(): void {
+  veredictos.verificados = 0;
+  veredictos.provisionales = 0;
+  veredictos.sinVeredicto = 0;
+}
+
+/**
  * Encola un reintento de anclaje para `paymentId`. Idempotente: una segunda
  * llamada con el mismo `paymentId` mientras la primera sigue en cola no
  * duplica la tarea ni reinicia sus intentos.
@@ -548,7 +639,17 @@ async function intentarAhora(paymentId: string, reloj: RelojDeReintentos): Promi
     cola.delete(paymentId);
     if (esExitoOYaAnclado(resultado)) {
       cerrarCorte();
-      registro.info("x402", "anclaje diferido logrado", { paymentId, resultado, recuperadoPorGet: true });
+      // El veredicto se cuenta también acá: este anclaje es de una venta ya
+      // cobrada y su registro vale lo mismo que el del camino inmediato. No
+      // hay doble conteo — al servir el sobre esta venta no tenía `pointer`
+      // (por eso quedó diferida) y `registrarVeredicto` no la contó.
+      registrarVeredicto(resultado);
+      registro.info("x402", "anclaje diferido logrado", {
+        paymentId,
+        resultado,
+        recuperadoPorGet: true,
+        veredictos: contadorVeredictos(),
+      });
     } else {
       registro.error("x402", "anclaje diferido: 409 sin registro propio (ajeno o GET caído); se abandona", undefined, {
         paymentId,
@@ -569,7 +670,8 @@ async function intentarAhora(paymentId: string, reloj: RelojDeReintentos): Promi
     // del refutador).
     cerrarCorte();
     cola.delete(paymentId);
-    registro.info("x402", "anclaje diferido logrado", { paymentId, resultado });
+    registrarVeredicto(resultado);
+    registro.info("x402", "anclaje diferido logrado", { paymentId, resultado, veredictos: contadorVeredictos() });
     return;
   }
   tarea.intento += 1;

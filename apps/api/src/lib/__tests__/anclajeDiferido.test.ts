@@ -25,6 +25,10 @@ import {
   envejecerReservaParaTest,
   sondearFacilitador,
   recuperarEvidenciaAnclada,
+  leerVeredicto,
+  registrarVeredicto,
+  contadorVeredictos,
+  resetContadorVeredictosParaTest,
 } from "../anclajeDiferido.js";
 import { usarEmisor, type LineaDeRegistro } from "../registro.js";
 
@@ -690,5 +694,66 @@ describe("recuperarEvidenciaAnclada (qué hay detrás de un 409)", () => {
     });
     expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, lanza as unknown as typeof fetch)).toEqual(esperado);
     expect(lineas.filter((l) => l.nivel === "warn").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ── Veredicto del facilitador (peldaño 0) ─────────────────────────────────
+//
+// `verified` / `notVerifiedReason` son lo que dice QUÉ VALE un anclaje que
+// prendió. Hasta acá nadie los leía: un provisional —lo único que hoy
+// produce esta ruta— cuenta como éxito, cierra el cortacircuitos y se sirve
+// sin dejar rastro. Lo que se prueba es que ahora se leen, que se cuentan
+// aparte, y que ese contador NO puede apagar la ruta.
+describe("veredicto del facilitador", () => {
+  beforeEach(() => {
+    resetContadorVeredictosParaTest();
+  });
+
+  it("lee los dos campos de un registro anclado", () => {
+    expect(
+      leerVeredicto({ pointer: "s3+https://x/y", verified: false, notVerifiedReason: "dx402_proof_missing" })
+    ).toEqual({ verified: false, notVerifiedReason: "dx402_proof_missing" });
+  });
+
+  it("un `verified` que no es boolean no es un veredicto", () => {
+    expect(leerVeredicto({ pointer: "s3+https://x/y", verified: "true" })).toEqual({});
+    expect(leerVeredicto({ pointer: "s3+https://x/y", verified: 1 })).toEqual({});
+    expect(leerVeredicto({ pointer: "s3+https://x/y", notVerifiedReason: "" })).toEqual({});
+  });
+
+  it("sin `pointer` no hay registro del que leer veredicto, y no se cuenta", () => {
+    expect(registrarVeredicto({ v: 1, skipped: "anchor_failed", error: "facilitator_unreachable" })).toEqual({});
+    expect(registrarVeredicto({ v: 1, skipped: "already_anchored", error: "registro_ajeno" })).toEqual({});
+    expect(contadorVeredictos()).toEqual({ verificados: 0, provisionales: 0, sinVeredicto: 0 });
+  });
+
+  it("un anclado sin el campo `verified` cuenta como sinVeredicto, no como provisional", () => {
+    registrarVeredicto({ pointer: "s3+https://x/y" });
+    expect(contadorVeredictos()).toEqual({ verificados: 0, provisionales: 0, sinVeredicto: 1 });
+  });
+
+  it("cada fila cuenta en la suya", () => {
+    registrarVeredicto({ pointer: "p1", verified: false, notVerifiedReason: "dx402_proof_missing" });
+    registrarVeredicto({ pointer: "p2", verified: false, notVerifiedReason: "dx402_seller_signature_missing" });
+    registrarVeredicto({ pointer: "p3", verified: true });
+    expect(contadorVeredictos()).toEqual({ verificados: 1, provisionales: 2, sinVeredicto: 0 });
+  });
+
+  it("una racha de provisionales NO abre el cortacircuitos: mide otra cosa", () => {
+    // 8 > 5, el umbral del cortacircuitos.
+    for (let i = 0; i < 8; i += 1) {
+      const provisional = { v: 1, pointer: `s3+https://x/${i}`, verified: false, notVerifiedReason: "dx402_proof_missing" };
+      registrarResultadoAnchor(provisional);
+      registrarVeredicto(provisional);
+    }
+    expect(anclajeDisponible()).toBe(true);
+    expect(contadorVeredictos().provisionales).toBe(8);
+  });
+
+  it("el contador que se devuelve es una copia: nadie de afuera lo mueve", () => {
+    registrarVeredicto({ pointer: "p1", verified: true });
+    const copia = contadorVeredictos();
+    copia.verificados = 99;
+    expect(contadorVeredictos().verificados).toBe(1);
   });
 });

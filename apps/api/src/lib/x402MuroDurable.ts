@@ -64,6 +64,8 @@ import {
   sondearFacilitador,
   recuperarEvidenciaAnclada,
   normalizarResultadoAnchor,
+  registrarVeredicto,
+  contadorVeredictos,
 } from "./anclajeDiferido.js";
 import { registro } from "./registro.js";
 
@@ -847,12 +849,21 @@ export function crearMiddlewareDurable(
         // Los bytes servidos son los SELLADOS y hasheados — nunca `res.json()`,
         // que reserializaría el objeto y ya no coincidiría con `contentHash`.
         res.setHeader("X-Durable-Evidence", encabezadoEvidencia(resultado, idDePago, cuerpo, diferido));
+        // El veredicto no toca el header ni la respuesta —el vocabulario
+        // DX402 del comprador no lo tiene, y el sobre ya está firmado—, así
+        // que esta línea es el único lugar del lado del vendedor donde queda
+        // escrito qué vale el registro que acabamos de anclar: hoy, un
+        // provisional que `esExitoOYaAnclado` cuenta como éxito. El acumulado
+        // va acá porque la API no expone métricas por HTTP.
+        const veredicto = registrarVeredicto(resultado);
         registro.info("x402", "sobre durable servido", {
           paymentId: idDePago,
           tx,
           resultado: typeof resultado.skipped === "string" ? resultado.skipped : resultado.pointer,
           ...(typeof resultado.error === "string" ? { error: resultado.error } : {}),
           diferido,
+          ...veredicto,
+          veredictos: contadorVeredictos(),
         });
         res.status(200).type("application/json").send(cuerpo);
         return undefined;

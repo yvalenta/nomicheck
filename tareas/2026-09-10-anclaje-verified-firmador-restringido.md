@@ -438,3 +438,43 @@ sesión lo puede hacer sin Yonatan, y sin eso ninguna variante se puede confirma
 después de desplegada. Lo que sí espera a Yonatan es la decisión 7, con las
 cuatro opciones del informe y la pregunta previa de si hoy existe una llave para
 `X402_PAY_TO` y si es accesible.
+
+## Peldaño 0 — hecho (2026-09-12)
+
+Lo único del orden de peldaños que una sesión puede hacer sola: sin llave, sin
+identidad, sin gasto y sin tocar producción. Antes de esto, `grep -rn
+"notVerifiedReason" apps/api/src` daba cero fuera de tests: el facilitador
+contesta qué vale cada anclaje y nadie lo leía.
+
+- **Se lee el veredicto.** `leerVeredicto` (`apps/api/src/lib/anclajeDiferido.ts`)
+  saca `verified` y `notVerifiedReason` del resultado del anchor —el 201 del
+  camino inmediato, el registro que devuelve `recuperarEvidenciaAnclada` en el
+  409, y el de la cola diferida, que son el mismo objeto normalizado—. Solo
+  `boolean`: un `"true"` de string o un `1` no son veredicto.
+- **Se logea.** La línea `sobre durable servido` (`x402MuroDurable.ts`) lleva
+  ahora `verified` y `notVerifiedReason` cuando el registro los trae, más el
+  acumulado. Las dos líneas de `anclaje diferido logrado` llevan el acumulado.
+  El header del comprador NO cambia: el vocabulario DX402 no tiene el veredicto
+  y el sobre ya está firmado cuando esto se lee.
+- **Se cuenta aparte.** `registrarVeredicto` / `contadorVeredictos` mantienen
+  `{verificados, provisionales, sinVeredicto}` en memoria, separados del
+  cortacircuitos, que sigue midiendo «ancló o no ancló» — mezclarlos apagaría
+  `/verificar/durable` entera hoy mismo, porque cada venta es un provisional.
+  `sinVeredicto` es su propia fila: un registro sin el campo es falta de dato,
+  no un provisional medido. Solo cuenta lo que tiene `pointer`: un fallo, un
+  diferido o un `registro_ajeno` no son registros nuestros de los que leer nada.
+
+**Verificación.** `pnpm test` en la raíz: 1.894 pruebas verdes (api 1.176, web
+205, reglas 478, mcp 35), `tsc --noEmit` de `apps/api` en 0. Nueve pruebas
+nuevas: siete de unidad en `anclajeDiferido.test.ts` —incluida una racha de
+ocho provisionales que NO abre el cortacircuitos— y dos de integración en
+`x402MuroDurable.test.ts`, que venden una vez contra un facilitador que ancla
+con `verified: false`. Prueba negativa corrida: sacando `...veredicto` de la
+línea de log, la integración se pone roja (`expected { …(10) } to match object
+{ verified: false, …(2) }`); revertido.
+
+**Lo que esto habilita y lo que no.** Habilita medir el peldaño 1 cuando se
+haga: la transición de `dx402_proof_missing` a `dx402_seller_signature_missing`
+ahora es legible en el log de la venta, que era la única señal que ese peldaño
+produce. No cambia nada de lo que el comprador recibe, no acerca ningún anclaje
+a `verified`, y no toca la decisión 7, que sigue siendo de Yonatan.
