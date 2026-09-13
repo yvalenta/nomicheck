@@ -478,3 +478,84 @@ haga: la transición de `dx402_proof_missing` a `dx402_seller_signature_missing`
 ahora es legible en el log de la venta, que era la única señal que ese peldaño
 produce. No cambia nada de lo que el comprador recibe, no acerca ningún anclaje
 a `verified`, y no toca la decisión 7, que sigue siendo de Yonatan.
+
+## La premisa se cayó: no seríamos los primeros (2026-09-12)
+
+Workflow `wf_03be83d9-a2a`, 11 agentes (5 mediciones + 5 refutadores + síntesis),
+1,55 M tokens, 28 min, 0 errores. Todo de sólo lectura: ningún POST a un tercero,
+ningún gasto, ninguna llave. El informe completo del run está en la tarea del
+harness; acá va lo que sobrevivió, separado por quién lo verificó.
+
+### Verificado a mano en esta sesión
+
+- **Ya hay anclajes ajenos `verified: true` en este facilitador.**
+  `curl -s https://facilitator.ultravioletadao.xyz/dx402/evidence/0x950293081222e35b3dcd2cbf4bd98157caca76e394bc92f59ba4f36ecb612fff`
+  devuelve 200 con `"verified": true, "signed": true`, `receiptSigner`
+  `0x7bC4b9cc90a057A95A0F5a8F93C3e3996EE4e0DF`, anclado el 1789073367.
+  **Esto tumba la premisa de la que venía toda la tarea** (informe §3a: «lo que
+  quedó con apalancamiento real es que nomicheck sea el primer vendedor tercero
+  con anclajes que cuenten»). No seríamos los primeros; seríamos uno más.
+- **El SDK no tiene campo `sellerSignature` en `AnchorOptions`**: tiene
+  `sign?: (digest: Uint8Array) => string | Promise<string>`
+  (`uvd-x402-sdk@2.88.0` `dist/index.d.ts:305`) y arma la firma con él
+  (`dist/index.js:2493`, `payload.sellerSignature = await opts.sign(digest)`).
+  Hoy `opcionesBase` (`x402MuroDurable.ts:611-625`) no pasa **ninguna** de las
+  dos entradas: ni `sign` ni `proofOfPayment`. Faltan las dos, no una.
+- **El 200 del `GET /dx402/evidence/{paymentId}` no declara
+  `notVerifiedReason` en ninguna parte del openapi; sólo el 201 del anchor lo
+  declara** (verificado sobre el openapi vivo 2.26.0). El GET sí devuelve
+  `verified` y `signed` (visto en la respuesta real de arriba, aunque el
+  esquema del 200 esté tipado como objeto libre). Consecuencia para el peldaño
+  0 que se acaba de implementar: por el camino del 409 el veredicto se lee
+  igual, pero el MOTIVO nunca llega, y esas filas caen —correctamente— en
+  `sinVeredicto`.
+
+### Del workflow, con su fuente, no re-verificado a escala
+
+- **81 anclajes `verified: true` + `signed: true`**, de 20 payees distintos, en
+  7 redes (arbitrum 38, avalanche 16, base 13, monad 5, optimism 4, polygon 3,
+  ethereum 2), entre el 2026-09-03 y el 2026-09-10. Método: derivar 807
+  `paymentId` de los `txHash` que devuelve `GET /transactions?network=<slug>`
+  sobre los 17 slugs de `/api/stats`; 232 tenían evidencia. Yo verifiqué uno de
+  esos 81.
+- **En esos 232 registros no hay ni uno con `verified: true` y `signed: false`.**
+  Empíricamente, verified no llega sin la firma del vendedor — o sea que el
+  peldaño 1 (proof sin firma) nunca puede ser el destino, sólo el instrumento.
+- **`GET /transactions` NO sirve como testigo de ausencia:** su filtro
+  `network` no es prefijo y omite filas (`limit=20&network=avalanche` devolvió
+  13 y se comió 101 filas probadas por otra vía). Sirve para encontrar, no para
+  demostrar que algo no pasó. Con eso se cae también «nadie llega a verified»
+  como afirmación negativa.
+- Defecto en nuestro código, distinto del de hoy: `anclajeDiferido.ts:573`
+  colapsa 404, 410 y 503 del GET de evidencia en un solo `if (!res.ok)` y los
+  degrada todos a `skipped: "already_anchored"`. El openapi es explícito en que
+  no son intercambiables («In a dispute those are not interchangeable») y el 503
+  es reintentable. Queda anotado, no arreglado en este bloque.
+
+### Corrección al propio informe del workflow
+
+La síntesis afirma que la puerta del proof es una **ventana** y no una igualdad
+estricta, y con eso da por refutado H8. **No se sostiene tal como está escrita:**
+`ERC8004_PROOF_MAX_AGE_SECS` aparece **una sola vez** en los 128 KB del openapi,
+y es en la prosa de `POST /feedback` — el riel ERC-8004 de calificaciones, no el
+anchor. La prosa de `POST /dx402/anchor` no menciona ninguna puerta de timestamp.
+Así que H8 (leído del fuente de x402-rs, `gate.rs`) **no queda ni confirmado ni
+refutado**: sigue sin dato, con la diferencia de que ahora se sabe que el otro
+riel del mismo facilitador publica una ventana. Cerrarlo sigue pidiendo el
+fuente pinneado o un anclaje de prueba.
+
+### Qué cambia para la decisión 7
+
+- **A (sigue no) queda peor parada.** Provisional no es un estado estable: el
+  `paymentId` lo deriva cualquiera desde la cadena —probado a escala, 807
+  derivados y 232 aciertos—, `/dx402/anchor` no exige identidad, y un claim más
+  fuerte de un tercero ocupa el slot sin que lo podamos desplazar
+  (`/dx402/repair` es admin-only y no escala autoridad).
+- **B (peldaño 1 sin llave) queda mejor como instrumento y peor como destino:**
+  no hay un solo verified sin signed.
+- **C y D quedan mejor paradas**: el gancho `sign` ya existe en el SDK y no hay
+  arquitectura que inventar. Lo que las separa sigue siendo tuyo.
+- **Y una pregunta nueva que la premisa caída abre:** si ya hay 20 payees con
+  anclajes verified, ¿qué vale llegar? Deja de ser «ser el primero» y pasa a ser
+  «no ser el único que vende verificación con evidencia provisional». Eso puede
+  cambiar de lado la respuesta a la decisión 7, y es tuya.
