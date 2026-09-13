@@ -556,6 +556,42 @@ export async function sondearFacilitador(facilitator: string, doFetch: typeof fe
  * el registro del vendedor, nunca en el header (el vocabulario DX402 no lo
  * tiene).
  */
+/**
+ * Los finales distintos de un GET de evidencia que no trajo el registro. El
+ * openapi del facilitador declara exactamente 200/404/410/503 y es explícito
+ * en que no son lo mismo: «404 and 410 are different answers — 404 means no
+ * evidence was ever recorded; 410 means the retention window lapsed. In a
+ * dispute those are not interchangeable», y marca el 503 como "Index
+ * unavailable — RETRYABLE".
+ *
+ * Los tres colapsaban acá en un solo `if (!res.ok)` que servía el mismo
+ * `skipped: "already_anchored"` pelado (hallazgo del workflow
+ * `wf_03be83d9-a2a`, 2026-09-12). El vendedor perdía la diferencia entre
+ * "nunca hubo registro" —que además CONTRADICE el 409 que el anchor acaba de
+ * dar—, "venció la retención", que es una respuesta legítima sobre un pago
+ * viejo, y "no se pudo leer", que es la ÚNICA que se arregla volviendo a
+ * preguntar. En una disputa esa diferencia es la disputa.
+ *
+ * Va en `error`, junto al `registro_ajeno` que ya existía: el
+ * `parseEvidenceHeader` del comprador (`uvd-x402-sdk` `dist/index.js:2047`)
+ * lanza `EvidenceSkipped(payload.skipped)` y NO mira `error`, así que sumar
+ * valores acá no le rompe la lectura a nadie.
+ */
+const MOTIVO_DE_LECTURA: Record<number, string> = {
+  404: "evidencia_inexistente",
+  410: "evidencia_vencida",
+};
+
+const LECTURA_ILEGIBLE = "evidencia_ilegible";
+
+/** `true` si el 409 se resolvió contra una lectura que puede volver a
+ * intentarse (503 del índice, timeout, red cortada) — y no contra una
+ * respuesta final del facilitador (404, 410) ni contra un registro ajeno.
+ * Lo consulta `x402MuroDurable.ts` para decidir si vale la pena diferir. */
+export function lecturaReintentable(resultado: Record<string, unknown>): boolean {
+  return resultado.error === LECTURA_ILEGIBLE;
+}
+
 export async function recuperarEvidenciaAnclada(
   facilitator: string,
   paymentId: string,
@@ -571,11 +607,26 @@ export async function recuperarEvidenciaAnclada(
   try {
     const res = await doFetch(`${facilitator.replace(/\/+$/, "")}/dx402/evidence/${paymentId}`);
     if (!res.ok) {
-      registro.warn("x402", "409 del anchor pero GET /dx402/evidence no devolvió el registro", {
-        paymentId,
-        status: res.status,
-      });
-      return sinPointer;
+      const motivo = MOTIVO_DE_LECTURA[res.status] ?? LECTURA_ILEGIBLE;
+      if (motivo === "evidencia_inexistente") {
+        // El anchor dijo "ya está anclado" y el índice dice que nunca hubo
+        // nada: dos endpoints del MISMO facilitador se contradicen. Es
+        // posible sin que nadie mienta —`/dx402/stats` avisa que "records
+        // whose index write failed are not counted"—, pero para el vendedor
+        // significa que su evidencia no es recuperable por paymentId, que es
+        // la única forma que tiene el comprador de volver a pedirla.
+        registro.error("x402", "el anchor dijo already_anchored pero GET /dx402/evidence contesta 404", undefined, {
+          paymentId,
+          status: res.status,
+        });
+      } else {
+        registro.warn("x402", "409 del anchor pero GET /dx402/evidence no devolvió el registro", {
+          paymentId,
+          status: res.status,
+          motivo,
+        });
+      }
+      return { ...sinPointer, error: motivo };
     }
     const registroAnclado = normalizarResultadoAnchor(await res.json());
     if (typeof registroAnclado.pointer !== "string" || registroAnclado.pointer.length === 0) {
@@ -594,11 +645,14 @@ export async function recuperarEvidenciaAnclada(
     }
     return { v: 1, ...registroAnclado, paymentId, contentHash: anclado };
   } catch (e) {
+    // Un timeout o una conexión cortada es indistinguible de un índice caído
+    // desde acá, y se trata igual: reintentable.
     registro.warn("x402", "409 del anchor y GET /dx402/evidence falló", {
       paymentId,
       error: e instanceof Error ? e.message : String(e),
+      motivo: LECTURA_ILEGIBLE,
     });
-    return sinPointer;
+    return { ...sinPointer, error: LECTURA_ILEGIBLE };
   }
 }
 

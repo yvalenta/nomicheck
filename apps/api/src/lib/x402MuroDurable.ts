@@ -66,6 +66,7 @@ import {
   normalizarResultadoAnchor,
   registrarVeredicto,
   contadorVeredictos,
+  lecturaReintentable,
 } from "./anclajeDiferido.js";
 import { registro } from "./registro.js";
 
@@ -805,14 +806,30 @@ export function crearMiddlewareDurable(
         };
         let { resultado, huboRegistro } = await resolver(await anchorEvidence(cuerpo, opcionesAnchor));
         registrarResultadoAnchor(resultado);
-        let diferido = false;
         if (!esExitoOYaAnclado(resultado) && !huboRegistro) {
           ({ resultado, huboRegistro } = await resolver(await anchorEvidence(cuerpo, opcionesAnchor)));
           registrarResultadoAnchor(resultado);
-          if (!esExitoOYaAnclado(resultado) && !huboRegistro) {
-            diferido = programarAnclaje(idDePago, cuerpo, opcionesAnchor);
-          }
         }
+        // La decisión de diferir, en UN solo lugar y sobre el resultado
+        // final: el 409 puede caer en cualquiera de los dos intentos, y
+        // cuando cayó en el segundo la rama de arriba ya se había cerrado.
+        //
+        // Dos motivos para diferir, no uno. El viejo: no hubo registro
+        // ninguno (el facilitador no contestó). El nuevo: SÍ hubo 409, pero
+        // el GET que lo resuelve no se pudo LEER (503 del índice, timeout,
+        // red) — ahí no se reintenta inline, porque este camino ya gastó un
+        // anchor y un GET y el presupuesto post-cobro son 6 s, pero a los
+        // 30 s la cola vuelve a anclar, el facilitador vuelve a contestar
+        // 409 y `intentarAhora` relee el registro, que es lo único que
+        // puede recuperar el pointer del lado del vendedor. El comprador
+        // recibe `deferred: true`, que es lo cierto: vale la pena que vuelva
+        // a preguntar. Un 404 o un 410 NO entran acá: son respuestas finales
+        // del facilitador y reintentarlas es ruido (openapi vivo, y ver
+        // `lecturaReintentable`).
+        const diferido =
+          !esExitoOYaAnclado(resultado) &&
+          (!huboRegistro || lecturaReintentable(resultado)) &&
+          programarAnclaje(idDePago, cuerpo, opcionesAnchor);
 
         // El sobre YA firmó `habeasData.retencionExterna` con
         // `DURABLE_EVIDENCE_INFO.backend`/`.retention` — ANTES de cobrar, y

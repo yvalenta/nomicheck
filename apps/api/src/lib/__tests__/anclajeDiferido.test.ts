@@ -25,6 +25,7 @@ import {
   envejecerReservaParaTest,
   sondearFacilitador,
   recuperarEvidenciaAnclada,
+  lecturaReintentable,
   leerVeredicto,
   registrarVeredicto,
   contadorVeredictos,
@@ -683,17 +684,48 @@ describe("recuperarEvidenciaAnclada (qué hay detrás de un 409)", () => {
     expect(lineas.some((l) => l.nivel === "error" && l.mensaje.includes("AJENO"))).toBe(true);
   });
 
-  it("GET que falla (503, sin pointer, o lanza): skipped already_anchored con paymentId + contentHash, sin error", async () => {
-    const esperado = { v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro };
-    const r503 = vi.fn(async () => new Response("index unavailable", { status: 503 }));
-    expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, r503 as unknown as typeof fetch)).toEqual(esperado);
-    const sinPointer = vi.fn(async () => new Response(JSON.stringify({ paymentId, contentHash: nuestro }), { status: 200 }));
-    expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, sinPointer as unknown as typeof fetch)).toEqual(esperado);
-    const lanza = vi.fn(async () => {
-      throw new TypeError("fetch failed");
-    });
-    expect(await recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, lanza as unknown as typeof fetch)).toEqual(esperado);
-    expect(lineas.filter((l) => l.nivel === "warn").length).toBeGreaterThanOrEqual(3);
+  const recuperar = (doFetch: unknown) =>
+    recuperarEvidenciaAnclada("https://f.example", paymentId, nuestro, doFetch as typeof fetch);
+
+  it("404 (nunca hubo registro): lo grita como error, porque contradice al 409 del anchor", async () => {
+    const r = await recuperar(vi.fn(async () => new Response("not found", { status: 404 })));
+    expect(r).toEqual({ v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro, error: "evidencia_inexistente" });
+    expect(lecturaReintentable(r)).toBe(false);
+    expect(lineas.some((l) => l.nivel === "error" && l.mensaje.includes("404"))).toBe(true);
+  });
+
+  it("410 (venció la retención) NO es lo mismo que 404: otro motivo, y tampoco se reintenta", async () => {
+    const r = await recuperar(vi.fn(async () => new Response("gone", { status: 410 })));
+    expect(r).toEqual({ v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro, error: "evidencia_vencida" });
+    expect(lecturaReintentable(r)).toBe(false);
+    expect(lineas.some((l) => l.nivel === "warn" && l.motivo === "evidencia_vencida")).toBe(true);
+  });
+
+  it("503 (índice caído) y un fetch que lanza son la MISMA cosa: ilegible, y reintentable", async () => {
+    const esperado = { v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro, error: "evidencia_ilegible" };
+    const r503 = await recuperar(vi.fn(async () => new Response("index unavailable", { status: 503 })));
+    expect(r503).toEqual(esperado);
+    const lanza = await recuperar(
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      })
+    );
+    expect(lanza).toEqual(esperado);
+    expect(lecturaReintentable(r503)).toBe(true);
+    expect(lecturaReintentable(lanza)).toBe(true);
+  });
+
+  it("un 200 sin pointer no es una lectura fallida: sin motivo, y no se reintenta", async () => {
+    const r = await recuperar(vi.fn(async () => new Response(JSON.stringify({ paymentId, contentHash: nuestro }), { status: 200 })));
+    expect(r).toEqual({ v: 1, skipped: "already_anchored", paymentId, contentHash: nuestro });
+    expect(lecturaReintentable(r)).toBe(false);
+  });
+
+  it("un registro ajeno tampoco se reintenta: el facilitador contestó", async () => {
+    const r = await recuperar(
+      vi.fn(async () => new Response(JSON.stringify({ paymentId, pointer: "s3+https://f/e/otro", contentHash: "0x" + "ff".repeat(32) }), { status: 200 }))
+    );
+    expect(lecturaReintentable(r)).toBe(false);
   });
 });
 

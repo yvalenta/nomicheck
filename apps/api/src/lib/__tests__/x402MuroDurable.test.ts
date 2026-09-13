@@ -1031,7 +1031,7 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
     expect(anclajeDiferidoModule.reservarMedioAbierto().admision).toBe("cerrado");
   });
 
-  it("si GET /dx402/evidence no contesta, se degrada a already_anchored con paymentId + contentHash, sin reintento", async () => {
+  it("si el índice está caído (503), el motivo lo dice y SÍ se difiere: es la única lectura que se arregla volviendo a preguntar", async () => {
     const { llamadasEvidence } = stubAnchor409ConEvidencia(() => new Response("index unavailable", { status: 503 }));
     const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
 
@@ -1042,14 +1042,36 @@ describe("el facilitador ya tenía la evidencia anclada (409 already_anchored en
     const res = await postFirmado(base, batchChico(), carga);
 
     expect(res.status).toBe(200);
+    // Una sola lectura: el diferido NO reintenta inline, el presupuesto
+    // post-cobro ya se gastó.
     expect(llamadasEvidence).toHaveLength(1);
     const cuerpo = Buffer.from(await res.arrayBuffer());
     const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
     expect(evidencia.skipped).toBe("already_anchored");
-    expect(evidencia.error).toBeUndefined();
+    expect(evidencia.error).toBe("evidencia_ilegible");
     expect(evidencia.pointer).toBeUndefined();
     expect(evidencia.contentHash).toBe(contentHash(cuerpo));
     expect(typeof evidencia.paymentId).toBe("string");
+    // `deferred: true` es lo cierto para el comprador: vale la pena que
+    // vuelva a pedir la evidencia más tarde.
+    expect(evidencia.deferred).toBe(true);
+    expect(programarSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("si la retención venció (410), el motivo es OTRO y no se difiere: reintentar un final es ruido", async () => {
+    stubAnchor409ConEvidencia(() => new Response("gone", { status: 410 }));
+    const programarSpy = vi.spyOn(anclajeDiferidoModule, "programarAnclaje").mockImplementation(() => true);
+
+    const pagador = privateKeyToAccount(generatePrivateKey());
+    const carga = await firmarCarga(pagador);
+    const base = await construirApp(handlerFalso());
+
+    const res = await postFirmado(base, batchChico(), carga);
+
+    expect(res.status).toBe(200);
+    const evidencia = decodeEvidenceHeader(res.headers.get("x-durable-evidence")!);
+    expect(evidencia.error).toBe("evidencia_vencida");
+    expect(evidencia.deferred).toBeUndefined();
     expect(programarSpy).not.toHaveBeenCalled();
   });
 });

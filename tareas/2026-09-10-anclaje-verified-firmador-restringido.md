@@ -559,3 +559,49 @@ fuente pinneado o un anclaje de prueba.
   anclajes verified, ¿qué vale llegar? Deja de ser «ser el primero» y pasa a ser
   «no ser el único que vende verificación con evidencia provisional». Eso puede
   cambiar de lado la respuesta a la decisión 7, y es tuya.
+
+## Arreglado el colapso de 404/410/503 (2026-09-13)
+
+El defecto que encontró el workflow, atacado. `recuperarEvidenciaAnclada`
+colapsaba las tres respuestas de fallo del `GET /dx402/evidence/{paymentId}` en
+un solo `if (!res.ok)` que servía el mismo `skipped: "already_anchored"` pelado.
+El openapi vivo declara exactamente 200/404/410/503, dice que «404 and 410 are
+different answers … In a dispute those are not interchangeable» y marca el 503
+como «Index unavailable — RETRYABLE».
+
+- **Tres motivos distintos, en `error`:** `evidencia_inexistente` (404),
+  `evidencia_vencida` (410), `evidencia_ilegible` (503, timeout, red cortada).
+  Van junto al `registro_ajeno` que ya existía; el `parseEvidenceHeader` del
+  comprador (`uvd-x402-sdk` `dist/index.js:2047`) lanza
+  `EvidenceSkipped(payload.skipped)` y no mira `error`, así que sumar valores no
+  le rompe la lectura a nadie — verificado en el fuente del SDK.
+- **El 404 se grita como `error`, no como `warn`:** que el anchor conteste 409 y
+  el índice conteste «nunca hubo registro» es una contradicción entre dos
+  endpoints del mismo facilitador. Es posible sin que nadie mienta —`/dx402/stats`
+  avisa que «records whose index write failed are not counted»— pero para el
+  vendedor significa que su evidencia no se puede recuperar por `paymentId`, que
+  es la única forma que tiene el comprador de volver a pedirla.
+- **Sólo lo reintentable se difiere.** `lecturaReintentable` es nueva y la
+  consulta el muro. Antes, un 409 resuelto contra un GET ilegible cerraba la
+  venta sin pointer y sin reintento: el pointer quedaba perdido para siempre del
+  lado del vendedor aunque el registro existiera. Ahora se encola, y a los 30 s
+  `intentarAhora` vuelve a anclar, recibe otro 409 y relee el registro. Un 404 o
+  un 410 no entran: son finales del facilitador y reintentarlos es ruido.
+- **No se reintenta INLINE.** El presupuesto post-cobro son 6 s (dos intentos de
+  3 s) y este camino ya gastó un anchor y un GET; sumarle otro par arriesga el
+  timeout de 10 s del comprador, que es lo que la reparación de ronda 1 vino a
+  arreglar. Sólo se difiere.
+- **El comprador ahora recibe `deferred: true` en ese caso**, que es lo cierto:
+  vale la pena que vuelva a preguntar por `GET /dx402/evidence/{paymentId}`.
+- La decisión de diferir quedó en un solo lugar, sobre el resultado FINAL: el
+  409 puede caer en cualquiera de los dos intentos, y cuando caía en el segundo
+  la rama que decidía ya se había cerrado. Ese fue el primer intento de arreglo
+  y lo agarró el test de integración, no la lectura.
+
+**Verificación.** `pnpm test` en la raíz: 1.899 verdes (api 1.181, web 205,
+reglas 478, mcp 35), `tsc --noEmit` en 0. Cinco pruebas nuevas de unidad (404,
+410, 503 y fetch que lanza, 200 sin pointer, registro ajeno) y dos de
+integración (503 difiere con motivo; 410 no difiere y trae otro motivo); una
+vieja se reescribió porque afirmaba el colapso. Prueba negativa corrida: sacando
+el 410 de la tabla de motivos caen las dos pruebas del 410, una por el motivo y
+otra por el diferido; revertido.
