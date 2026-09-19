@@ -1,7 +1,9 @@
 ---
-estado: informe
+estado: hecha
+dueño: sesión
 fecha: 2026-09-10
 tema: qué se está diseñando en x402 alrededor de durable-evidence (#3377), RFC-008 (#3447), stark-receipt (#3389) y conformance profiles (#3396); qué podría aportar la casa
+criterio_cierre: el informe del workflow `x402-dx402-que-se-disena` (run `wf_d219dd7c-0f0`) queda escrito en este archivo, con sus citas y sus `sin_dato`; es un informe, no trabajo pendiente — nació `hecha`
 ---
 
 Salida del workflow `x402-dx402-que-se-disena` (run `wf_d219dd7c-0f0`, 2026-09-10; 42 agentes): 5 lectores + 5 cierres de huecos (sonnet, con citas), crítico de completitud, panel de 3 ángulos × 2–3 ideas, refutación de cada idea por 3 lentes (el grande), síntesis. **Las 9 ideas fueron refutadas 3/3**; lo que sigue es la síntesis con las mejoras que dejaron las refutaciones. Sin editar.
