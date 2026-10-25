@@ -9,11 +9,17 @@
 #   --build-arg VITE_SUPABASE_ANON_KEY=<publishable-key> .
 # docker run -d -p 80:80 --env-file apps/api/.env --name nomicheck nomicheck
 
-# 24.19.0 y no 24.20.0: nodejs.org ya publicó 24.20.0 pero Docker Hub va
-# detrás y su tag -slim no existe todavía (medido 2026-08-26; el build del CI
-# muere en "not found" con un tag inexistente). Al subir esto, verificar que
-# el tag exista: curl -s https://hub.docker.com/v2/repositories/library/node/tags/<v>-slim
-ARG NODE_VERSION=24.19.0
+# 24.22.1 es el piso: la release de seguridad del 2026-10-21 cierra
+# CVE-2026-111497 (desborde en el decodificador Brotli, RCE). Esta API está
+# expuesta por la vía exacta de la demo «Node2Shell»: `express.json()` de
+# Express 5 descomprime solo un cuerpo con `Content-Encoding: br`. 24.19.0 y
+# 24.22.0 son vulnerables; no bajar de acá.
+#
+# Docker Hub va detrás de nodejs.org (el 2026-08-26 el tag de 24.20.0 todavía
+# no existía y el build del CI moría en "not found"). Al subir esto, verificar
+# que el tag exista: curl -s https://hub.docker.com/v2/repositories/library/node/tags/<v>-slim
+# (24.22.1-slim: 200, medido 2026-10-24).
+ARG NODE_VERSION=24.22.1
 FROM docker.io/library/node:${NODE_VERSION}-slim AS base
 
 WORKDIR /app

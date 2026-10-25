@@ -21,3 +21,18 @@ allowBuilds:
 overrides:
   postcss: '>=8.5.23'
   nanoid: '>=3.3.18'
+
+# UN aviso que SÍ llega a producción y se acepta a sabiendas, con fecha:
+# GHSA-mrhx-c7xc-m3w5 (zod: un array enorme acumula un issue por elemento y
+# agota la memoria). No tiene parche en zod 3 — el arreglo es zod 4.6.6, un
+# salto mayor que además deja vacíos en silencio los JSON Schema de
+# `zod-to-json-schema` (el catálogo público y el bazaar x402). Decisión de
+# Yonatan, 2026-10-24: no frenar por esto el parche de Node2Shell (RCE en el
+# Brotli de Node, CVE-2026-111497). El riesgo que queda es un DoS acotado por
+# los topes de `express.json()` (100 kb; 5 mb en /api/batch).
+#
+# Esta línea se BORRA cuando cierre tareas/2026-10-24-migrar-zod-4.md, no
+# antes ni por otra razón. Un ignore sin dueño es un audit apagado.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-mrhx-c7xc-m3w5
